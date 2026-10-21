@@ -20,5 +20,15 @@ export default defineConfig({
     action: {
       default_title: '__MSG_actionTitle__',
     },
+    commands: {
+      'capture-knowledge': {
+        suggested_key: { default: 'Alt+Shift+K' },
+        description: '__MSG_command_captureKnowledge__',
+      },
+      'capture-idea': {
+        suggested_key: { default: 'Alt+Shift+I' },
+        description: '__MSG_command_captureIdea__',
+      },
+    },
   },
 });

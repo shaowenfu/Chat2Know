@@ -3,7 +3,8 @@ import { readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import type { AddressInfo } from 'node:net';
-import { test as base, chromium, type BrowserContext, type Worker } from '@playwright/test';
+/// <reference types="chrome" />
+import { test as base, expect as baseExpect, chromium, type BrowserContext, type Worker } from '@playwright/test';
 
 const EXTENSION_PATH = resolve('.output/chrome-mv3-e2e');
 const PAGES_DIR = resolve('tests/fixtures/pages');
@@ -20,7 +21,7 @@ export const test = base.extend<
     async ({}, use) => {
       const server: Server = createServer(async (req, res) => {
         try {
-          const name = (req.url ?? '/').split('?')[0]!.replace(/^\/+/, '') || 'basic.html';
+          const name = (req.url ?? '/').split('?')[0]!.replace(/^\/+/, '') || 'synthetic-chat-katex.html';
           const body = await readFile(join(PAGES_DIR, name.replace(/\.\.+/g, '')));
           res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }).end(body);
         } catch {
@@ -44,6 +45,8 @@ export const test = base.extend<
   },
   serviceWorker: async ({ context }, use) => {
     const sw = context.serviceWorkers()[0] ?? (await context.waitForEvent('serviceworker'));
+    // On a cold start the worker can be reachable before extension APIs are bound.
+    await baseExpect.poll(() => sw.evaluate(() => typeof chrome !== 'undefined' && !!chrome.runtime?.id)).toBe(true);
     await use(sw);
   },
   extensionId: async ({ serviceWorker }, use) => {

@@ -44,3 +44,5 @@ Weekly count of **mastered cards**: cards that passed "explain it to me" or "qui
 - E2E builds a separate variant to `.output/chrome-mv3-e2e` with `CHAT2KNOW_E2E=1`, which adds `<all_urls>` host permission so tests can inject without a user gesture. Release builds never include it.
 - E2E uses `/opt/pw-browsers/chromium` when present (cloud container), otherwise Playwright's own Chromium. Override with `CHROMIUM_PATH`.
 - The side panel screenshot is written to `tests/e2e/screenshots/sidepanel.png`; look at it after UI changes.
+- Page fixtures: every `tests/fixtures/pages/*.html` is converted and compared with `tests/fixtures/expected/*.md`. After a deliberate converter change, review the diff and update with `npx vitest run -u`.
+- Turndown gives rules added later higher priority; add generic rules before specific ones in `src/capture/markdown.ts`.

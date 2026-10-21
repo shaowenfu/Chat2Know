@@ -1,6 +1,8 @@
 import { defineContentScript } from 'wxt/utils/define-content-script';
-import { onMessages } from '@/src/messaging';
-import { describePage } from '@/src/capture/page-info';
+import { onMessages, sendMessage } from '@/src/messaging';
+import { captureSelection } from '@/src/capture/selection';
+import { highlightQuote } from '@/src/capture/highlight';
+import { SelectionToolbar } from '@/src/capture/toolbar';
 
 declare global {
   interface Window {
@@ -16,8 +18,16 @@ export default defineContentScript({
     if (window.__chat2knowContentLoaded) return;
     window.__chat2knowContentLoaded = true;
 
+    const toolbar = new SelectionToolbar(document, async (type) => {
+      const capture = captureSelection(document, location.href);
+      if (!capture) throw new Error('No selection');
+      await sendMessage('capture/save', { type, capture });
+    });
+    toolbar.mount();
+
     onMessages({
-      'content/describe': () => describePage(document, location.href),
+      'content/capture': () => captureSelection(document, location.href),
+      'content/highlight': ({ quote }) => ({ found: highlightQuote(document, quote) }),
     });
   },
 });

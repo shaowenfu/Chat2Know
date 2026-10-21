@@ -1,13 +1,38 @@
 extName: Chat2Know
 extDescription: 把与 AI 的对话沉淀成你讲得出来的知识。
 actionTitle: 打开 Chat2Know
+command:
+  captureKnowledge: 将选中内容存为知识
+  captureIdea: 将选中内容存为灵感
+menu:
+  saveKnowledge: 存到 Chat2Know（知识）
+  saveIdea: 存到 Chat2Know（灵感）
+toolbar:
+  saveKnowledge: 存知识
+  saveIdea: 存灵感
+  saved: 已保存 ✓
+  failed: 保存失败
 panel:
   tagline: 聊过的，都能讲出来。
-  backgroundStatus: 后台
-  connected: 已连接
-  connecting: 连接中…
-  disconnected: 未连接
-  probePage: 测试当前页面
-  probing: 正在读取页面…
-  probeResult: 当前页面
-  probeFailed: "无法读取此页面：$1"
+  toolbarUnavailable: 此页面无法显示划词工具条。请使用 Alt+Shift+K，或右键 → 存到 Chat2Know。
+  empty: 在任意网页选中文字后点"存知识"，或按 Alt+Shift+K，或右键 → 存到 Chat2Know。
+  cardCount:
+    0: 暂无卡片
+    1: 1 张卡片
+    n: $1 张卡片
+  exportJson: 导出 JSON
+  exportMarkdown: 导出 Markdown
+  importJson: 导入 JSON
+  imported:
+    1: 已导入 1 张卡片
+    n: 已导入 $1 张卡片
+  importFailed: "导入失败：$1"
+  delete: 删除
+  openSource: 查看出处
+  sourceUnavailable: 无法打开出处页面
+type:
+  knowledge: 知识
+  idea: 灵感
+  insight: 见解
+  question: 疑问
+  topic: 主题

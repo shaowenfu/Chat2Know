@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Synthetic chat: attention</title>
+    <!-- Hand-written fixture imitating common AI chat markup (KaTeX, highlighted code, tables). Not copied from any site. -->
+    <style>
+      .katex-mathml { position: absolute; clip: rect(1px, 1px, 1px, 1px); padding: 0; border: 0; height: 1px; width: 1px; overflow: hidden; }
+      .katex-display { display: block; text-align: center; margin: 1em 0; }
+      article { max-width: 720px; margin: 24px auto; font-family: sans-serif; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <article data-role="user">
+        <div class="whitespace-pre-wrap">What is scaled dot-product attention?</div>
+      </article>
+      <article data-role="assistant" id="answer">
+        <div class="markdown prose">
+          <h3>Scaled dot-product attention</h3>
+          <p id="intro">Attention lets each token weigh every other token. For queries <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>Q</mi></mrow><annotation encoding="application/x-tex">Q</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="mord mathnormal">Q</span></span></span></span>, keys <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>K</mi></mrow><annotation encoding="application/x-tex">K</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="mord mathnormal">K</span></span></span></span> and values <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>V</mi></mrow><annotation encoding="application/x-tex">V</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="mord mathnormal">V</span></span></span></span>:</p>
+          <span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mtext>Attention</mtext></mrow><annotation encoding="application/x-tex">\mathrm{Attention}(Q, K, V) = \mathrm{softmax}\left(\frac{QK^\top}{\sqrt{d_k}}\right)V</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="mord">Attention(Q,K,V)=softmax(QKᵀ/√dₖ)V</span></span></span></span></span>
+          <p>The <strong>scaling factor</strong> keeps the softmax from saturating when <em>d_k</em> is large.</p>
+          <ol>
+            <li>Compute similarity scores.</li>
+            <li>Normalize them with softmax.</li>
+            <li>Take a weighted sum of values.</li>
+          </ol>
+          <pre class="!overflow-visible"><div class="contain-inline-size rounded-md"><div class="flex items-center text-xs">python<button class="flex gap-1">Copy code</button></div><div class="overflow-y-auto p-4"><code class="!whitespace-pre hljs language-python"><span class="hljs-keyword">def</span> <span class="hljs-title function_">attention</span>(q, k, v):
+    scores = q @ k.T / math.sqrt(k.shape[-1])
+    <span class="hljs-keyword">return</span> softmax(scores) @ v
+</code></div></div></pre>
+          <table>
+            <thead>
+              <tr><th>Variant</th><th>Complexity</th><th>Notes</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Full attention</td><td><span class="katex"><span class="katex-mathml"><math><semantics><mrow><mi>O</mi></mrow><annotation encoding="application/x-tex">O(n^2)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true">O(n²)</span></span></td><td>Exact</td></tr>
+              <tr><td>Linear attention</td><td><span class="katex"><span class="katex-mathml"><math><semantics><mrow><mi>O</mi></mrow><annotation encoding="application/x-tex">O(n)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true">O(n)</span></span></td><td>Approximate | kernel trick</td></tr>
+            </tbody>
+          </table>
+          <p id="outro">In short: attention is a learned, content-based lookup.</p>
+        </div>
+      </article>
+    </main>
+  </body>
+</html>

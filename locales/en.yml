@@ -1,13 +1,38 @@
 extName: Chat2Know
 extDescription: Turn AI conversations into knowledge you can explain.
 actionTitle: Open Chat2Know
+command:
+  captureKnowledge: Save selection as knowledge
+  captureIdea: Save selection as idea
+menu:
+  saveKnowledge: Save to Chat2Know as knowledge
+  saveIdea: Save to Chat2Know as idea
+toolbar:
+  saveKnowledge: Save
+  saveIdea: Idea
+  saved: Saved ✓
+  failed: Could not save
 panel:
   tagline: Everything you chatted about, you can explain.
-  backgroundStatus: Background
-  connected: Connected
-  connecting: Connecting…
-  disconnected: Not connected
-  probePage: Test current page
-  probing: Reading page…
-  probeResult: Current page
-  probeFailed: "Cannot read this page: $1"
+  toolbarUnavailable: The selection toolbar can't run on this page. Use Alt+Shift+K or right-click → Save to Chat2Know.
+  empty: Select text on any page and click Save, press Alt+Shift+K, or right-click → Save to Chat2Know.
+  cardCount:
+    0: No cards
+    1: 1 card
+    n: $1 cards
+  exportJson: Export JSON
+  exportMarkdown: Export Markdown
+  importJson: Import JSON
+  imported:
+    1: Imported 1 card
+    n: Imported $1 cards
+  importFailed: "Import failed: $1"
+  delete: Delete
+  openSource: Open source
+  sourceUnavailable: Source page could not be opened
+type:
+  knowledge: Knowledge
+  idea: Idea
+  insight: Insight
+  question: Question
+  topic: Topic

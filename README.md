@@ -21,6 +21,15 @@ npm run build
 
 Open `chrome://extensions`, enable **Developer mode**, click **Load unpacked** and pick `.output/chrome-mv3`. After pulling updates, run `npm install && npm run build` again and click the reload button on the extension card.
 
+### Using it (M1)
+
+1. Click the Chat2Know toolbar icon to open the side panel.
+2. Select text on the page and click **Save** (knowledge) or **Idea** in the floating toolbar. Alternatively press **Alt+Shift+K** / **Alt+Shift+I**, or right-click → *Save to Chat2Know*.
+3. Cards appear in the side panel. Click the source link to jump back to the original text.
+4. Export everything as JSON or Markdown at any time; import JSON to restore.
+
+Everything stays in your browser. Nothing is sent anywhere.
+
 ## Docs
 
 - [Project plan (中文)](docs/project-plan.md)

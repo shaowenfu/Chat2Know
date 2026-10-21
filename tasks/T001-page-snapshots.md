@@ -12,6 +12,7 @@ Save real conversation pages from major AI chat sites as HTML fixtures, so captu
 ## Scope
 - `tests/fixtures/pages/` (new `.html` files only)
 - `tests/fixtures/pages/README.md` (create; list each file and its source)
+- `tests/fixtures/expected/` (generated files only, see step 6)
 
 ## Steps
 1. For each site below, open a conversation that contains **a math formula (rendered LaTeX), a code block, a table, and a bulleted list**. Ask the AI to produce them if needed. Make one Chinese and one English conversation per site where possible.
@@ -21,6 +22,8 @@ Save real conversation pages from major AI chat sites as HTML fixtures, so captu
 3. Name files `<site>-<lang>-<topic>.html`, e.g. `chatgpt-en-attention.html`, `kimi-zh-transformer.html`.
 4. **Remove personal data**: open the file in an editor, search for your email, name, avatar URLs, account IDs, and replace them with `REDACTED`. Delete `<script>` tags with inline tokens if present.
 5. In `README.md`, add a row per file: file name, site, language, date saved, what it contains (formula/code/table/list).
+
+6. Run `npx vitest run tests/unit/fixtures.test.ts -u`. This generates `tests/fixtures/expected/<name>.md` for each new page. Commit these files too; do **not** edit them by hand. The main engineer reviews them in the PR and fixes the converter where the output is wrong.
 
 ## Acceptance criteria
 - [ ] At least 12 HTML files covering all 7 sources above.
