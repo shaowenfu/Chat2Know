@@ -38,3 +38,9 @@ Weekly count of **mastered cards**: cards that passed "explain it to me" or "qui
 - Local agents work only from task cards in `tasks/`, on branch `task/<id>-<slug>`, and open a PR. Stay inside the card's scope; do not add dependencies or change interfaces unless the card says so.
 - Conventional Commits (`feat:`, `fix:`, `docs:`, `test:`, `chore:`). Code, comments, commits in English.
 - Update `CHANGELOG.md` for user-visible changes.
+
+## Testing notes
+
+- E2E builds a separate variant to `.output/chrome-mv3-e2e` with `CHAT2KNOW_E2E=1`, which adds `<all_urls>` host permission so tests can inject without a user gesture. Release builds never include it.
+- E2E uses `/opt/pw-browsers/chromium` when present (cloud container), otherwise Playwright's own Chromium. Override with `CHROMIUM_PATH`.
+- The side panel screenshot is written to `tests/e2e/screenshots/sidepanel.png`; look at it after UI changes.

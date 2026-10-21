@@ -1,0 +1,13 @@
+extName: Chat2Know
+extDescription: Turn AI conversations into knowledge you can explain.
+actionTitle: Open Chat2Know
+panel:
+  tagline: Everything you chatted about, you can explain.
+  backgroundStatus: Background
+  connected: Connected
+  connecting: Connecting…
+  disconnected: Not connected
+  probePage: Test current page
+  probing: Reading page…
+  probeResult: Current page
+  probeFailed: "Cannot read this page: $1"

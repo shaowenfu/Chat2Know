@@ -1,0 +1,11 @@
+node_modules/
+.output/
+.wxt/
+stats.html
+*.log
+.env.local
+.env.*.local
+test-results/
+playwright-report/
+tests/e2e/screenshots/
+.DS_Store

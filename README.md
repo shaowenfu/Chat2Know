@@ -8,6 +8,19 @@ Chat2Know 是一个浏览器插件：叠在所有 AI 客户端之上的"知识�
 
 > Status: early development (M0). Not ready for use yet.
 
+## Try it locally
+
+Requires Node.js 22+.
+
+```bash
+git clone https://github.com/shaowenfu/Chat2Know.git
+cd Chat2Know
+npm install
+npm run build
+```
+
+Open `chrome://extensions`, enable **Developer mode**, click **Load unpacked** and pick `.output/chrome-mv3`. After pulling updates, run `npm install && npm run build` again and click the reload button on the extension card.
+
 ## Docs
 
 - [Project plan (中文)](docs/project-plan.md)

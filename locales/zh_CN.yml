@@ -1,0 +1,13 @@
+extName: Chat2Know
+extDescription: 把与 AI 的对话沉淀成你讲得出来的知识。
+actionTitle: 打开 Chat2Know
+panel:
+  tagline: 聊过的，都能讲出来。
+  backgroundStatus: 后台
+  connected: 已连接
+  connecting: 连接中…
+  disconnected: 未连接
+  probePage: 测试当前页面
+  probing: 正在读取页面…
+  probeResult: 当前页面
+  probeFailed: "无法读取此页面：$1"

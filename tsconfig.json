@@ -1,0 +1,10 @@
+{
+  "extends": "./.wxt/tsconfig.json",
+  "compilerOptions": {
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "allowImportingTsExtensions": true
+  },
+  "include": [".wxt/wxt.d.ts", "**/*.ts", "**/*.vue"],
+  "exclude": ["node_modules", ".output"]
+}
