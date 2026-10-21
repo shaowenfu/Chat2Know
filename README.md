@@ -1,9 +1,18 @@
 # Chat2Know
 
-聊过的，都能讲出来。
+**Everything you chatted about, you can explain.** · 聊过的，都能讲出来。
+
+Chat2Know is a browser extension that sits on top of any AI chat client as a knowledge layer: it captures, distills, organizes and **verifies** what you learn from AI conversations, so you can still explain it after you close the tab.
 
 Chat2Know 是一个浏览器插件：叠在所有 AI 客户端之上的"知识层"，负责捕获、蒸馏、组织和检验对话中的知识。
 
-## 文档
+> Status: early development (M0). Not ready for use yet.
 
-- [项目方案](docs/project-plan.md)：北极星目标、产品原则、核心功能、技术架构、数据模型、里程碑与验收标准
+## Docs
+
+- [Project plan (中文)](docs/project-plan.md)
+- [Contributing](CONTRIBUTING.md)
+
+## License
+
+[AGPL-3.0-or-later](LICENSE). "Chat2Know" is a trademark of the project maintainer.
