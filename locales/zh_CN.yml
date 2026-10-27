@@ -32,14 +32,8 @@ panel:
     n: 已导入 $1 张卡片
   importFailed: "导入失败：$1"
   delete: 删除
-  openSource: 查看出处
-  sourceUnavailable: 无法打开出处页面
 type:
-  knowledge: 知识
   idea: 灵感
-  insight: 见解
-  question: 疑问
-  topic: 主题
 ask:
   label: 稍后问：
   labelNow: 现在问：

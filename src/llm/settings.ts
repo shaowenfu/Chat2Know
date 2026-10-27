@@ -4,7 +4,7 @@ import type { ModelSettings } from './client';
 // Background only: this is the one place the API key is read.
 const KEY = 'modelSettings';
 
-export const EMPTY_SETTINGS: ModelSettings = { baseUrl: '', model: '', apiKey: '', embeddingModel: '' };
+const EMPTY_SETTINGS: ModelSettings = { baseUrl: '', model: '', apiKey: '', embeddingModel: '' };
 
 export async function loadSettings(): Promise<ModelSettings> {
   const stored = (await browser.storage.local.get(KEY))[KEY] as Partial<ModelSettings> | undefined;

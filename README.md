@@ -6,7 +6,7 @@ Chat2Know is a browser extension that sits on top of any AI chat client as a kno
 
 Chat2Know 是一个浏览器插件：叠在所有 AI 客户端之上的"知识层"，负责捕获、蒸馏、组织和检验对话中的知识。
 
-> Status: early development (M0). Not ready for use yet.
+> Status: early development (M4 done). Usable for daily dogfooding; expect changes.
 
 ## Try it locally
 
@@ -21,15 +21,18 @@ npm run build
 
 Open `chrome://extensions`, enable **Developer mode**, click **Load unpacked** and pick `.output/chrome-mv3`. After pulling updates, run `npm install && npm run build` again and click the reload button on the extension card.
 
-### Using it (M1)
+### Using it
 
-1. Click the Chat2Know toolbar icon to open the side panel.
+1. Click the Chat2Know toolbar icon to open the side panel. Open **⚙ Model settings** and enter any OpenAI-compatible endpoint: base URL, model and API key (an embedding model is optional and enables placement suggestions). Capturing works without a model.
 2. Select text on the page and click **Save** (knowledge) or **Idea** in the floating toolbar. Alternatively press **Alt+Shift+K** / **Alt+Shift+I**, or right-click → *Save to Chat2Know*.
 3. Hit a term you don't fully get? Select it and click **Ask later** (or press **Alt+Q**), optionally type your question, and keep reading. Work through the **Ask later** tab in the side panel when you're done; **Copy follow-up** gives you a ready-to-paste question for the chat.
-4. Cards appear in the side panel. Click the source link to jump back to the original text.
-5. Export everything as JSON or Markdown at any time; import JSON to restore.
+   Need it right away? **Ask now** answers in the side panel without touching the page.
+4. In **Ask later**, click **Ask here** for an answer. Answers wait in an inbox for 7 days; click **Keep** and choose a question to review it by and a short statement to keep. Anything you don't keep just expires.
+5. In **Cards**, pick one of the proposed questions as the title, drag cards into a tree, switch to **Conclusions** for an outline, or **Organize page** / **Organize pasted text** to turn a whole conversation into candidate cards.
+6. Mark what you must **know by heart** and use **Quiz me**. The number of such cards you pass each week is what Chat2Know optimizes for.
+7. Export everything as JSON or Markdown at any time; import JSON to restore.
 
-Everything stays in your browser. Nothing is sent anywhere.
+Your data stays in your browser. The only thing that leaves it is the text you ask about or organize, sent to the model provider you configured, with your own key. No telemetry.
 
 ## Docs
 

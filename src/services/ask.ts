@@ -4,10 +4,10 @@ import type { KeepDecision, Repository } from '@/src/db/repository';
 import type { InboxItem, KNode } from '@/src/db/types';
 
 /** How many recent decisions to show the model as examples of this user's taste. */
-export const PREFERENCE_EXAMPLES = 8;
+const PREFERENCE_EXAMPLES = 8;
 
 /** The question text sent to the model: the user's own, or a plain default about the term. */
-export function questionOf(node: KNode, defaultQuestion: (term: string) => string): string {
+function questionOf(node: KNode, defaultQuestion: (term: string) => string): string {
   if (node.title) return node.title;
   if (!node.term) throw new Error('Question has neither text nor term');
   return defaultQuestion(node.term);

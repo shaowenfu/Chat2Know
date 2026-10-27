@@ -69,7 +69,6 @@ export interface InboxItem {
   question: string;
   quote: string;
   answer: string;
-  parentNodeId?: string;
   createdAt: number;
   expiresAt: number;
   promotedNodeId?: string;

@@ -32,14 +32,8 @@ panel:
     n: Imported $1 cards
   importFailed: "Import failed: $1"
   delete: Delete
-  openSource: Open source
-  sourceUnavailable: Source page could not be opened
 type:
-  knowledge: Knowledge
   idea: Idea
-  insight: Insight
-  question: Question
-  topic: Topic
 ask:
   label: Ask later about
   labelNow: Ask now about

@@ -4,7 +4,7 @@ import type { Repository } from '@/src/db/repository';
 import type { KNode, Review, Verdict } from '@/src/db/types';
 
 /** What the learner is expected to recall: the kept statement, or the raw text when there is none. */
-export function expectedAnswer(node: KNode): string {
+function expectedAnswer(node: KNode): string {
   const expected = node.summary ?? node.body;
   if (!expected) throw new Error('Card has nothing to check against');
   return expected;

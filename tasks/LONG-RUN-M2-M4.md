@@ -70,7 +70,7 @@ and `docs/project-plan.md`, check `git log`, and continue from the first uncheck
 ## Final
 
 - [x] F1 Self-review of the whole diff vs `main`: bugs, dead code, redundant fallbacks, over-design, naming; fix.
-- [ ] F2 Docs: CHANGELOG, README usage, plan progress notes, CLAUDE.md if rules changed.
+- [x] F2 Docs: CHANGELOG, README usage, plan progress notes, CLAUDE.md if rules changed.
 - [ ] F3 `npm run check` green; fast-forward `main`; push `main` and this branch.
 
 ## Log

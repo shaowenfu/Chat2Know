@@ -190,9 +190,9 @@ flowchart LR
     BG["后台 Service Worker<br/>模型 Provider 层<br/>提炼、归类、出题队列<br/>消息路由与导出任务<br/>API Key 只在此处使用"]
     SP["侧边栏（Vue）<br/>卡片列表与问题树<br/>待问队列、现在问、临时区<br/>一键整理与刷卡确认<br/>讲给我听、考我"]
     ST[("本地存储<br/>IndexedDB（Dexie）<br/>节点、边、出处、复习<br/>操作日志 oplog<br/>导出 JSON、MD、OPML")]
-    OS["离屏文档 Offscreen<br/>本地嵌入模型<br/>transformers.js<br/>语义相似度归类"]
+    OS["语义归类<br/>嵌入向量缓存在本地<br/>挂载推荐、概念合并"]
   end
-  MS["模型服务（浏览器外）<br/>云端 API：自带 Key<br/>本地：Ollama、LM Studio<br/>只收到提示词内容"]
+  MS["模型服务（浏览器外）<br/>兼容 OpenAI 格式的接口<br/>自带 Key<br/>只收到提示词内容"]
   CS -- 捕获 --> BG
   BG -- 调用 --> MS
   BG <-- 读写 --> ST
@@ -205,7 +205,7 @@ flowchart LR
 
 内容脚本只负责捕获，侧栏只负责界面，所有模型调用和数据读写都经过后台，API Key 只在后台使用。
 
-**技术栈：** WXT（跨浏览器插件框架）+ Vue 3 + TypeScript；Dexie（IndexedDB）；Turndown（HTML 转 Markdown）；transformers.js（本地嵌入）；Vitest + Playwright（测试）。
+**技术栈：** WXT（跨浏览器插件框架）+ Vue 3 + TypeScript；Dexie（IndexedDB）；Turndown（HTML 转 Markdown）；fractional-indexing（兄弟节点排序）；Vitest + Playwright（测试）。模型和嵌入都通过用户配置的、兼容 OpenAI 格式的接口调用。
 
 ### 通用捕获方案（不做站点适配）
 
@@ -217,26 +217,29 @@ flowchart LR
 
 ### 模型层接口
 
-所有服务商实现同一个接口。大多数服务商兼容 OpenAI 格式，Anthropic 和 Gemini 各写一个转换层。
+只支持一种配置：兼容 OpenAI 格式的接口（几乎所有云端服务商都提供）。用户填写接口地址、模型名、Key，以及可选的嵌入模型名。不做流式输出：回答都很短。
 
 ```ts
-interface LLMProvider {
-  id: string;
-  kind: 'openai-compatible' | 'anthropic' | 'gemini' | 'ollama';
-  chat(req: ChatRequest, signal?: AbortSignal): AsyncIterable<ChatChunk>;
-  testConnection(): Promise<{ ok: boolean; message?: string }>;
+interface ModelSettings {
+  baseUrl: string;        // 例如 https://api.openai.com/v1
+  model: string;
+  apiKey: string;         // 只在后台读取
+  embeddingModel: string; // 为空则不启用挂载推荐和概念合并
 }
 
-interface EmbeddingProvider {
-  model: string;
-  embed(texts: string[]): Promise<Float32Array[]>;
+class LlmClient {
+  chat(messages: ChatMessage[]): Promise<string>;                          // POST {baseUrl}/chat/completions
+  json<T>(messages: ChatMessage[], parse: (v: unknown) => T): Promise<T>;  // 要求返回 JSON 并严格校验
+  embed(texts: string[]): Promise<number[][]>;                             // POST {baseUrl}/embeddings
 }
 ```
+
+模型返回的格式不对时直接报错给用户，不做猜测或修补。
 
 ### 权限
 
 - 必需：`sidePanel`、`storage`、`activeTab`、`scripting`、`contextMenus`。
-- 模型服务的地址作为可选主机权限，用户添加 Provider 时再申请。
+- 模型服务的地址作为可选主机权限，用户保存模型设置时再申请。
 - 不申请"读取所有网站"权限。内容脚本在用户触发时按需注入。
 - 这带来一个约束：`activeTab` 只在用户"调用"插件的那个标签页上生效（点工具栏图标打开侧栏、按快捷键、点右键菜单）。所以划词工具条只出现在用户调用过插件的页面上；没有权限的页面，侧栏会提示改用快捷键或右键菜单，这两种方式本身就会授予权限。
 - 跳回出处时打开的是新标签页，没有注入权限，因此主要依靠浏览器原生的 Text Fragment（`#:~:text=`）滚动和高亮；能注入时再用我们自己的锚点做更精确的高亮。
@@ -288,7 +291,13 @@ interface KNode {
 
 每个里程碑都要能独立使用，验收标准写成可以自动测试的形式，交给 Claude Code 按标准实现和自测。M1 不接 AI 也已经是一个有用的工具。
 
-**进度（2026-10-27）：** M0、M1 已完成，包括稍后问（整句引用、快捷疑问选项、页面下划线、待问队列、复制追问），数据库已升级到包含问句标题、掌握要求、临时区的第二版。M1 中"稍后问时的父节点"要等 M3 有了问题树才有意义，届时补上。真实网站的快照样本尚未到位（见任务卡 T001）。
+**进度（2026-10-27）：** M0–M4 已完成，执行记录与偏差说明见 `tasks/LONG-RUN-M2-M4.md`。与本表的差异：
+
+- M2 只支持一种模型配置：用户填写兼容 OpenAI 格式的接口地址、模型名和 Key（产品负责人决定，不做 Ollama 和多服务商适配）。
+- M4 的嵌入改用同一服务商的 `/embeddings` 接口（可选的嵌入模型），不再在本地运行 transformers.js；没有配置嵌入模型时，挂载推荐和概念合并不显示。
+- 稍后问的疑问不记录"父节点"：它是在网页上问的，没有可挂的节点。在侧栏里对回答或卡片"追问"时，才会生成 `arose_from` 子节点。
+- 评测脚本已就绪（`npm run eval`），但基线需要产品负责人用真实模型跑一次后提交。
+- 真实网站的快照样本尚未到位（见任务卡 T001）。
 
 | 里程碑 | 交付内容 | 验收标准 |
 | --- | --- | --- |
@@ -388,11 +397,12 @@ entrypoints/
   content/          # 划词工具条、捕获
   background.ts     # Provider 层、任务队列、消息路由
   sidepanel/        # Vue 侧栏应用
-  offscreen/        # 本地嵌入模型
 src/
   capture/          # DOM 转 Markdown、公式提取、消息边界、锚点
   db/               # Dexie 表结构、仓储层、oplog
-  llm/              # Provider 接口与实现、提示词
+  llm/              # 模型客户端、设置、提示词
+  services/         # 回答、记下、提炼、考我、挂载、整理（纯 TypeScript，不依赖插件 API）
+  review/           # 间隔重复的排期
   graph/            # 树与图的操作、归类、合并
   export/           # JSON / Markdown / OPML / Anki
   messaging/        # 类型安全的消息协议
@@ -451,7 +461,7 @@ CLAUDE.md
 | 分类和确认步骤太多 | 记录变成负担 | 记不记、掌握要求、挂载位置都由 AI 给默认值，一键接受；确认集中在待问队列和整理时批量完成 |
 | 记录建议判断错误 | 该记的被丢掉，或笔记变臃肿 | 用户可以随时改；从取舍中学习偏好；临时区到期前都能找回 |
 | 提炼质量不稳定 | 精华卡片不可信 | 卡片始终可以跳回原文；提示词版本化，用评测样本对比效果 |
-| 自带 Key 门槛高 | 非技术用户流失 | 设置页提供连接测试和常见服务商的预设；支持本地 Ollama；M1 不需要 Key 也能用 |
+| 自带 Key 门槛高 | 非技术用户流失 | 设置页提供连接测试；捕获和稍后问不需要 Key 也能用；以后由官方云服务解决（见开源策略） |
 | 后台脚本被浏览器休眠 | 长任务中断 | 任务队列持久化到 IndexedDB，唤醒后续跑 |
 
 **已定的交互决定（2026-10-27）：**

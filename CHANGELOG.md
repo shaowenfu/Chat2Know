@@ -6,6 +6,27 @@ All notable changes to this project are documented here. Format follows [Keep a 
 
 ### Added
 
+- M4 semantic help and organizing:
+  - Placement suggestions after keeping a card (top 3 similar cards as parents) and a merge offer for near-duplicate concepts, using the provider's embedding model when one is set.
+  - Default mastery suggestion (know by heart / understand / know where to find) by a simple rule, and a "know it by heart?" prompt for terms asked three times.
+  - The keep suggestion learns from earlier keep / drop decisions.
+  - Organize a whole page or pasted text: the model proposes cards with verbatim quotes; review once and keep.
+  - `npm run eval` measures suggestion, placement, mastery and organize quality against a real model.
+- M3 minimal quiz, tree and ask now:
+  - Mastery choice on cards and **Quiz me**: answer from memory, reveal and grade yourself or let the model judge; spaced repetition; local stats with the north star (cards mastered this week).
+  - Card tree with drag and drop (nest, reorder, move to top level), and a conclusions outline view.
+  - **Ask now** from the selection toolbar answers in the side panel without touching the page; **Follow up** on answers and cards creates child questions.
+- M2 model and ask/keep separation:
+  - Model settings: any OpenAI-compatible endpoint (base URL, model, API key, optional embedding model), connection test, host permission requested per origin.
+  - Answer queued questions in the side panel. Answers stay in a 7-day inbox; nothing enters the knowledge graph until you keep it.
+  - Keep flow: the model classifies the question (concept / instance / curiosity), proposes three review questions plus your own, and a short statement; instances hang under their concept.
+  - Captured knowledge is distilled in the background into a statement and three title candidates; failures show with a retry, the raw text is always kept.
+- Data: schema v3 (inbox links to its question, review indexes); preferences included in JSON export.
+
+### Fixed
+
+- The selection toolbar now really hides (it stayed on screen with stale content), and a status message no longer hides the next toolbar.
+
 - Ask later (M1, no AI, no network):
   - "Ask later" button, Alt+Q shortcut and right-click menu. The selection is expanded to its full sentence with `Intl.Segmenter` (Chinese, English and mixed text).
   - One-line question prompt with quick options (What is…? Why…? How is it different from…? What role does it play here?). Enter saves; Esc saves now so the question can be written later.

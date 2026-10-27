@@ -27,7 +27,10 @@ Core flow: **ask → keep or not → mastery requirement → verify**.
 - API keys live only in `chrome.storage.local`, are used only in the background, never logged, never exported by default.
 - All DB writes go through the repository layer in `src/db/`, which also appends to `oplog`. Exception: the `inbox` table is disposable and not logged; promoting an inbox item to a node is logged.
 - No "read all sites" permission. Inject content scripts on demand via `activeTab` + `scripting`.
-- All user-facing strings go through i18n (`en` default, `zh_CN`). No hard-coded UI strings.
+- All user-facing strings go through i18n (`en` default, `zh_CN`). No hard-coded UI strings. Errors the user can act on are thrown as `UserError(i18nKey, subs)` and translated where shown; internal invariant errors and provider errors stay verbatim.
+- One model configuration: an OpenAI-compatible base URL, model, key and optional embedding model (`src/llm/`). Model JSON is validated strictly; bad output is an error, never patched.
+- No defensive fallbacks. Let errors surface; catch only where there is a real recovery (e.g. storing a distill error on the card for retry).
+- Business logic lives in `src/services/` and `src/db/` as plain TypeScript (no extension APIs), so it can be reused outside the extension.
 
 ## Commands
 
@@ -51,3 +54,5 @@ Core flow: **ask → keep or not → mastery requirement → verify**.
 - The side panel screenshot is written to `tests/e2e/screenshots/sidepanel.png`; look at it after UI changes.
 - Page fixtures: every `tests/fixtures/pages/*.html` is converted and compared with `tests/fixtures/expected/*.md`. After a deliberate converter change, review the diff and update with `npx vitest run -u`.
 - Turndown gives rules added later higher priority; add generic rules before specific ones in `src/capture/markdown.ts`.
+- Model calls in tests go to the deterministic mock server in `tests/mock-llm/` (routes on the `[task:<name>]` tag every prompt carries; accepts only `Bearer test-key`). Never call a real model from `npm run check`.
+- `npm run eval` (see `tests/eval/README.md`) measures quality against a real model from `.env.local`; it is not part of `check`.
