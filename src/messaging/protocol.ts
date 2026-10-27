@@ -7,7 +7,7 @@ import type { CapturedSelection } from '@/src/capture/selection';
 import type { TextQuote } from '@/src/capture/text-quote';
 import type { AskLaterResult, CaptureType, ImportResult, KeepDecision, PageQuestion } from '@/src/db/repository';
 import type { InboxItem, Mastery, Review, Verdict } from '@/src/db/types';
-import type { Suggestion } from '@/src/llm/prompts';
+import type { CandidateCard, Suggestion } from '@/src/llm/prompts';
 import type { Placement } from '@/src/services/placement';
 import type { PublicSettings } from '@/src/llm/settings';
 import type { NodeView } from '@/src/db/types';
@@ -49,6 +49,14 @@ export interface MessageMap {
   /** Parent and duplicate suggestions for a card; null when no embedding model is configured. */
   'place/suggest': { req: { nodeId: string }; res: Placement | null };
   'nodes/merge': { req: { duplicateId: string; targetId: string }; res: null };
+  /** Organize a whole page (active tab when omitted) into candidate cards. */
+  'organize/page': { req: { tabId?: number }; res: { cards: CandidateCard[]; url: string; pageTitle: string } };
+  /** Organize pasted text into candidate cards. */
+  'organize/text': { req: { text: string }; res: { cards: CandidateCard[] } };
+  'organize/keep': {
+    req: { cards: { title: string; summary: string; quote: string }[]; page?: { url: string; pageTitle: string } };
+    res: { kept: number };
+  };
   'nodes/setMastery': { req: { id: string; mastery: Mastery | null }; res: null };
   'quiz/due': { req: Record<string, never>; res: NodeView[] };
   'quiz/grade': { req: { nodeId: string; answer: string; verdict: Verdict }; res: Review };
@@ -69,6 +77,7 @@ export interface MessageMap {
   // Background -> content script
   'content/capture': { req: Record<string, never>; res: CapturedSelection | null };
   'content/askLater': { req: Record<string, never>; res: null };
+  'content/pageMarkdown': { req: Record<string, never>; res: { markdown: string; url: string; pageTitle: string } };
   'content/highlight': { req: { quote: TextQuote }; res: { found: boolean } };
 
   // Background -> side panel (broadcast)

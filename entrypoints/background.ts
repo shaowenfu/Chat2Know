@@ -13,6 +13,7 @@ import { answerQuestion, confirmKeep, dismissQuestion, suggestKeep } from '@/src
 import { Distiller } from '@/src/services/distill';
 import { judge, selfGrade } from '@/src/services/quiz';
 import { suggestPlacement } from '@/src/services/placement';
+import { organize } from '@/src/services/organize';
 
 const CONTENT_SCRIPT = '/content-scripts/content.js';
 
@@ -240,6 +241,18 @@ export default defineBackground(() => {
       await (await repo()).mergeInto(duplicateId, targetId);
       notifyChanged();
       return null;
+    },
+    'organize/page': async ({ tabId }) => {
+      const id = await resolveTabId(tabId);
+      await inject(id);
+      const page = await sendTabMessage(id, 'content/pageMarkdown', {});
+      return { cards: await organize(await client(), page.markdown), url: page.url, pageTitle: page.pageTitle };
+    },
+    'organize/text': async ({ text }) => ({ cards: await organize(await client(), text) }),
+    'organize/keep': async ({ cards, page }) => {
+      const ids = await (await repo()).addCards(cards, page);
+      notifyChanged();
+      return { kept: ids.length };
     },
     'nodes/setMastery': async ({ id, mastery }) => {
       await (await repo()).setMastery(id, mastery ?? undefined);

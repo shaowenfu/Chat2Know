@@ -3,6 +3,7 @@ import { onMessages, sendMessage } from '@/src/messaging';
 import { captureSelection } from '@/src/capture/selection';
 import { prepareAskDraft } from '@/src/capture/ask';
 import { highlightQuote, underlineRange, underlineTerms } from '@/src/capture/highlight';
+import { htmlToMarkdown } from '@/src/capture/markdown';
 import { SelectionToolbar } from '@/src/capture/toolbar';
 
 declare global {
@@ -42,6 +43,7 @@ export default defineContentScript({
     onMessages({
       'content/capture': () => captureSelection(document, location.href),
       'content/highlight': ({ quote }) => ({ found: highlightQuote(document, quote) }),
+      'content/pageMarkdown': () => ({ markdown: htmlToMarkdown(document.body), url: location.href, pageTitle: document.title }),
       'content/askLater': () => {
         if (!toolbar.openAskPrompt('later')) throw new Error('No text selected');
         return null;

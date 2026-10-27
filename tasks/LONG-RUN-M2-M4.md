@@ -64,7 +64,7 @@ and `docs/project-plan.md`, check `git log`, and continue from the first uncheck
 - [x] M4.1 Embeddings via provider (when embedding model set), cached per node+model. Mount recommendation (top-3 parents) when confirming a card. Concept merge prompt above a similarity threshold; merging moves sources, adds askCount, soft-deletes the duplicate.
 - [x] M4.2 Mastery suggestion by rule (dependents via child/arose_from edges, askCount ≥ 3) as the selector default; "asked 3 times — must know by heart?" prompt in the queue.
 - [x] M4.3 Learn from choices: recent preferences as few-shot examples in the recording-suggestion prompt.
-- [ ] M4.4 Whole-page organize (content script extracts page Markdown) and paste organize: model splits into Q&A turns and candidate cards; keep / edit / discard each.
+- [x] M4.4 Whole-page organize (content script extracts page Markdown) and paste organize: model splits into Q&A turns and candidate cards; keep / edit / discard each.
 - [ ] M4.5 Eval harness `tests/eval/` (EVAL=1, real provider from env): mount top-3 hit rate, mastery suggestion accuracy, page split on fixtures. Baseline recorded when the owner runs it.
 
 ## Final
@@ -83,3 +83,4 @@ Short notes on deviations and why, newest last.
 - M3.3: Ask now has no shortcut or context-menu entry (toolbar only); the shortcut slots stay for capture and ask later. A failed ask-now keeps the question in the queue.
 - M4.1: Embedding rows store the embedded text (to detect staleness) and a plain number array; dropped the derivable `dim`. Duplicate threshold 0.9 cosine; tune with the eval harness on a real embedding model.
 - M4.3: Already delivered in M2.3 (preferences recorded on keep/dismiss; last 8 sent as examples in the suggestion prompt; unit-tested). Whether the model actually stops suggesting deleted info types is a real-model property, measured by the eval harness.
+- M4.4: Candidates are transient (not persisted); one model request per pass, input capped at 100k characters with an explicit error. Organized cards are confirmed knowledge with the model's verbatim quote as source (page) or no source (paste).

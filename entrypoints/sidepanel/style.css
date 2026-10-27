@@ -493,3 +493,32 @@ button.danger:hover {
   border-color: var(--accent);
   color: var(--accent);
 }
+
+.organize {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.organize h2 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.organize textarea {
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--fg);
+  font: inherit;
+  font-size: 13px;
+}
+
+.grow {
+  flex: 1;
+}
+
+.card.off {
+  opacity: 0.5;
+}

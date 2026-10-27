@@ -1,4 +1,5 @@
 import type { ChatMessage } from './client';
+import { LlmError } from './client';
 import { obj, oneOf, str, strList } from './validate';
 
 /**
@@ -131,4 +132,33 @@ export function judgePrompt(input: { question: string; expected: string; answer:
 export function parseJudgement(value: unknown): Judgement {
   const o = obj(value);
   return { verdict: oneOf(o, 'verdict', VERDICTS), feedback: str(o, 'feedback') };
+}
+
+// ---------------------------------------------------------------- organize (whole page / paste)
+
+export interface CandidateCard {
+  question: string;
+  summary: string;
+  quote: string; // verbatim excerpt from the text, used as provenance
+}
+
+export const MAX_CANDIDATES = 12;
+
+export function organizePrompt(text: string): ChatMessage[] {
+  return [
+    system(
+      'organize',
+      `The user gives you an AI conversation (or part of one) as text. Split it into question-and-answer turns, then propose cards worth keeping for later study: transferable concepts, mechanisms and conclusions, not filler, not fast-changing facts. At most ${MAX_CANDIDATES} cards; zero is fine. Return JSON only: {"cards": [{"question": "a question worth reviewing", "summary": "1–3 sentence statement answering it", "quote": "a short excerpt copied verbatim from the text that supports it"}]}. Keep formulas in LaTeX. ${SAME_LANGUAGE}`,
+    ),
+    { role: 'user', content: text },
+  ];
+}
+
+export function parseCandidates(value: unknown): CandidateCard[] {
+  const cards = obj(value).cards;
+  if (!Array.isArray(cards)) throw new LlmError('Expected "cards" to be a list');
+  return cards.map((c) => {
+    const o = obj(c);
+    return { question: str(o, 'question'), summary: str(o, 'summary'), quote: str(o, 'quote') };
+  });
 }

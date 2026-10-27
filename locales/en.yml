@@ -146,3 +146,21 @@ place:
   duplicate: "Looks like the same concept as \"$1\"."
   merge: Merge
   skip: Leave at top level
+organize:
+  page: Organize page
+  paste: Organize pasted text
+  pageTitle: Organize this page
+  pasteTitle: Organize pasted text
+  pastePlaceholder: Paste an answer or a whole conversation (use the chat's own Copy button for best fidelity)
+  start: Organize
+  working: Organizing…
+  none: Nothing worth keeping was found.
+  keepThis: Keep this card
+  keepSelected:
+    0: Keep selected
+    1: Keep 1 card
+    n: Keep $1 cards
+  kept:
+    0: No cards kept
+    1: Kept 1 card
+    n: Kept $1 cards

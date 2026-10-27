@@ -240,6 +240,37 @@ export class Repository {
     });
   }
 
+  /** Adds cards the user kept from an organize pass, each with its quote as provenance. */
+  async addCards(cards: { title: string; summary: string; quote: string }[], page?: { url: string; pageTitle: string }): Promise<string[]> {
+    const ids: string[] = [];
+    await this.db.transaction('rw', this.db.nodes, this.db.sources, this.db.oplog, async () => {
+      for (const c of cards) {
+        const at = this.now();
+        const node: KNode = {
+          id: this.ulid(at),
+          type: 'knowledge',
+          title: c.title.trim(),
+          summary: c.summary.trim(),
+          body: c.quote,
+          status: 'confirmed',
+          askCount: 0,
+          createdAt: at,
+          updatedAt: this.clock.tick(),
+        };
+        if (!node.title || !node.summary) throw new Error('Title and summary are required');
+        await this.db.nodes.add(node);
+        await this.db.oplog.add(this.log('nodes', node.id, 'put', node));
+        if (page) {
+          const source = this.newSource(node.id, { ...page, markdown: c.quote, quote: { exact: c.quote, prefix: '', suffix: '' } }, at);
+          await this.db.sources.add(source);
+          await this.db.oplog.add(this.log('sources', source.id, 'put', source));
+        }
+        ids.push(node.id);
+      }
+    });
+    return ids;
+  }
+
   async sourcesOf(nodeId: string): Promise<Source[]> {
     return this.db.sources.where('nodeId').equals(nodeId).toArray();
   }

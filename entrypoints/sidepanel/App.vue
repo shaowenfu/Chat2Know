@@ -7,6 +7,7 @@ import type { InboxItem, NodeView } from '@/src/db/types';
 import type { PublicSettings } from '@/src/llm/settings';
 import AskQueue from './components/AskQueue.vue';
 import CardList from './components/CardList.vue';
+import OrganizeView from './components/OrganizeView.vue';
 import PlacementPrompt from './components/PlacementPrompt.vue';
 import QuizView from './components/QuizView.vue';
 import SettingsView from './components/SettingsView.vue';
@@ -14,7 +15,7 @@ import { NOTIFY, errorText } from './notify';
 import { PLACE } from './placement';
 import type { Placement } from '@/src/services/placement';
 
-type View = 'queue' | 'cards' | 'quiz' | 'settings';
+type View = 'queue' | 'cards' | 'quiz' | 'settings' | 'organize-page' | 'organize-paste';
 const view = ref<View>('cards');
 
 const nodes = ref<NodeView[]>([]);
@@ -179,7 +180,9 @@ onUnmounted(() => browser.tabs.onActivated.removeListener(onTabActivated));
       @done="placing = null"
     />
 
-    <SettingsView v-if="view === 'settings' && settings" :key="settings.baseUrl + settings.model" :settings="settings" />
+    <OrganizeView v-if="view === 'organize-page' || view === 'organize-paste'" :source="view === 'organize-page' ? 'page' : 'paste'" @done="view = 'cards'" />
+
+    <SettingsView v-else-if="view === 'settings' && settings" :key="settings.baseUrl + settings.model" :settings="settings" />
 
     <template v-else>
       <nav class="tabs" role="tablist">
@@ -204,6 +207,8 @@ onUnmounted(() => browser.tabs.onActivated.removeListener(onTabActivated));
           <button type="button" data-testid="export-json" @click="exportJson">{{ i18n.t('panel.exportJson') }}</button>
           <button type="button" data-testid="export-md" @click="exportMarkdown">{{ i18n.t('panel.exportMarkdown') }}</button>
           <button type="button" data-testid="import-json" @click="fileInput?.click()">{{ i18n.t('panel.importJson') }}</button>
+          <button type="button" data-testid="organize-page" :disabled="!configured" @click="view = 'organize-page'">{{ i18n.t('organize.page') }}</button>
+          <button type="button" data-testid="organize-paste" :disabled="!configured" @click="view = 'organize-paste'">{{ i18n.t('organize.paste') }}</button>
           <input ref="fileInput" type="file" accept="application/json,.json" hidden data-testid="import-input" @change="importJson">
         </section>
         <CardList :cards="cards" :configured="configured" @open-source="openSource" />

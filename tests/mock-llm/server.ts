@@ -69,6 +69,19 @@ function chatReply(task: string, user: string): string {
       const hit = [...words(between(user, "Learner's answer:\n", '\u0000'))].some((w) => expected.has(w));
       return JSON.stringify(hit ? { verdict: 'pass', feedback: 'Covers the key point.' } : { verdict: 'fail', feedback: 'Misses the key point.' });
     }
+    case 'organize': {
+      // One card per substantial paragraph, quoting its first sentence verbatim.
+      const cards = user
+        .split(/\n\s*\n/)
+        .map((p) => p.trim())
+        .filter((p) => p.length > 40 && !p.startsWith('```') && !p.startsWith('|'))
+        .slice(0, 5)
+        .map((p) => {
+          const first = p.split(/(?<=[.。!?！？])\s*/)[0]!;
+          return { question: `What does this say: ${first.split(/\s+/).slice(0, 4).join(' ')}?`, summary: first, quote: first };
+        });
+      return JSON.stringify({ cards });
+    }
     default:
       return `Unknown task ${task}`;
   }

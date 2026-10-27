@@ -146,3 +146,21 @@ place:
   duplicate: "看起来和\"$1\"是同一个概念。"
   merge: 合并
   skip: 留在顶层
+organize:
+  page: 整理本页
+  paste: 粘贴整理
+  pageTitle: 整理当前页面
+  pasteTitle: 粘贴整理
+  pastePlaceholder: 粘贴一段回答或整段对话（用网站自带的"复制"按钮复制，保真度最高）
+  start: 开始整理
+  working: 正在整理…
+  none: 没有发现值得记下的内容。
+  keepThis: 记下这张
+  keepSelected:
+    0: 记下选中的
+    1: 记下 1 张
+    n: 记下 $1 张
+  kept:
+    0: 没有记下卡片
+    1: 已记下 1 张卡片
+    n: 已记下 $1 张卡片
