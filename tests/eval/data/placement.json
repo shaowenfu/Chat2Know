@@ -1,0 +1,17 @@
+{
+  "cards": [
+    { "id": "attention", "title": "What does attention compute?", "summary": "Attention mixes value vectors weighted by the similarity of queries and keys." },
+    { "id": "cache", "title": "Why does a CPU cache speed up programs?", "summary": "Caches keep recently used memory close to the core, exploiting locality." },
+    { "id": "vlm", "title": "What parts make up a VLM?", "summary": "A vision encoder turns images into vectors and a language model reasons over them with text." },
+    { "id": "sgd", "title": "How does stochastic gradient descent update weights?", "summary": "It steps against the gradient of the loss computed on a small batch." },
+    { "id": "tokenizer", "title": "What does a tokenizer do?", "summary": "It splits text into subword units and maps them to integer ids." }
+  ],
+  "queries": [
+    { "title": "Why scale attention scores by sqrt(d)?", "summary": "Scaling keeps softmax over query-key scores from saturating.", "expected": "attention" },
+    { "title": "What is multi-head attention?", "summary": "Several attention heads attend to different subspaces in parallel.", "expected": "attention" },
+    { "title": "What is a projector in a VLM?", "summary": "A projector maps vision features into the language model's embedding space.", "expected": "vlm" },
+    { "title": "What is cache locality?", "summary": "Programs reuse nearby memory soon, so caches hit often.", "expected": "cache" },
+    { "title": "What is the learning rate?", "summary": "The step size that scales each gradient update.", "expected": "sgd" },
+    { "title": "What is byte-pair encoding?", "summary": "BPE merges frequent symbol pairs to build a subword vocabulary.", "expected": "tokenizer" }
+  ]
+}

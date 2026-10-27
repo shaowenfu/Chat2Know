@@ -1,0 +1,8 @@
+[
+  { "case": "core concept many cards build on", "askCount": 0, "dependents": 3, "instance": false, "expected": "internalize" },
+  { "case": "asked about four times", "askCount": 4, "dependents": 0, "instance": false, "expected": "internalize" },
+  { "case": "derivation detail, nothing builds on it", "askCount": 1, "dependents": 0, "instance": false, "expected": "understand" },
+  { "case": "design choice with one follow-up", "askCount": 0, "dependents": 1, "instance": false, "expected": "understand" },
+  { "case": "a specific model as an example", "askCount": 0, "dependents": 0, "instance": true, "expected": "index" },
+  { "case": "an example asked about repeatedly", "askCount": 3, "dependents": 0, "instance": true, "expected": "index" }
+]
