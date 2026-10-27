@@ -105,3 +105,23 @@ settings:
   permissionDenied: "没有获得访问 $1 的权限"
   needed: 配置模型后，才能回答待问和提炼卡片。
   privacy: Key 只保存在本浏览器里。只有你提问的内容会发给你配置的模型服务商。
+mastery:
+  label: 这张卡片需要掌握到什么程度？
+  internalize: 要熟记
+  understand: 要理解
+  index: 知道在哪
+quiz:
+  tab: 考我
+  masteredThisWeek: 本周掌握
+  dueNow: 待复习
+  mustKnow: 要熟记
+  noneMarked: 把卡片标为"要熟记"，就会在这里考你。
+  allDone: 暂时没有要复习的，晚点再来。
+  answerPlaceholder: 不看原文，凭记忆回答
+  reveal: 看答案
+  judge: 让 AI 判断
+  judging: 判断中…
+  howDidYouDo: 答得怎么样？
+  verdict_pass: 记得
+  verdict_partial: 模糊
+  verdict_fail: 忘了

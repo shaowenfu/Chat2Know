@@ -108,3 +108,27 @@ export function parseDistillation(value: unknown): Distillation {
   const o = obj(value);
   return { titles: strList(o, 'titles', 3), summary: str(o, 'summary') };
 }
+
+// ---------------------------------------------------------------- judge (quiz me)
+
+export const VERDICTS = ['pass', 'partial', 'fail'] as const;
+
+export interface Judgement {
+  verdict: (typeof VERDICTS)[number];
+  feedback: string;
+}
+
+export function judgePrompt(input: { question: string; expected: string; answer: string }): ChatMessage[] {
+  return [
+    system(
+      'judge',
+      `You check a learner's recall. Compare their answer with the expected answer on meaning, not wording. "pass": the key points are there and correct. "partial": some key points missing or vague. "fail": wrong or mostly missing. Return JSON only: {"verdict": "pass" | "partial" | "fail", "feedback": "one or two sentences naming what was missing or wrong"}. ${SAME_LANGUAGE}`,
+    ),
+    { role: 'user', content: `Question: ${input.question}\n\nExpected answer:\n${input.expected}\n\nLearner's answer:\n${input.answer}` },
+  ];
+}
+
+export function parseJudgement(value: unknown): Judgement {
+  const o = obj(value);
+  return { verdict: oneOf(o, 'verdict', VERDICTS), feedback: str(o, 'feedback') };
+}

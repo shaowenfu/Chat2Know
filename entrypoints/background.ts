@@ -11,6 +11,7 @@ import { LlmClient } from '@/src/llm/client';
 import { isConfigured, loadSettings, saveSettings, toPublic } from '@/src/llm/settings';
 import { answerQuestion, confirmKeep, dismissQuestion, suggestKeep } from '@/src/services/ask';
 import { Distiller } from '@/src/services/distill';
+import { judge, selfGrade } from '@/src/services/quiz';
 
 const CONTENT_SCRIPT = '/content-scripts/content.js';
 
@@ -208,6 +209,23 @@ export default defineBackground(() => {
       await (await distiller()).retry(id);
       return null;
     },
+    'nodes/setMastery': async ({ id, mastery }) => {
+      await (await repo()).setMastery(id, mastery ?? undefined);
+      notifyChanged();
+      return null;
+    },
+    'quiz/due': async () => (await repo()).dueForQuiz(),
+    'quiz/grade': async ({ nodeId, answer, verdict }) => {
+      const review = await selfGrade(await repo(), nodeId, answer, verdict);
+      notifyChanged();
+      return review;
+    },
+    'quiz/judge': async ({ nodeId, answer }) => {
+      const review = await judge(await repo(), await client(), nodeId, answer);
+      notifyChanged();
+      return review;
+    },
+    'stats/get': async () => (await repo()).stats(),
     'settings/get': async () => toPublic(await loadSettings()),
     'settings/save': async ({ baseUrl, model, embeddingModel, apiKey }) => {
       const current = await loadSettings();

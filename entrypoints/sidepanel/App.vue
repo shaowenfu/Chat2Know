@@ -7,15 +7,18 @@ import type { InboxItem, NodeView } from '@/src/db/types';
 import type { PublicSettings } from '@/src/llm/settings';
 import AskQueue from './components/AskQueue.vue';
 import CardList from './components/CardList.vue';
+import QuizView from './components/QuizView.vue';
 import SettingsView from './components/SettingsView.vue';
 import { NOTIFY, errorText } from './notify';
 
-type View = 'queue' | 'cards' | 'settings';
+type View = 'queue' | 'cards' | 'quiz' | 'settings';
 const view = ref<View>('cards');
 
 const nodes = ref<NodeView[]>([]);
 const inbox = ref<InboxItem[]>([]);
 const settings = ref<PublicSettings | null>(null);
+const due = ref<NodeView[]>([]);
+const stats = ref({ masteredThisWeek: 0, due: 0, mustKnow: 0, openQuestions: 0 });
 const toolbarUnavailable = ref(false);
 const notice = ref<{ text: string; error: boolean } | null>(null);
 const fileInput = ref<HTMLInputElement | null>(null);
@@ -47,10 +50,12 @@ const leftovers = computed(() => {
 });
 
 async function refresh() {
-  [nodes.value, inbox.value, settings.value] = await Promise.all([
+  [nodes.value, inbox.value, settings.value, due.value, stats.value] = await Promise.all([
     sendMessage('nodes/list', {}),
     sendMessage('inbox/list', {}),
     sendMessage('settings/get', {}),
+    sendMessage('quiz/due', {}),
+    sendMessage('stats/get', {}),
   ]);
 }
 
@@ -159,9 +164,14 @@ onUnmounted(() => browser.tabs.onActivated.removeListener(onTabActivated));
         <button type="button" role="tab" :aria-selected="view === 'cards'" data-testid="tab-cards" @click="view = 'cards'">
           {{ i18n.t('queue.cardsTab') }}<span v-if="cards.length" class="pill">{{ cards.length }}</span>
         </button>
+        <button type="button" role="tab" :aria-selected="view === 'quiz'" data-testid="tab-quiz" @click="view = 'quiz'">
+          {{ i18n.t('quiz.tab') }}<span v-if="due.length" class="pill">{{ due.length }}</span>
+        </button>
       </nav>
 
-      <AskQueue v-if="view === 'queue'" :items="queue" :answers="answers" :leftovers="leftovers" @open-source="openSource" />
+      <QuizView v-if="view === 'quiz'" :due="due" :configured="configured" :stats="stats" />
+
+      <AskQueue v-else-if="view === 'queue'" :items="queue" :answers="answers" :leftovers="leftovers" @open-source="openSource" />
 
       <template v-else>
         <section class="actions">

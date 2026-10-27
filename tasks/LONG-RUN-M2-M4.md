@@ -55,7 +55,7 @@ and `docs/project-plan.md`, check `git log`, and continue from the first uncheck
 
 ## M3: minimal quiz, tree, ask now
 
-- [ ] M3.1 Mastery selector on cards with everyday labels (must know by heart / understand / know where to find). Quiz view: due internalize cards, answer, reveal, self-grade or AI judge, schedule, `mastered` on pass. Stats: north star this week, due count.
+- [x] M3.1 Mastery selector on cards with everyday labels (must know by heart / understand / know where to find). Quiz view: due internalize cards, answer, reveal, self-grade or AI judge, schedule, `mastered` on pass. Stats: north star this week, due count.
 - [ ] M3.2 Question tree view (explore) and conclusion view; drag a node onto another to make it a child, reorder persisted with fractional index.
 - [ ] M3.3 Ask now from the toolbar (inbox answer) and follow-up questions in the panel that create child nodes. Assert host page DOM unchanged (excluding our UI host) during ask now.
 
@@ -79,3 +79,4 @@ Short notes on deviations and why, newest last.
 
 - M2: Added `term`, `titleCandidates`, `distillError` on nodes and `questionNodeId` on inbox items (schema v3). Needed to merge repeat asks, hold title candidates until the user picks, and link answers to questions. Ideas are now saved as `confirmed` (they are never distilled or titled).
 - M2: Tree edges are directed parent → child for every kind (`child`, `arose_from`, `instance_of`), one incoming tree edge per node. Keeps M3's tree a single query.
+- M3.1: Dropped the unused `ease` field from reviews (fixed-ease schedule). Folded the reviews `createdAt` index into schema v3, which has not shipped yet.

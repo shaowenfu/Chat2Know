@@ -3,7 +3,8 @@ import { monotonicFactory } from 'ulid';
 import type { CapturedSelection } from '@/src/capture/selection';
 import { Hlc } from './hlc';
 import type { Chat2KnowDB } from './schema';
-import type { Edge, EdgeKind, Entity, InboxItem, KNode, Mastery, NodeView, OpLogEntry, Preference, Review, Source } from './types';
+import type { Edge, EdgeKind, Entity, InboxItem, KNode, Mastery, NodeView, OpLogEntry, Preference, Review, Source, Verdict } from './types';
+import { DAY_MS, isDue, nextInterval } from '@/src/review/schedule';
 import type { TextQuote } from '@/src/capture/text-quote';
 import { titleFromMarkdown } from './title';
 
@@ -317,12 +318,69 @@ export class Repository {
   }
 
   /** Live nodes, newest first, each with its sources. */
+  /** Live nodes, newest first, each with its sources and tree parent. */
   async listNodes(): Promise<NodeView[]> {
     const nodes = (await this.db.nodes.orderBy('createdAt').reverse().toArray()).filter((n) => n.deletedAt === undefined);
-    const sources = await this.db.sources.where('nodeId').anyOf(nodes.map((n) => n.id)).toArray();
+    const ids = nodes.map((n) => n.id);
+    const sources = await this.db.sources.where('nodeId').anyOf(ids).toArray();
     const byNode = new Map<string, Source[]>();
     for (const s of sources) byNode.set(s.nodeId, [...(byNode.get(s.nodeId) ?? []), s]);
-    return nodes.map((n) => ({ ...n, sources: byNode.get(n.id) ?? [] }));
+    const parents = new Map((await this.db.edges.where('to').anyOf(ids).toArray()).map((e) => [e.to, e]));
+    return nodes.map((n) => {
+      const e = parents.get(n.id);
+      return { ...n, sources: byNode.get(n.id) ?? [], ...(e ? { parent: { id: e.from, kind: e.kind, order: e.order } } : {}) };
+    });
+  }
+
+  // ------------------------------------------------------------ mastery and review
+
+  async setMastery(id: string, mastery: Mastery | undefined): Promise<void> {
+    await this.db.transaction('rw', this.db.nodes, this.db.oplog, () => this.patchNode(id, { mastery }));
+  }
+
+  private async latestReviews(): Promise<Map<string, Review>> {
+    const latest = new Map<string, Review>();
+    for (const r of await this.db.reviews.orderBy('createdAt').toArray()) latest.set(r.nodeId, r);
+    return latest;
+  }
+
+  /** Cards the user must know by heart whose review is due, oldest due first. */
+  async dueForQuiz(): Promise<NodeView[]> {
+    const now = this.now();
+    const latest = await this.latestReviews();
+    return (await this.listNodes())
+      .filter((n) => n.mastery === 'internalize' && n.status !== 'draft' && isDue(latest.get(n.id), now))
+      .sort((a, b) => (latest.get(a.id)?.dueAt ?? 0) - (latest.get(b.id)?.dueAt ?? 0));
+  }
+
+  /** Records a recall review, schedules the next one and moves the card in or out of `mastered`. */
+  async recordReview(input: { nodeId: string; prompt: string; answer: string; verdict: Verdict; feedback?: string }): Promise<Review> {
+    return this.db.transaction('rw', [this.db.nodes, this.db.reviews, this.db.oplog], async () => {
+      const previous = (await this.db.reviews.where('nodeId').equals(input.nodeId).sortBy('createdAt')).at(-1);
+      const at = this.now();
+      const interval = nextInterval(previous?.interval, input.verdict);
+      const review: Review = { ...input, id: this.ulid(at), mode: 'recall', interval, dueAt: at + interval * DAY_MS, createdAt: at };
+      await this.db.reviews.add(review);
+      await this.db.oplog.add(this.log('reviews', review.id, 'put', review));
+      if (input.verdict !== 'partial') await this.patchNode(input.nodeId, { status: input.verdict === 'pass' ? 'mastered' : 'confirmed' });
+      return review;
+    });
+  }
+
+  /** North star and queue sizes for the stats panel. */
+  async stats(): Promise<{ masteredThisWeek: number; due: number; mustKnow: number; openQuestions: number }> {
+    const now = this.now();
+    const nodes = await this.listNodes();
+    const mustKnow = new Set(nodes.filter((n) => n.mastery === 'internalize').map((n) => n.id));
+    const passed = (await this.db.reviews.where('createdAt').aboveOrEqual(now - 7 * DAY_MS).toArray()).filter(
+      (r) => r.verdict === 'pass' && mustKnow.has(r.nodeId),
+    );
+    return {
+      masteredThisWeek: new Set(passed.map((r) => r.nodeId)).size,
+      due: (await this.dueForQuiz()).length,
+      mustKnow: mustKnow.size,
+      openQuestions: nodes.filter((n) => n.type === 'question' && n.status === 'open').length,
+    };
   }
 
   async getSource(id: string): Promise<Source | undefined> {

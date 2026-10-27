@@ -6,7 +6,7 @@
 import type { CapturedSelection } from '@/src/capture/selection';
 import type { TextQuote } from '@/src/capture/text-quote';
 import type { AskLaterResult, CaptureType, ImportResult, KeepDecision, PageQuestion } from '@/src/db/repository';
-import type { InboxItem } from '@/src/db/types';
+import type { InboxItem, Mastery, Review, Verdict } from '@/src/db/types';
 import type { Suggestion } from '@/src/llm/prompts';
 import type { PublicSettings } from '@/src/llm/settings';
 import type { NodeView } from '@/src/db/types';
@@ -39,6 +39,11 @@ export interface MessageMap {
   'keep/confirm': { req: { inboxId: string; suggestion: Suggestion; decision: KeepDecision }; res: null };
   'nodes/confirmTitle': { req: { id: string; title: string }; res: null };
   'nodes/retryDistill': { req: { id: string }; res: null };
+  'nodes/setMastery': { req: { id: string; mastery: Mastery | null }; res: null };
+  'quiz/due': { req: Record<string, never>; res: NodeView[] };
+  'quiz/grade': { req: { nodeId: string; answer: string; verdict: Verdict }; res: Review };
+  'quiz/judge': { req: { nodeId: string; answer: string }; res: Review };
+  'stats/get': { req: Record<string, never>; res: { masteredThisWeek: number; due: number; mustKnow: number; openQuestions: number } };
   'settings/get': { req: Record<string, never>; res: PublicSettings };
   /** Omitting apiKey keeps the stored key. */
   'settings/save': { req: { baseUrl: string; model: string; embeddingModel: string; apiKey?: string }; res: PublicSettings };

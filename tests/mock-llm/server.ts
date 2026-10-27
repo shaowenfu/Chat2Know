@@ -62,6 +62,13 @@ function chatReply(task: string, user: string): string {
       const first = user.split(/(?<=[.。!?])\s/)[0]!.slice(0, 120);
       return JSON.stringify({ titles: ['What is the key idea?', 'Why does it hold?', 'How is it applied?'], summary: `Distilled: ${first}` });
     }
+    case 'judge': {
+      // Pass when the learner's answer shares a 4+ letter word with the expected answer.
+      const words = (s: string) => new Set(s.toLowerCase().match(/[a-z]{4,}/g) ?? []);
+      const expected = words(between(user, 'Expected answer:\n', '\n\n'));
+      const hit = [...words(between(user, "Learner's answer:\n", '\u0000'))].some((w) => expected.has(w));
+      return JSON.stringify(hit ? { verdict: 'pass', feedback: 'Covers the key point.' } : { verdict: 'fail', feedback: 'Misses the key point.' });
+    }
     default:
       return `Unknown task ${task}`;
   }

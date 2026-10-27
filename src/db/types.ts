@@ -47,17 +47,18 @@ export interface Source {
   capturedAt: number;
 }
 
+export type Verdict = 'pass' | 'partial' | 'fail';
+
 export interface Review {
   id: string;
   nodeId: string;
   mode: 'recall' | 'explain';
   prompt: string;
   answer: string;
-  verdict: 'pass' | 'partial' | 'fail';
+  verdict: Verdict;
   feedback?: string;
   dueAt: number;
-  interval: number;
-  ease: number;
+  interval: number; // days until the next review
   createdAt: number;
 }
 
@@ -104,4 +105,6 @@ export interface OpLogEntry {
 /** A node as the side panel shows it. */
 export interface NodeView extends KNode {
   sources: Source[];
+  /** Incoming tree edge, if the node has a parent. */
+  parent?: { id: string; kind: EdgeKind; order: string };
 }
