@@ -56,6 +56,12 @@ async function captureFromTab(type: CaptureType, tabId?: number): Promise<{ node
   return save(type, capture);
 }
 
+async function askFromTab(tabId?: number): Promise<null> {
+  const id = await resolveTabId(tabId);
+  await inject(id);
+  return sendTabMessage(id, 'content/askLater', {});
+}
+
 function waitForComplete(tabId: number, timeoutMs = 15_000): Promise<void> {
   return new Promise((resolve) => {
     const done = () => {
@@ -92,6 +98,7 @@ async function openSource(sourceId: string): Promise<{ tabId: number; highlighte
 
 const MENU_KNOWLEDGE = 'chat2know-save-knowledge';
 const MENU_IDEA = 'chat2know-save-idea';
+const MENU_ASK = 'chat2know-ask-later';
 
 export default defineBackground(() => {
   void browser.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
@@ -100,16 +107,25 @@ export default defineBackground(() => {
     void browser.contextMenus.removeAll().then(() => {
       browser.contextMenus.create({ id: MENU_KNOWLEDGE, title: i18n.t('menu.saveKnowledge'), contexts: ['selection'] });
       browser.contextMenus.create({ id: MENU_IDEA, title: i18n.t('menu.saveIdea'), contexts: ['selection'] });
+      browser.contextMenus.create({ id: MENU_ASK, title: i18n.t('menu.askLater'), contexts: ['selection'] });
     });
   });
 
   browser.contextMenus.onClicked.addListener((info, tab) => {
+    if (info.menuItemId === MENU_ASK && tab?.id !== undefined) {
+      askFromTab(tab.id).catch(() => {});
+      return;
+    }
     const type: CaptureType | undefined =
       info.menuItemId === MENU_KNOWLEDGE ? 'knowledge' : info.menuItemId === MENU_IDEA ? 'idea' : undefined;
     if (type && tab?.id !== undefined) captureFromTab(type, tab.id).catch(() => {});
   });
 
   browser.commands.onCommand.addListener((command, tab) => {
+    if (command === 'ask-later') {
+      askFromTab(tab?.id).catch(() => {});
+      return;
+    }
     const type: CaptureType | undefined =
       command === 'capture-knowledge' ? 'knowledge' : command === 'capture-idea' ? 'idea' : undefined;
     if (type) captureFromTab(type, tab?.id).catch(() => {});
@@ -124,6 +140,18 @@ export default defineBackground(() => {
     },
     'capture/save': ({ type, capture }) => save(type, capture),
     'capture/fromTab': ({ type, tabId }) => captureFromTab(type, tabId),
+    'ask/save': async (input) => {
+      const res = await (await repo()).askLater(input);
+      notifyNodesChanged();
+      return res;
+    },
+    'ask/update': async ({ id, question }) => {
+      await (await repo()).updateQuestion(id, question);
+      notifyNodesChanged();
+      return null;
+    },
+    'ask/fromTab': ({ tabId }) => askFromTab(tabId),
+    'ask/forUrl': async ({ url }) => (await repo()).questionsForUrl(url),
     'nodes/list': async () => (await repo()).listNodes(),
     'nodes/delete': async ({ id }) => {
       await (await repo()).deleteNode(id);

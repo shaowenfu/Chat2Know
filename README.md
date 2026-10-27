@@ -25,8 +25,9 @@ Open `chrome://extensions`, enable **Developer mode**, click **Load unpacked** a
 
 1. Click the Chat2Know toolbar icon to open the side panel.
 2. Select text on the page and click **Save** (knowledge) or **Idea** in the floating toolbar. Alternatively press **Alt+Shift+K** / **Alt+Shift+I**, or right-click → *Save to Chat2Know*.
-3. Cards appear in the side panel. Click the source link to jump back to the original text.
-4. Export everything as JSON or Markdown at any time; import JSON to restore.
+3. Hit a term you don't fully get? Select it and click **Ask later** (or press **Alt+Q**), optionally type your question, and keep reading. Work through the **Ask later** tab in the side panel when you're done; **Copy follow-up** gives you a ready-to-paste question for the chat.
+4. Cards appear in the side panel. Click the source link to jump back to the original text.
+5. Export everything as JSON or Markdown at any time; import JSON to restore.
 
 Everything stays in your browser. Nothing is sent anywhere.
 

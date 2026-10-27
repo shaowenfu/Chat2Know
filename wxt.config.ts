@@ -25,6 +25,10 @@ export default defineConfig({
         suggested_key: { default: 'Alt+Shift+K' },
         description: '__MSG_command_captureKnowledge__',
       },
+      'ask-later': {
+        suggested_key: { default: 'Alt+Q' },
+        description: '__MSG_command_askLater__',
+      },
       'capture-idea': {
         suggested_key: { default: 'Alt+Shift+I' },
         description: '__MSG_command_captureIdea__',

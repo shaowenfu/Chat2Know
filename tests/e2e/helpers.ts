@@ -25,3 +25,27 @@ export async function selectBetween(page: Page, fromSelector: string, toSelector
     [fromSelector, toSelector] as const,
   );
 }
+
+/** Selects the first occurrence of `text` inside `selector` and releases the mouse, like a user. */
+export async function selectText(page: Page, selector: string, text: string): Promise<void> {
+  await page.evaluate(
+    ([sel, needle]) => {
+      const root = document.querySelector(sel)!;
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+      for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+        const at = n.textContent!.indexOf(needle);
+        if (at < 0) continue;
+        const range = document.createRange();
+        range.setStart(n, at);
+        range.setEnd(n, at + needle.length);
+        const s = document.getSelection()!;
+        s.removeAllRanges();
+        s.addRange(range);
+        document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+        return;
+      }
+      throw new Error(`Text not found: ${needle}`);
+    },
+    [selector, text] as const,
+  );
+}

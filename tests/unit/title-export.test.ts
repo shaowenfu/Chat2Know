@@ -28,6 +28,7 @@ describe('nodesToMarkdown', () => {
           title: 'Spaced recall',
           body: 'Test yourself.',
           status: 'draft',
+          askCount: 0,
           createdAt: Date.UTC(2026, 9, 21),
           updatedAt: 'x',
           sources: [{ id: 's', nodeId: '1', url: 'https://a.dev', pageTitle: 'A [chat]', quoteExact: '', quotePrefix: '', quoteSuffix: '', capturedAt: 0 }],

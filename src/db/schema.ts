@@ -1,5 +1,5 @@
 import Dexie, { type EntityTable, type Table } from 'dexie';
-import type { Edge, Embedding, KNode, OpLogEntry, Review, Source } from './types';
+import type { Edge, Embedding, InboxItem, KNode, OpLogEntry, Preference, Review, Source } from './types';
 
 export class Chat2KnowDB extends Dexie {
   nodes!: EntityTable<KNode, 'id'>;
@@ -8,6 +8,8 @@ export class Chat2KnowDB extends Dexie {
   reviews!: EntityTable<Review, 'id'>;
   embeddings!: Table<Embedding, string>;
   oplog!: EntityTable<OpLogEntry, 'id'>;
+  inbox!: EntityTable<InboxItem, 'id'>;
+  preferences!: EntityTable<Preference, 'id'>;
 
   constructor(name = 'chat2know') {
     super(name);
@@ -19,5 +21,20 @@ export class Chat2KnowDB extends Dexie {
       embeddings: 'nodeId',
       oplog: 'id, entity, entityId',
     });
+    // v2: ask-later questions, mastery, temporary inbox and recording preferences.
+    this.version(2)
+      .stores({
+        nodes: 'id, type, status, createdAt, term',
+        inbox: 'id, createdAt, expiresAt',
+        preferences: 'id, questionType, createdAt',
+      })
+      .upgrade((tx) =>
+        tx
+          .table('nodes')
+          .toCollection()
+          .modify((node: Partial<KNode>) => {
+            node.askCount ??= 0;
+          }),
+      );
   }
 }

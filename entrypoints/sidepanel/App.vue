@@ -4,13 +4,20 @@ import { browser } from 'wxt/browser';
 import { i18n } from '#i18n';
 import { onMessages, sendMessage } from '@/src/messaging';
 import type { NodeView } from '@/src/db/types';
+import AskQueue from './components/AskQueue.vue';
 
 const nodes = ref<NodeView[]>([]);
 const toolbarUnavailable = ref(false);
 const notice = ref<{ text: string; error: boolean } | null>(null);
 const fileInput = ref<HTMLInputElement | null>(null);
 
-const countLabel = computed(() => i18n.t('panel.cardCount', nodes.value.length));
+type Tab = 'cards' | 'queue';
+const tab = ref<Tab>('cards');
+
+// Ask-later questions live in their own queue; everything else is a card.
+const queue = computed(() => nodes.value.filter((n) => n.type === 'question' && n.status === 'open'));
+const cards = computed(() => nodes.value.filter((n) => n.type !== 'question'));
+const countLabel = computed(() => i18n.t('panel.cardCount', cards.value.length));
 
 async function refresh() {
   nodes.value = await sendMessage('nodes/list', {});
@@ -109,38 +116,51 @@ onUnmounted(() => browser.tabs.onActivated.removeListener(onTabActivated));
 
     <p v-if="toolbarUnavailable" class="hint" data-testid="toolbar-unavailable">{{ i18n.t('panel.toolbarUnavailable') }}</p>
 
-    <section class="actions">
-      <span class="count" data-testid="card-count">{{ countLabel }}</span>
-      <button type="button" data-testid="export-json" @click="exportJson">{{ i18n.t('panel.exportJson') }}</button>
-      <button type="button" data-testid="export-md" @click="exportMarkdown">{{ i18n.t('panel.exportMarkdown') }}</button>
-      <button type="button" data-testid="import-json" @click="fileInput?.click()">{{ i18n.t('panel.importJson') }}</button>
-      <input ref="fileInput" type="file" accept="application/json,.json" hidden data-testid="import-input" @change="importJson">
-    </section>
+    <nav class="tabs" role="tablist">
+      <button type="button" role="tab" :aria-selected="tab === 'queue'" data-testid="tab-queue" @click="tab = 'queue'">
+        {{ i18n.t('queue.tab') }}<span v-if="queue.length" class="pill">{{ queue.length }}</span>
+      </button>
+      <button type="button" role="tab" :aria-selected="tab === 'cards'" data-testid="tab-cards" @click="tab = 'cards'">
+        {{ i18n.t('queue.cardsTab') }}<span v-if="cards.length" class="pill">{{ cards.length }}</span>
+      </button>
+    </nav>
 
     <p v-if="notice" class="notice" :class="{ error: notice.error }" role="status">{{ notice.text }}</p>
 
-    <p v-if="nodes.length === 0" class="empty" data-testid="empty">{{ i18n.t('panel.empty') }}</p>
+    <AskQueue v-if="tab === 'queue'" :items="queue" @open-source="openSource" @notice="flash" />
 
-    <ul class="cards">
-      <li v-for="node in nodes" :key="node.id" class="card" data-testid="card">
-        <div class="card-head">
-          <span class="badge" :data-type="node.type">{{ i18n.t(`type.${node.type}`) }}</span>
-          <button type="button" class="link danger" :aria-label="i18n.t('panel.delete')" @click="remove(node.id)">{{ i18n.t('panel.delete') }}</button>
-        </div>
-        <div class="title">{{ node.title }}</div>
-        <pre class="body">{{ node.body }}</pre>
-        <button
-          v-for="source in node.sources"
-          :key="source.id"
-          type="button"
-          class="link source"
-          data-testid="open-source"
-          :title="source.url"
-          @click="openSource(source.id)"
-        >
-          ↗ {{ source.pageTitle || host(source.url) }}
-        </button>
-      </li>
-    </ul>
+    <template v-else>
+      <section class="actions">
+        <span class="count" data-testid="card-count">{{ countLabel }}</span>
+        <button type="button" data-testid="export-json" @click="exportJson">{{ i18n.t('panel.exportJson') }}</button>
+        <button type="button" data-testid="export-md" @click="exportMarkdown">{{ i18n.t('panel.exportMarkdown') }}</button>
+        <button type="button" data-testid="import-json" @click="fileInput?.click()">{{ i18n.t('panel.importJson') }}</button>
+        <input ref="fileInput" type="file" accept="application/json,.json" hidden data-testid="import-input" @change="importJson">
+      </section>
+
+      <p v-if="cards.length === 0" class="empty" data-testid="empty">{{ i18n.t('panel.empty') }}</p>
+
+      <ul class="cards">
+        <li v-for="node in cards" :key="node.id" class="card" data-testid="card">
+          <div class="card-head">
+            <span v-if="node.type === 'idea'" class="badge" data-type="idea">{{ i18n.t('type.idea') }}</span>
+            <button type="button" class="link danger" :aria-label="i18n.t('panel.delete')" @click="remove(node.id)">{{ i18n.t('panel.delete') }}</button>
+          </div>
+          <div class="title">{{ node.title }}</div>
+          <pre class="body">{{ node.body }}</pre>
+          <button
+            v-for="source in node.sources"
+            :key="source.id"
+            type="button"
+            class="link source"
+            data-testid="open-source"
+            :title="source.url"
+            @click="openSource(source.id)"
+          >
+            ↗ {{ source.pageTitle || host(source.url) }}
+          </button>
+        </li>
+      </ul>
+    </template>
   </main>
 </template>

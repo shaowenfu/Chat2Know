@@ -5,7 +5,7 @@
 
 import type { CapturedSelection } from '@/src/capture/selection';
 import type { TextQuote } from '@/src/capture/text-quote';
-import type { CaptureType, ImportResult } from '@/src/db/repository';
+import type { AskLaterResult, CaptureType, ImportResult, PageQuestion } from '@/src/db/repository';
 import type { NodeView } from '@/src/db/types';
 
 export type Context = 'content' | 'background' | 'sidepanel';
@@ -21,6 +21,12 @@ export interface MessageMap {
   'capture/save': { req: { type: CaptureType; capture: CapturedSelection }; res: { nodeId: string } };
   /** Capture the current selection in a tab (shortcut and context-menu path). */
   'capture/fromTab': { req: { type: CaptureType; tabId?: number }; res: { nodeId: string } };
+  /** Save an ask-later question. Never calls a model. */
+  'ask/save': { req: { term: string; question: string; capture: CapturedSelection }; res: AskLaterResult };
+  'ask/update': { req: { id: string; question: string }; res: null };
+  /** Open the ask-later prompt in a tab (shortcut and context-menu path). */
+  'ask/fromTab': { req: { tabId?: number }; res: null };
+  'ask/forUrl': { req: { url: string }; res: PageQuestion[] };
   'nodes/list': { req: Record<string, never>; res: NodeView[] };
   'nodes/delete': { req: { id: string }; res: null };
   /** Open a source page and highlight the quote. */
@@ -31,6 +37,7 @@ export interface MessageMap {
 
   // Background -> content script
   'content/capture': { req: Record<string, never>; res: CapturedSelection | null };
+  'content/askLater': { req: Record<string, never>; res: null };
   'content/highlight': { req: { quote: TextQuote }; res: { found: boolean } };
 
   // Background -> side panel (broadcast)

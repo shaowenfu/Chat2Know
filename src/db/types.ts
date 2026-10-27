@@ -1,19 +1,24 @@
 export type NodeType = 'topic' | 'knowledge' | 'insight' | 'idea' | 'question';
-export type NodeStatus = 'draft' | 'confirmed' | 'mastered';
+export type NodeStatus = 'open' | 'draft' | 'confirmed' | 'mastered';
+export type Mastery = 'internalize' | 'understand' | 'index';
 
 export interface KNode {
   id: string; // ULID, sortable by time
   type: NodeType;
-  title: string;
-  summary?: string; // 1–3 sentence distillation, drafted by AI and confirmed by the user
+  title: string; // usually a question worth reviewing; may be empty for an ask-later with no question yet
+  originalAsk?: string; // the question as the user first asked it, kept as the path of understanding
+  term?: string; // for ask-later questions: the selected term the question is about
+  summary?: string; // 1–3 sentence statement, drafted by AI and confirmed by the user
   body?: string; // original Markdown, keeps formulas, code and tables
-  status: NodeStatus; // `mastered` is only set by a passed review
+  mastery?: Mastery; // chosen by the user (AI suggests from M4); not set for ideas and topics
+  status: NodeStatus; // `open` = unresolved question; `mastered` is only set by a passed review
+  askCount: number; // times this was asked later; repetition signals importance
   createdAt: number;
   updatedAt: string; // hybrid logical clock, for future conflict merging
   deletedAt?: number; // soft delete
 }
 
-export type EdgeKind = 'child' | 'related' | 'derived';
+export type EdgeKind = 'child' | 'arose_from' | 'instance_of' | 'related' | 'derived';
 
 export interface Edge {
   id: string;
@@ -48,6 +53,28 @@ export interface Review {
   createdAt: number;
 }
 
+/** Temporary inbox: answers to ask-now / ask-later live here until the user keeps them. Not synced. */
+export interface InboxItem {
+  id: string;
+  question: string;
+  quote: string;
+  answer: string;
+  parentNodeId?: string;
+  createdAt: number;
+  expiresAt: number;
+  promotedNodeId?: string;
+}
+
+/** The user's accept / edit / delete decisions on recording suggestions, used as few-shot examples. */
+export interface Preference {
+  id: string;
+  questionType: 'concept' | 'instance' | 'curiosity';
+  suggestion: string;
+  userAction: 'accept' | 'edit' | 'delete';
+  finalText?: string;
+  createdAt: number;
+}
+
 export interface Embedding {
   nodeId: string;
   model: string;
@@ -55,7 +82,7 @@ export interface Embedding {
   vector: Float32Array;
 }
 
-export type Entity = 'nodes' | 'edges' | 'sources' | 'reviews';
+export type Entity = 'nodes' | 'edges' | 'sources' | 'reviews' | 'preferences';
 
 export interface OpLogEntry {
   id: string; // HLC timestamp, totally ordered

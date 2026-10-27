@@ -4,14 +4,17 @@ actionTitle: Open Chat2Know
 command:
   captureKnowledge: Save selection as knowledge
   captureIdea: Save selection as idea
+  askLater: Ask about the selection later
 menu:
   saveKnowledge: Save to Chat2Know as knowledge
   saveIdea: Save to Chat2Know as idea
+  askLater: Ask later with Chat2Know
 toolbar:
   saveKnowledge: Save
   saveIdea: Idea
   saved: Saved ✓
   failed: Could not save
+  askLater: Ask later
 panel:
   tagline: Everything you chatted about, you can explain.
   toolbarUnavailable: The selection toolbar can't run on this page. Use Alt+Shift+K or right-click → Save to Chat2Know.
@@ -36,3 +39,26 @@ type:
   insight: Insight
   question: Question
   topic: Topic
+ask:
+  label: Ask later about
+  placeholder: Your question (optional)
+  chipWhat: What is $1?
+  chipWhy: Why $1?
+  chipDiff: How is $1 different from …?
+  chipRole: What role does $1 play here?
+  hint: Enter to save · Esc to save and write the question later
+  saved: Added to Ask later
+  savedRepeat: Added to Ask later · asked $1 times
+queue:
+  tab: Ask later
+  cardsTab: Cards
+  empty: Nothing queued. Select a term you don't fully get and click Ask later or press Alt+Q. Keep reading; come back here when you're done.
+  about: About "$1"
+  askedTimes: Asked $1 times
+  edit: Write question
+  editExisting: Edit question
+  save: Save
+  copy: Copy follow-up
+  copied: Copied. Paste it into the chat to ask there.
+  remove: Remove
+  followUp: "About this sentence: \"$1\"\nMy question: $2"

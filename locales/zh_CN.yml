@@ -4,14 +4,17 @@ actionTitle: 打开 Chat2Know
 command:
   captureKnowledge: 将选中内容存为知识
   captureIdea: 将选中内容存为灵感
+  askLater: 稍后问选中内容
 menu:
   saveKnowledge: 存到 Chat2Know（知识）
   saveIdea: 存到 Chat2Know（灵感）
+  askLater: 用 Chat2Know 稍后问
 toolbar:
   saveKnowledge: 存知识
   saveIdea: 存灵感
   saved: 已保存 ✓
   failed: 保存失败
+  askLater: 稍后问
 panel:
   tagline: 聊过的，都能讲出来。
   toolbarUnavailable: 此页面无法显示划词工具条。请使用 Alt+Shift+K，或右键 → 存到 Chat2Know。
@@ -36,3 +39,26 @@ type:
   insight: 见解
   question: 疑问
   topic: 主题
+ask:
+  label: 稍后问：
+  placeholder: 你的疑问（可以先不写）
+  chipWhat: $1 是什么？
+  chipWhy: 为什么是 $1？
+  chipDiff: $1 和…有什么区别？
+  chipRole: $1 在这里起什么作用？
+  hint: 回车保存 · Esc 先保存，疑问以后再补
+  saved: 已加入待问
+  savedRepeat: 已加入待问 · 第 $1 次问到
+queue:
+  tab: 待问
+  cardsTab: 卡片
+  empty: 暂无待问。读到没彻底弄懂的词，选中后点"稍后问"或按 Alt+Q，先接着读，读完再回来这里处理。
+  about: 关于"$1"
+  askedTimes: 已问过 $1 次
+  edit: 写下疑问
+  editExisting: 修改疑问
+  save: 保存
+  copy: 复制追问
+  copied: 已复制，粘贴到对话里即可追问。
+  remove: 移除
+  followUp: "关于这句话：\"$1\"\n我的疑问：$2"

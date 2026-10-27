@@ -16,7 +16,7 @@ export interface TextQuote {
 export const QUOTE_CONTEXT = 32;
 
 const SKIP_TAGS = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEMPLATE', 'TEXTAREA']);
-const BLOCK_SELECTOR =
+export const BLOCK_SELECTOR =
   'address,article,aside,blockquote,dd,div,dl,dt,fieldset,figcaption,figure,footer,form,h1,h2,h3,h4,h5,h6,header,hr,li,main,nav,ol,p,pre,section,table,tbody,td,tfoot,th,thead,tr,ul';
 
 /** Marks our own injected UI so it is never captured or anchored into. */
@@ -95,7 +95,8 @@ function boundaryToPos(index: TextIndex, container: Node, offset: number): Pos {
   return { node: index.nodes.length, offset: 0 };
 }
 
-function rangeToSpan(index: TextIndex, range: Range): [number, number] {
+/** Maps a DOM range to [start, end) in the index's normalized text, trimming edge whitespace. */
+export function rangeToSpan(index: TextIndex, range: Range): [number, number] {
   const start = boundaryToPos(index, range.startContainer, range.startOffset);
   const end = boundaryToPos(index, range.endContainer, range.endOffset);
   let s = index.map.findIndex((p) => cmp(p, start) >= 0);
@@ -130,8 +131,20 @@ function commonPrefix(a: string, b: string): number {
   return n;
 }
 
-/** Finds the best match for a quote, using prefix/suffix to pick among repeats. */
-export function anchorQuote(quote: TextQuote, root: Node, index = buildTextIndex(root)): Range | null {
+/** Maps [start, end) in the normalized text back to a DOM range. */
+export function spanToRange(index: TextIndex, start: number, end: number): Range | null {
+  if (start >= end || end > index.map.length) return null;
+  const s = index.map[start]!;
+  const e = index.map[end - 1]!;
+  const first = index.nodes[s.node]!;
+  const range = first.ownerDocument.createRange();
+  range.setStart(first, s.offset);
+  range.setEnd(index.nodes[e.node]!, e.offset + 1);
+  return range;
+}
+
+/** Finds the best match for a quote in the normalized text, using prefix/suffix to pick among repeats. */
+export function anchorSpan(quote: TextQuote, index: TextIndex): [number, number] | null {
   const { text } = index;
   if (!quote.exact) return null;
   let best = -1;
@@ -145,11 +158,10 @@ export function anchorQuote(quote: TextQuote, root: Node, index = buildTextIndex
       bestScore = score;
     }
   }
-  if (best < 0) return null;
-  const start = index.map[best]!;
-  const end = index.map[best + quote.exact.length - 1]!;
-  const range = (root.ownerDocument ?? (root as Document)).createRange();
-  range.setStart(index.nodes[start.node]!, start.offset);
-  range.setEnd(index.nodes[end.node]!, end.offset + 1);
-  return range;
+  return best < 0 ? null : [best, best + quote.exact.length];
+}
+
+export function anchorQuote(quote: TextQuote, root: Node, index = buildTextIndex(root)): Range | null {
+  const span = anchorSpan(quote, index);
+  return span ? spanToRange(index, span[0], span[1]) : null;
 }
