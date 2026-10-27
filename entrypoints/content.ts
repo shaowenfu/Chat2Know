@@ -26,11 +26,15 @@ export default defineContentScript({
         await sendMessage('capture/save', { type, capture });
       },
       prepareAsk: () => prepareAskDraft(document, location.href),
-      async ask(draft, question) {
+      async askLater(draft, question) {
         // Ask-later never calls a model: it only stores the question locally.
         const res = await sendMessage('ask/save', { term: draft.term, question, capture: draft.capture });
         underlineRange(document, draft.termRange);
         return res.askCount;
+      },
+      async askNow(draft, question) {
+        // The answer goes to the side panel; the host page is left untouched.
+        await sendMessage('ask/now', { term: draft.term, question, capture: draft.capture });
       },
     });
     toolbar.mount();
@@ -39,7 +43,7 @@ export default defineContentScript({
       'content/capture': () => captureSelection(document, location.href),
       'content/highlight': ({ quote }) => ({ found: highlightQuote(document, quote) }),
       'content/askLater': () => {
-        if (!toolbar.openAskPrompt()) throw new Error('No text selected');
+        if (!toolbar.openAskPrompt('later')) throw new Error('No text selected');
         return null;
       },
     });

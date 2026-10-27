@@ -15,6 +15,7 @@ toolbar:
   saved: Saved ✓
   failed: Could not save
   askLater: Ask later
+  askNow: Ask now
 panel:
   tagline: Everything you chatted about, you can explain.
   toolbarUnavailable: The selection toolbar can't run on this page. Use Alt+Shift+K or right-click → Save to Chat2Know.
@@ -41,6 +42,10 @@ type:
   topic: Topic
 ask:
   label: Ask later about
+  labelNow: Ask now about
+  hintNow: Enter to ask · the answer appears in the side panel
+  asking: Asking…
+  answered: Answer is in the side panel
   placeholder: Your question (optional)
   chipWhat: What is $1?
   chipWhy: Why $1?
@@ -62,6 +67,9 @@ queue:
   copied: Copied. Paste it into the chat to ask there.
   remove: Remove
   askHere: Ask here
+  followUpAsk: Follow up
+  followUpPlaceholder: Ask a follow-up question
+  arose: "Follow-up to: $1"
   answering: Asking…
   keep: Keep
   dontKeep: Don't keep

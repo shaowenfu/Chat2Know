@@ -183,6 +183,22 @@ export default defineBackground(() => {
     },
     'ask/fromTab': ({ tabId }) => askFromTab(tabId),
     'ask/forUrl': async ({ url }) => (await repo()).questionsForUrl(url),
+    'ask/now': async (input) => {
+      const r = await repo();
+      const { nodeId } = await r.askLater(input);
+      notifyChanged();
+      const item = await answerQuestion(r, await client(), nodeId, defaultQuestion);
+      notifyChanged();
+      return item;
+    },
+    'ask/followUp': async ({ parentId, question }) => {
+      const r = await repo();
+      const node = await r.askFollowUp(parentId, question);
+      notifyChanged();
+      const item = await answerQuestion(r, await client(), node.id, defaultQuestion);
+      notifyChanged();
+      return item;
+    },
     'ask/answer': async ({ questionId }) => {
       const item = await answerQuestion(await repo(), await client(), questionId, defaultQuestion);
       notifyChanged();

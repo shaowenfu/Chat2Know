@@ -3,10 +3,11 @@ import { inject, nextTick, ref } from 'vue';
 import { i18n } from '#i18n';
 import { sendMessage } from '@/src/messaging';
 import type { InboxItem, NodeView } from '@/src/db/types';
+import FollowUp from './FollowUp.vue';
 import KeepPanel from './KeepPanel.vue';
 import { NOTIFY, useRun } from '../notify';
 
-const props = defineProps<{ items: NodeView[]; answers: Map<string, InboxItem>; leftovers: InboxItem[] }>();
+const props = defineProps<{ items: NodeView[]; answers: Map<string, InboxItem>; leftovers: InboxItem[]; titles: Map<string, string> }>();
 const emit = defineEmits<{ openSource: [sourceId: string] }>();
 const notify = inject(NOTIFY)!;
 const run = useRun();
@@ -71,7 +72,10 @@ const daysLeft = (item: InboxItem) => String(Math.max(1, Math.ceil((item.expires
         <button type="submit">{{ i18n.t('queue.save') }}</button>
       </form>
       <div v-else class="title" :class="{ muted: !item.title }" data-testid="queue-question">{{ questionText(item) }}</div>
-      <blockquote class="quote" data-testid="queue-quote">{{ parts(item)[0] }}<mark>{{ parts(item)[1] }}</mark>{{ parts(item)[2] }}</blockquote>
+      <p v-if="item.parent?.kind === 'arose_from'" class="muted small" data-testid="queue-arose">
+        {{ i18n.t('queue.arose', [props.titles.get(item.parent.id) ?? '']) }}
+      </p>
+      <blockquote v-if="item.sources[0]" class="quote" data-testid="queue-quote">{{ parts(item)[0] }}<mark>{{ parts(item)[1] }}</mark>{{ parts(item)[2] }}</blockquote>
       <div class="meta">
         <button
           v-if="item.sources[0]"
@@ -97,12 +101,13 @@ const daysLeft = (item: InboxItem) => String(Math.max(1, Math.ceil((item.expires
         <template v-if="props.answers.get(item.id)">
           <button type="button" data-testid="queue-keep" @click="keeping = props.answers.get(item.id)!.id">{{ i18n.t('queue.keep') }}</button>
           <button type="button" class="link" data-testid="queue-dismiss" @click="dismiss(item)">{{ i18n.t('queue.dontKeep') }}</button>
+          <FollowUp :parent-id="item.id" />
         </template>
         <button v-else type="button" data-testid="queue-answer-btn" :disabled="answering.has(item.id)" @click="answer(item)">
           {{ answering.has(item.id) ? i18n.t('queue.answering') : i18n.t('queue.askHere') }}
         </button>
         <button v-if="editing !== item.id" type="button" class="link" @click="startEdit(item)">{{ item.title ? i18n.t('queue.editExisting') : i18n.t('queue.edit') }}</button>
-        <button type="button" class="link" data-testid="queue-copy" @click="copyFollowUp(item)">{{ i18n.t('queue.copy') }}</button>
+        <button v-if="item.sources[0]" type="button" class="link" data-testid="queue-copy" @click="copyFollowUp(item)">{{ i18n.t('queue.copy') }}</button>
         <button v-if="!props.answers.get(item.id)" type="button" class="link danger" @click="dismiss(item)">{{ i18n.t('queue.remove') }}</button>
       </div>
     </li>

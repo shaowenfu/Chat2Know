@@ -23,9 +23,11 @@ export async function answerQuestion(
   const node = await repo.getNode(questionId);
   if (!node || node.type !== 'question') throw new Error('Question not found');
   const [source] = await repo.sourcesOf(questionId);
+  const parent = await repo.parentOf(questionId);
   const question = questionOf(node, defaultQuestion);
-  const quote = source?.quoteExact ?? '';
-  const answer = await client.chat(answerPrompt({ question, quote }));
+  // A follow-up has no page sentence; the card it arose from is its context.
+  const quote = source?.quoteExact ?? parent?.summary ?? parent?.body ?? '';
+  const answer = await client.chat(answerPrompt({ question, quote, ...(parent ? { context: parent.title } : {}) }));
   return repo.addInboxItem({ questionNodeId: questionId, question, quote, answer });
 }
 

@@ -4,12 +4,16 @@ import { UI_ATTR } from './text-quote';
 
 export type SaveType = 'knowledge' | 'idea';
 
+export type AskMode = 'later' | 'now';
+
 export interface ToolbarHandlers {
   save(type: SaveType): Promise<void>;
-  /** Captures the selection for an ask-later question before the prompt takes focus. */
+  /** Captures the selection for a question before the prompt takes focus. */
   prepareAsk(): AskDraft | null;
-  /** Saves the question; resolves to how many times this term has been asked. */
-  ask(draft: AskDraft, question: string): Promise<number>;
+  /** Ask later: saves the question and resolves to how many times this term has been asked. */
+  askLater(draft: AskDraft, question: string): Promise<number>;
+  /** Ask now: the answer appears in the side panel. */
+  askNow(draft: AskDraft, question: string): Promise<void>;
 }
 
 const CSS_TEXT = `
@@ -47,7 +51,7 @@ export class SelectionToolbar {
   private readonly bar: HTMLElement;
   private hideTimer: ReturnType<typeof setTimeout> | undefined;
   /** Set while the ask prompt is open; committing it saves the question. */
-  private pending: { draft: AskDraft; input: HTMLInputElement } | null = null;
+  private pending: { draft: AskDraft; input: HTMLInputElement; mode: AskMode } | null = null;
 
   constructor(
     private readonly doc: Document,
@@ -119,7 +123,8 @@ export class SelectionToolbar {
     this.bar.replaceChildren(
       this.button(i18n.t('toolbar.saveKnowledge'), () => this.runSave('knowledge')),
       this.button(i18n.t('toolbar.saveIdea'), () => this.runSave('idea')),
-      this.button(i18n.t('toolbar.askLater'), () => this.openAskPrompt()),
+      this.button(i18n.t('toolbar.askLater'), () => this.openAskPrompt('later')),
+      this.button(i18n.t('toolbar.askNow'), () => this.openAskPrompt('now')),
     );
     this.place(sel.getRangeAt(0).getBoundingClientRect(), 36);
     this.bar.hidden = false;
@@ -145,7 +150,7 @@ export class SelectionToolbar {
   }
 
   /** Opens the one-line question prompt for the current selection. Returns false when nothing is selected. */
-  openAskPrompt(): boolean {
+  openAskPrompt(mode: AskMode): boolean {
     if (this.pending) return true;
     const draft = this.handlers.prepareAsk();
     if (!draft) return false;
@@ -154,7 +159,7 @@ export class SelectionToolbar {
     term.className = 'term';
     const b = this.doc.createElement('b');
     b.textContent = draft.term;
-    term.append(`${i18n.t('ask.label')} `, b);
+    term.append(`${mode === 'now' ? i18n.t('ask.labelNow') : i18n.t('ask.label')} `, b);
 
     const input = this.doc.createElement('input');
     input.type = 'text';
@@ -184,9 +189,9 @@ export class SelectionToolbar {
 
     const hint = this.doc.createElement('div');
     hint.className = 'hint';
-    hint.textContent = i18n.t('ask.hint');
+    hint.textContent = mode === 'now' ? i18n.t('ask.hintNow') : i18n.t('ask.hint');
 
-    this.pending = { draft, input };
+    this.pending = { draft, input, mode };
     this.bar.classList.add('ask');
     this.bar.replaceChildren(term, input, chips, hint);
     this.place(draft.termRange.getBoundingClientRect(), 130);
@@ -201,10 +206,16 @@ export class SelectionToolbar {
     this.pending = null;
     this.bar.classList.remove('ask');
     try {
-      const count = await this.handlers.ask(pending.draft, pending.input.value);
-      this.flash(count > 1 ? i18n.t('ask.savedRepeat', [String(count)]) : i18n.t('ask.saved'), false);
-    } catch {
-      this.flash(i18n.t('toolbar.failed'), true);
+      if (pending.mode === 'now') {
+        this.flash(i18n.t('ask.asking'), false);
+        await this.handlers.askNow(pending.draft, pending.input.value);
+        this.flash(i18n.t('ask.answered'), false);
+      } else {
+        const count = await this.handlers.askLater(pending.draft, pending.input.value);
+        this.flash(count > 1 ? i18n.t('ask.savedRepeat', [String(count)]) : i18n.t('ask.saved'), false);
+      }
+    } catch (err) {
+      this.flash(err instanceof Error ? err.message : i18n.t('toolbar.failed'), true);
     }
   }
 
@@ -216,6 +227,6 @@ export class SelectionToolbar {
     this.bar.replaceChildren(status);
     this.bar.hidden = false;
     clearTimeout(this.hideTimer);
-    this.hideTimer = setTimeout(this.hide, 1500);
+    this.hideTimer = setTimeout(this.hide, error ? 5000 : 1500);
   }
 }

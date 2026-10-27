@@ -175,6 +175,26 @@ export class Repository {
     return this.db.nodes.get(id);
   }
 
+  async parentOf(nodeId: string): Promise<KNode | undefined> {
+    const edge = await this.db.edges.where('to').equals(nodeId).first();
+    return edge && this.db.nodes.get(edge.from);
+  }
+
+  /** A question asked about a card or an answer: a child node that arose from it. */
+  async askFollowUp(parentId: string, question: string): Promise<KNode> {
+    const q = question.trim();
+    if (!q) throw new Error('Question is empty');
+    return this.db.transaction('rw', [this.db.nodes, this.db.edges, this.db.oplog], async () => {
+      if (!(await this.db.nodes.get(parentId))) throw new Error(`Node ${parentId} not found`);
+      const at = this.now();
+      const node: KNode = { id: this.ulid(at), type: 'question', title: q, originalAsk: q, status: 'open', askCount: 1, createdAt: at, updatedAt: this.clock.tick() };
+      await this.db.nodes.add(node);
+      await this.db.oplog.add(this.log('nodes', node.id, 'put', node));
+      await this.replaceParent(node.id, parentId, 'arose_from');
+      return node;
+    });
+  }
+
   async sourcesOf(nodeId: string): Promise<Source[]> {
     return this.db.sources.where('nodeId').equals(nodeId).toArray();
   }

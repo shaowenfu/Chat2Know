@@ -30,6 +30,10 @@ export interface MessageMap {
   /** Open the ask-later prompt in a tab (shortcut and context-menu path). */
   'ask/fromTab': { req: { tabId?: number }; res: null };
   'ask/forUrl': { req: { url: string }; res: PageQuestion[] };
+  /** Ask now: save the question and answer it right away into the inbox. Never touches the host page. */
+  'ask/now': { req: { term: string; question: string; capture: CapturedSelection }; res: InboxItem };
+  /** A follow-up question on a card or answer, answered right away; becomes its child. */
+  'ask/followUp': { req: { parentId: string; question: string }; res: InboxItem };
   /** Answer a queued question with the model; the answer lands in the inbox. */
   'ask/answer': { req: { questionId: string }; res: InboxItem };
   /** Drop a question from the queue (its answer stays in the inbox until it expires). */

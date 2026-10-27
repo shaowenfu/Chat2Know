@@ -3,6 +3,7 @@ import { ref, watch } from 'vue';
 import { i18n } from '#i18n';
 import { sendMessage } from '@/src/messaging';
 import type { NodeView } from '@/src/db/types';
+import FollowUp from './FollowUp.vue';
 import MasteryPicker from './MasteryPicker.vue';
 import TitlePicker from './TitlePicker.vue';
 import { useRun } from '../notify';
@@ -59,7 +60,10 @@ const host = (url: string) => (URL.canParse(url) ? new URL(url).host : url);
       <p v-else class="muted" data-testid="card-pending">{{ configured ? i18n.t('card.distilling') : i18n.t('card.needsModel') }}</p>
     </template>
 
-    <MasteryPicker v-if="node.type === 'knowledge' && node.status !== 'draft'" :node="node" />
+    <div v-if="node.type === 'knowledge' && node.status !== 'draft'" class="row-actions">
+      <MasteryPicker :node="node" />
+      <FollowUp :parent-id="node.id" />
+    </div>
     <pre v-if="node.body" class="body">{{ node.body }}</pre>
     <button
       v-for="source in node.sources"

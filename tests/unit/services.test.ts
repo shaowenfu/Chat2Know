@@ -70,6 +70,34 @@ describe('answerQuestion', () => {
   });
 });
 
+describe('follow-ups', () => {
+  it('creates a child question that arose from the card and answers it in that context', async () => {
+    const card = await repo.capture('idea', capture('Attention weighs tokens.'));
+    await repo.setDistillation(card.id, 'Attention mixes values by similarity.', ['a', 'b', 'c']);
+    const child = await repo.askFollowUp(card.id, 'Why softmax?');
+    expect(child).toMatchObject({ type: 'question', status: 'open', title: 'Why softmax?', originalAsk: 'Why softmax?' });
+    expect(await db.edges.toArray()).toMatchObject([{ from: card.id, to: child.id, kind: 'arose_from' }]);
+    const { client, prompts } = clientReplying('Because it normalizes.');
+    const item = await answerQuestion(repo, client, child.id, (x) => x);
+    expect(item.quote).toBe('Attention mixes values by similarity.');
+    expect(prompts[0]).toContain('I was exploring: Attention weighs tokens.');
+  });
+
+  it('keeping a follow-up keeps it under its parent', async () => {
+    const card = await repo.capture('idea', capture('Parent card.'));
+    const child = await repo.askFollowUp(card.id, 'Child?');
+    const item = await answerQuestion(repo, clientReplying('ans').client, child.id, (x) => x);
+    await repo.keep(item.id, { title: 'Child?', summary: 'S.' });
+    expect((await repo.listNodes()).find((n) => n.id === child.id)!.parent).toMatchObject({ id: card.id, kind: 'arose_from' });
+  });
+
+  it('rejects empty follow-ups and unknown parents', async () => {
+    await expect(repo.askFollowUp('nope', 'q')).rejects.toThrow('not found');
+    const card = await repo.capture('idea', capture('x'));
+    await expect(repo.askFollowUp(card.id, '  ')).rejects.toThrow('Question is empty');
+  });
+});
+
 describe('inbox', () => {
   it('purges expired answers when listed', async () => {
     await answered('VLM', '');

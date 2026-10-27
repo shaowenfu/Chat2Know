@@ -37,6 +37,8 @@ const cards = computed(() => nodes.value.filter((n) => n.type !== 'question'));
 const countLabel = computed(() => i18n.t('panel.cardCount', cards.value.length));
 const configured = computed(() => Boolean(settings.value?.baseUrl && settings.value.model && settings.value.hasKey));
 
+const titles = computed(() => new Map(nodes.value.map((n) => [n.id, n.title])));
+
 /** Latest answer per open question. */
 const answers = computed(() => {
   const map = new Map<string, InboxItem>();
@@ -171,7 +173,7 @@ onUnmounted(() => browser.tabs.onActivated.removeListener(onTabActivated));
 
       <QuizView v-if="view === 'quiz'" :due="due" :configured="configured" :stats="stats" />
 
-      <AskQueue v-else-if="view === 'queue'" :items="queue" :answers="answers" :leftovers="leftovers" @open-source="openSource" />
+      <AskQueue v-else-if="view === 'queue'" :items="queue" :answers="answers" :leftovers="leftovers" :titles="titles" @open-source="openSource" />
 
       <template v-else>
         <section class="actions">

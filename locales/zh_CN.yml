@@ -15,6 +15,7 @@ toolbar:
   saved: 已保存 ✓
   failed: 保存失败
   askLater: 稍后问
+  askNow: 现在问
 panel:
   tagline: 聊过的，都能讲出来。
   toolbarUnavailable: 此页面无法显示划词工具条。请使用 Alt+Shift+K，或右键 → 存到 Chat2Know。
@@ -41,6 +42,10 @@ type:
   topic: 主题
 ask:
   label: 稍后问：
+  labelNow: 现在问：
+  hintNow: 回车提问 · 答案显示在侧栏
+  asking: 正在问…
+  answered: 答案已在侧栏
   placeholder: 你的疑问（可以先不写）
   chipWhat: $1 是什么？
   chipWhy: 为什么是 $1？
@@ -62,6 +67,9 @@ queue:
   copied: 已复制，粘贴到对话里即可追问。
   remove: 移除
   askHere: 在这里问
+  followUpAsk: 追问
+  followUpPlaceholder: 继续追问
+  arose: "追问自：$1"
   answering: 正在问…
   keep: 记下
   dontKeep: 不记
