@@ -4,23 +4,28 @@ Browser extension that turns AI conversations into a personal knowledge graph yo
 
 ## North star
 
-Weekly count of **mastered cards**: cards that passed "explain it to me" or "quiz me". Saving is not mastering.
+Weekly count of **passed "internalize" cards**: cards whose mastery requirement is *internalize* and that passed "quiz me" or "explain it to me". Saving does not count; *understand* and *index* cards do not count.
+
+Core flow: **ask → keep or not → mastery requirement → verify**.
 
 ## Product principles (in priority order)
 
 1. A knowledge layer, not a chat UI. Works on top of any AI client.
 2. Capture instantly, organize later, confirm in batches.
-3. No per-site adapters. Capture text; let the model recover structure.
-4. Local-first. No login, bring your own API key, full export at any time.
-5. Two layers: distilled cards for reading, original text for provenance.
-6. Verification over collection.
-7. AI proposes structure, the user decides.
+3. Never interrupt reading. "Ask later" is the default; capturing never calls AI or pops up answers.
+4. Asking is not recording. Answers go to a temporary inbox; only what is worth reusing enters the graph.
+5. Questions are the entry point, statements are the content. Node titles are questions; distilled cards are statements.
+6. No per-site adapters. Capture text; let the model recover structure.
+7. Local-first. No login, bring your own API key, full export at any time.
+8. Two layers: distilled cards for reading, original text for provenance.
+9. Verification over collection; verification strength follows the mastery requirement (internalize / understand / index).
+10. AI proposes, the user decides: graph structure, keep-or-not and mastery all get AI defaults with one-click confirm.
 
 ## Architecture rules
 
 - Content script only captures. Side panel only renders UI. All model calls and DB reads/writes go through the background.
 - API keys live only in `chrome.storage.local`, are used only in the background, never logged, never exported by default.
-- All DB writes go through the repository layer in `src/db/`, which also appends to `oplog`.
+- All DB writes go through the repository layer in `src/db/`, which also appends to `oplog`. Exception: the `inbox` table is disposable and not logged; promoting an inbox item to a node is logged.
 - No "read all sites" permission. Inject content scripts on demand via `activeTab` + `scripting`.
 - All user-facing strings go through i18n (`en` default, `zh_CN`). No hard-coded UI strings.
 
