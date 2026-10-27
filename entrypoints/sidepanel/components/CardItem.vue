@@ -2,14 +2,14 @@
 import { ref, watch } from 'vue';
 import { i18n } from '#i18n';
 import { sendMessage } from '@/src/messaging';
-import type { NodeView } from '@/src/db/types';
+import type { Mastery, NodeView } from '@/src/db/types';
 import FollowUp from './FollowUp.vue';
 import MasteryPicker from './MasteryPicker.vue';
 import TitlePicker from './TitlePicker.vue';
 import { useRun } from '../notify';
 import { usePlace } from '../placement';
 
-const props = defineProps<{ node: NodeView; configured: boolean }>();
+const props = defineProps<{ node: NodeView; configured: boolean; suggested?: Mastery }>();
 const emit = defineEmits<{ openSource: [sourceId: string] }>();
 const run = useRun();
 const place = usePlace();
@@ -64,7 +64,7 @@ const host = (url: string) => (URL.canParse(url) ? new URL(url).host : url);
     </template>
 
     <div v-if="node.type === 'knowledge' && node.status !== 'draft'" class="row-actions">
-      <MasteryPicker :node="node" />
+      <MasteryPicker :node="node" :suggested="suggested" />
       <FollowUp :parent-id="node.id" />
     </div>
     <pre v-if="node.body" class="body">{{ node.body }}</pre>

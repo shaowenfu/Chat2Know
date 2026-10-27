@@ -4,6 +4,7 @@ import { i18n } from '#i18n';
 import { sendMessage } from '@/src/messaging';
 import type { NodeView } from '@/src/db/types';
 import { buildTree } from '@/src/graph/tree';
+import { dependents, suggestMastery } from '@/src/graph/mastery';
 import CardTree from './CardTree.vue';
 import { DRAGGING } from '../dnd';
 import { useRun } from '../notify';
@@ -15,6 +16,10 @@ const run = useRun();
 /** Explore: the question tree as it grew. Conclusion: the same tree as an outline of statements. */
 const mode = ref<'explore' | 'conclusion'>('explore');
 const tree = computed(() => buildTree(props.cards));
+const suggestions = computed(() => {
+  const deps = dependents(props.cards);
+  return new Map(props.cards.map((n) => [n.id, suggestMastery(n, deps.get(n.id) ?? 0)]));
+});
 const dragging = ref<string | null>(null);
 provide(DRAGGING, dragging);
 
@@ -36,7 +41,7 @@ async function toTopLevel() {
         {{ i18n.t('tree.conclusion') }}
       </button>
     </div>
-    <CardTree :items="tree" :parent-id="null" :mode="mode" :configured="configured" @open-source="emit('openSource', $event)" />
+    <CardTree :items="tree" :parent-id="null" :mode="mode" :configured="configured" :suggestions="suggestions" @open-source="emit('openSource', $event)" />
     <div v-if="dragging" class="drop-root" data-testid="drop-root" @dragover.prevent @drop.prevent="toTopLevel">
       {{ i18n.t('tree.dropRoot') }}
     </div>

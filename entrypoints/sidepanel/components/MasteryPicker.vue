@@ -5,7 +5,7 @@ import type { Mastery, NodeView } from '@/src/db/types';
 import { useRun } from '../notify';
 
 /** How well the user needs to know this card, in everyday words. Clicking the current choice clears it. */
-const props = defineProps<{ node: NodeView }>();
+const props = defineProps<{ node: NodeView; suggested?: Mastery }>();
 const run = useRun();
 
 const OPTIONS: { value: Mastery; label: () => string }[] = [
@@ -29,9 +29,10 @@ async function choose(value: Mastery) {
       class="chip"
       :aria-pressed="node.mastery === o.value"
       :data-testid="`mastery-${o.value}`"
+      :class="{ suggested: !node.mastery && suggested === o.value }"
       @click="choose(o.value)"
     >
-      {{ o.label() }}
+      {{ o.label() }}<span v-if="!node.mastery && suggested === o.value" class="suggested-mark" data-testid="mastery-suggested"> · {{ i18n.t('mastery.suggested') }}</span>
     </button>
   </div>
 </template>

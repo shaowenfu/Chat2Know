@@ -487,3 +487,9 @@ button.danger:hover {
 .place .link {
   align-self: flex-start;
 }
+
+.chip.suggested {
+  border-style: dashed;
+  border-color: var(--accent);
+  color: var(--accent);
+}

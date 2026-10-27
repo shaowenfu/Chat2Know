@@ -5,6 +5,7 @@ import { sendMessage } from '@/src/messaging';
 import type { InboxItem, NodeView } from '@/src/db/types';
 import FollowUp from './FollowUp.vue';
 import KeepPanel from './KeepPanel.vue';
+import { REPEAT_ASK_THRESHOLD } from '@/src/graph/mastery';
 import { NOTIFY, useRun } from '../notify';
 
 const props = defineProps<{ items: NodeView[]; answers: Map<string, InboxItem>; leftovers: InboxItem[]; titles: Map<string, string> }>();
@@ -87,6 +88,15 @@ const daysLeft = (item: InboxItem) => String(Math.max(1, Math.ceil((item.expires
           ↗ {{ item.sources[0].pageTitle || item.sources[0].url }}
         </button>
         <span v-if="item.askCount > 1" class="repeat" data-testid="queue-repeat">{{ i18n.t('queue.askedTimes', [String(item.askCount)]) }}</span>
+        <button
+          v-if="item.askCount >= REPEAT_ASK_THRESHOLD && item.mastery !== 'internalize'"
+          type="button"
+          class="chip"
+          data-testid="queue-must-know"
+          @click="run(() => sendMessage('nodes/setMastery', { id: item.id, mastery: 'internalize' }))"
+        >
+          {{ i18n.t('queue.markMustKnow') }}
+        </button>
       </div>
 
       <div v-if="props.answers.get(item.id)" class="answer" data-testid="queue-answer">{{ props.answers.get(item.id)!.answer }}</div>

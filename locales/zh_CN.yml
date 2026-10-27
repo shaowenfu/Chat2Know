@@ -67,6 +67,7 @@ queue:
   copied: 已复制，粘贴到对话里即可追问。
   remove: 移除
   askHere: 在这里问
+  markMustKnow: 问了好几次，要熟记吗？
   followUpAsk: 追问
   followUpPlaceholder: 继续追问
   arose: "追问自：$1"
@@ -118,6 +119,7 @@ mastery:
   internalize: 要熟记
   understand: 要理解
   index: 知道在哪
+  suggested: 建议
 quiz:
   tab: 考我
   masteredThisWeek: 本周掌握

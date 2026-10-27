@@ -2,6 +2,7 @@
 import { i18n } from '#i18n';
 import { sendMessage } from '@/src/messaging';
 import type { TreeNode } from '@/src/graph/tree';
+import type { Mastery } from '@/src/db/types';
 import CardItem from './CardItem.vue';
 import { useDragging } from '../dnd';
 import { useRun } from '../notify';
@@ -11,7 +12,13 @@ import { useRun } from '../notify';
  * drag and drop (onto a card: becomes its child; onto the strip above a
  * sibling: placed before it). Conclusion mode shows the statements as an outline.
  */
-const props = defineProps<{ items: TreeNode[]; parentId: string | null; mode: 'explore' | 'conclusion'; configured: boolean }>();
+const props = defineProps<{
+  items: TreeNode[];
+  parentId: string | null;
+  mode: 'explore' | 'conclusion';
+  configured: boolean;
+  suggestions: Map<string, Mastery>;
+}>();
 const emit = defineEmits<{ openSource: [sourceId: string] }>();
 const dragging = useDragging();
 const run = useRun();
@@ -50,7 +57,12 @@ async function drop(parentId: string, beforeId?: string) {
           @dragover.prevent
           @drop.prevent="drop(item.node.id)"
         >
-          <CardItem :node="item.node" :configured="configured" @open-source="emit('openSource', $event)" />
+          <CardItem
+            :node="item.node"
+            :configured="configured"
+            :suggested="suggestions.get(item.node.id)"
+            @open-source="emit('openSource', $event)"
+          />
         </div>
       </template>
       <span v-else class="statement" data-testid="outline-item">{{ item.node.summary ?? item.node.title }}</span>
@@ -60,6 +72,7 @@ async function drop(parentId: string, beforeId?: string) {
         :parent-id="item.node.id"
         :mode="props.mode"
         :configured="configured"
+        :suggestions="suggestions"
         @open-source="emit('openSource', $event)"
       />
     </li>

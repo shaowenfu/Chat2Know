@@ -67,6 +67,7 @@ queue:
   copied: Copied. Paste it into the chat to ask there.
   remove: Remove
   askHere: Ask here
+  markMustKnow: Asked often. Know it by heart?
   followUpAsk: Follow up
   followUpPlaceholder: Ask a follow-up question
   arose: "Follow-up to: $1"
@@ -118,6 +119,7 @@ mastery:
   internalize: Know by heart
   understand: Understand
   index: Know where to find
+  suggested: suggested
 quiz:
   tab: Quiz me
   masteredThisWeek: mastered this week
