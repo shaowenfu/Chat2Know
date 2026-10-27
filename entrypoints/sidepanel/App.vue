@@ -7,9 +7,12 @@ import type { InboxItem, NodeView } from '@/src/db/types';
 import type { PublicSettings } from '@/src/llm/settings';
 import AskQueue from './components/AskQueue.vue';
 import CardList from './components/CardList.vue';
+import PlacementPrompt from './components/PlacementPrompt.vue';
 import QuizView from './components/QuizView.vue';
 import SettingsView from './components/SettingsView.vue';
 import { NOTIFY, errorText } from './notify';
+import { PLACE } from './placement';
+import type { Placement } from '@/src/services/placement';
 
 type View = 'queue' | 'cards' | 'quiz' | 'settings';
 const view = ref<View>('cards');
@@ -30,6 +33,17 @@ function notify(text: string, error = false) {
   noticeTimer = setTimeout(() => (notice.value = null), error ? 8000 : 4000);
 }
 provide(NOTIFY, notify);
+
+/** Placement suggestions for the card the user just kept, if any. */
+const placing = ref<{ nodeId: string; placement: Placement } | null>(null);
+provide(PLACE, async (nodeId: string) => {
+  try {
+    const placement = await sendMessage('place/suggest', { nodeId });
+    if (placement && (placement.parents.length || placement.duplicate)) placing.value = { nodeId, placement };
+  } catch (err) {
+    notify(errorText(err), true);
+  }
+});
 
 // Ask-later questions live in their own queue; everything else is a card.
 const queue = computed(() => nodes.value.filter((n) => n.type === 'question' && n.status === 'open'));
@@ -155,6 +169,15 @@ onUnmounted(() => browser.tabs.onActivated.removeListener(onTabActivated));
     </p>
 
     <p v-if="notice" class="notice" :class="{ error: notice.error }" role="status">{{ notice.text }}</p>
+
+    <PlacementPrompt
+      v-if="placing && view !== 'settings'"
+      :key="placing.nodeId"
+      :node-id="placing.nodeId"
+      :title="titles.get(placing.nodeId) ?? ''"
+      :placement="placing.placement"
+      @done="placing = null"
+    />
 
     <SettingsView v-if="view === 'settings' && settings" :key="settings.baseUrl + settings.model" :settings="settings" />
 

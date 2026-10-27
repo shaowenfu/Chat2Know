@@ -7,10 +7,12 @@ import FollowUp from './FollowUp.vue';
 import MasteryPicker from './MasteryPicker.vue';
 import TitlePicker from './TitlePicker.vue';
 import { useRun } from '../notify';
+import { usePlace } from '../placement';
 
 const props = defineProps<{ node: NodeView; configured: boolean }>();
 const emit = defineEmits<{ openSource: [sourceId: string] }>();
 const run = useRun();
+const place = usePlace();
 
 // Candidates arrive after distillation, possibly after this card was first rendered.
 const pick = ref('');
@@ -23,7 +25,8 @@ watch(
 );
 
 async function confirmTitle() {
-  await run(() => sendMessage('nodes/confirmTitle', { id: props.node.id, title: pick.value }));
+  const ok = await run(() => sendMessage('nodes/confirmTitle', { id: props.node.id, title: pick.value }));
+  if (ok !== undefined && !props.node.parent) await place(props.node.id);
 }
 
 async function retry() {

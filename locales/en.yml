@@ -138,3 +138,9 @@ tree:
   conclusion: Conclusions
   dropBefore: Place here
   dropRoot: Drop here to move to the top level
+place:
+  title: "Where does \"$1\" belong?"
+  under: "Put it under:"
+  duplicate: "Looks like the same concept as \"$1\"."
+  merge: Merge
+  skip: Leave at top level

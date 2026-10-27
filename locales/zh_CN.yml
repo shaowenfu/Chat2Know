@@ -138,3 +138,9 @@ tree:
   conclusion: 结论
   dropBefore: 放到这里
   dropRoot: 拖到这里移到顶层
+place:
+  title: "\"$1\"放在哪里？"
+  under: 放到这张卡片下面：
+  duplicate: "看起来和\"$1\"是同一个概念。"
+  merge: 合并
+  skip: 留在顶层

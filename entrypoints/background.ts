@@ -12,6 +12,7 @@ import { isConfigured, loadSettings, saveSettings, toPublic } from '@/src/llm/se
 import { answerQuestion, confirmKeep, dismissQuestion, suggestKeep } from '@/src/services/ask';
 import { Distiller } from '@/src/services/distill';
 import { judge, selfGrade } from '@/src/services/quiz';
+import { suggestPlacement } from '@/src/services/placement';
 
 const CONTENT_SCRIPT = '/content-scripts/content.js';
 
@@ -227,6 +228,16 @@ export default defineBackground(() => {
     },
     'nodes/move': async ({ id, parentId, beforeId }) => {
       await (await repo()).moveNode(id, parentId, beforeId);
+      notifyChanged();
+      return null;
+    },
+    'place/suggest': async ({ nodeId }) => {
+      const settings = await loadSettings();
+      if (!settings.embeddingModel) return null; // placement help is off until an embedding model is set
+      return suggestPlacement(await repo(), new LlmClient(settings), settings.embeddingModel, nodeId);
+    },
+    'nodes/merge': async ({ duplicateId, targetId }) => {
+      await (await repo()).mergeInto(duplicateId, targetId);
       notifyChanged();
       return null;
     },

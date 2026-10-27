@@ -461,3 +461,29 @@ button.danger:hover {
   font-size: 13px;
   line-height: 1.6;
 }
+
+.place {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.place-title {
+  margin: 0;
+  font-weight: 600;
+}
+
+.place-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+}
+
+.place .link {
+  align-self: flex-start;
+}

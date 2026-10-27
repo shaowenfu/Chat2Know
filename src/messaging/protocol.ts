@@ -8,6 +8,7 @@ import type { TextQuote } from '@/src/capture/text-quote';
 import type { AskLaterResult, CaptureType, ImportResult, KeepDecision, PageQuestion } from '@/src/db/repository';
 import type { InboxItem, Mastery, Review, Verdict } from '@/src/db/types';
 import type { Suggestion } from '@/src/llm/prompts';
+import type { Placement } from '@/src/services/placement';
 import type { PublicSettings } from '@/src/llm/settings';
 import type { NodeView } from '@/src/db/types';
 
@@ -45,6 +46,9 @@ export interface MessageMap {
   'nodes/retryDistill': { req: { id: string }; res: null };
   /** Move a card under another (before a sibling, or last), or to the top level with parentId null. */
   'nodes/move': { req: { id: string; parentId: string | null; beforeId?: string }; res: null };
+  /** Parent and duplicate suggestions for a card; null when no embedding model is configured. */
+  'place/suggest': { req: { nodeId: string }; res: Placement | null };
+  'nodes/merge': { req: { duplicateId: string; targetId: string }; res: null };
   'nodes/setMastery': { req: { id: string; mastery: Mastery | null }; res: null };
   'quiz/due': { req: Record<string, never>; res: NodeView[] };
   'quiz/grade': { req: { nodeId: string; answer: string; verdict: Verdict }; res: Review };

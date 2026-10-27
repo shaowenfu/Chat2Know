@@ -85,11 +85,12 @@ export interface Preference {
   createdAt: number;
 }
 
+/** Cached embedding of a node's text; recomputed when the model or the text changes. Not synced. */
 export interface Embedding {
   nodeId: string;
   model: string;
-  dim: number;
-  vector: Float32Array;
+  text: string;
+  vector: number[];
 }
 
 export type Entity = 'nodes' | 'edges' | 'sources' | 'reviews' | 'preferences';

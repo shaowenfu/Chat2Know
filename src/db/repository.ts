@@ -3,7 +3,7 @@ import { monotonicFactory } from 'ulid';
 import type { CapturedSelection } from '@/src/capture/selection';
 import { Hlc } from './hlc';
 import type { Chat2KnowDB } from './schema';
-import type { Edge, EdgeKind, Entity, InboxItem, KNode, Mastery, NodeView, OpLogEntry, Preference, Review, Source, Verdict } from './types';
+import type { Edge, EdgeKind, Embedding, Entity, InboxItem, KNode, Mastery, NodeView, OpLogEntry, Preference, Review, Source, Verdict } from './types';
 import { DAY_MS, isDue, nextInterval } from '@/src/review/schedule';
 import type { TextQuote } from '@/src/capture/text-quote';
 import { titleFromMarkdown } from './title';
@@ -192,6 +192,51 @@ export class Repository {
       await this.db.oplog.add(this.log('nodes', node.id, 'put', node));
       await this.replaceParent(node.id, parentId, 'arose_from');
       return node;
+    });
+  }
+
+  // ------------------------------------------------------------ embeddings (cache, not logged)
+
+  async embeddingsFor(ids: string[]): Promise<Map<string, Embedding>> {
+    return new Map((await this.db.embeddings.bulkGet(ids)).filter((e): e is Embedding => !!e).map((e) => [e.nodeId, e]));
+  }
+
+  async putEmbeddings(rows: Embedding[]): Promise<void> {
+    await this.db.embeddings.bulkPut(rows);
+  }
+
+  /** Ids of every node below `id` in the tree. */
+  async descendantsOf(id: string): Promise<Set<string>> {
+    const out = new Set<string>();
+    for (let frontier = [id]; frontier.length; ) {
+      const children = (await this.db.edges.where('from').anyOf(frontier).toArray()).map((e) => e.to).filter((c) => !out.has(c));
+      children.forEach((c) => out.add(c));
+      frontier = children;
+    }
+    return out;
+  }
+
+  /**
+   * Merges a duplicate concept into an existing node: its sources and children
+   * move over, ask counts add up, and the duplicate is soft-deleted.
+   */
+  async mergeInto(duplicateId: string, targetId: string): Promise<void> {
+    if (duplicateId === targetId) throw new Error('Cannot merge a card into itself');
+    await this.db.transaction('rw', [this.db.nodes, this.db.edges, this.db.sources, this.db.oplog], async () => {
+      const dup = await this.db.nodes.get(duplicateId);
+      const target = await this.db.nodes.get(targetId);
+      if (!dup || !target) throw new Error('Card not found');
+      for (const s of await this.db.sources.where('nodeId').equals(duplicateId).toArray()) {
+        await this.db.sources.update(s.id, { nodeId: targetId });
+        await this.db.oplog.add(this.log('sources', s.id, 'put', { nodeId: targetId }));
+      }
+      for (const e of await this.db.edges.where('from').equals(duplicateId).toArray()) {
+        if (e.to === targetId) continue;
+        await this.replaceParent(e.to, targetId, e.kind);
+      }
+      await this.removeParent(duplicateId);
+      await this.patchNode(targetId, { askCount: target.askCount + dup.askCount });
+      await this.patchNode(duplicateId, { deletedAt: this.now() });
     });
   }
 
