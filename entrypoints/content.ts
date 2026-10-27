@@ -5,6 +5,7 @@ import { prepareAskDraft } from '@/src/capture/ask';
 import { highlightQuote, underlineRange, underlineTerms } from '@/src/capture/highlight';
 import { htmlToMarkdown } from '@/src/capture/markdown';
 import { SelectionToolbar } from '@/src/capture/toolbar';
+import { UserError } from '@/src/errors';
 
 declare global {
   interface Window {
@@ -23,7 +24,7 @@ export default defineContentScript({
     const toolbar = new SelectionToolbar(document, {
       async save(type) {
         const capture = captureSelection(document, location.href);
-        if (!capture) throw new Error('No selection');
+        if (!capture) throw new UserError('error.noSelection');
         await sendMessage('capture/save', { type, capture });
       },
       prepareAsk: () => prepareAskDraft(document, location.href),
@@ -45,7 +46,7 @@ export default defineContentScript({
       'content/highlight': ({ quote }) => ({ found: highlightQuote(document, quote) }),
       'content/pageMarkdown': () => ({ markdown: htmlToMarkdown(document.body), url: location.href, pageTitle: document.title }),
       'content/askLater': () => {
-        if (!toolbar.openAskPrompt('later')) throw new Error('No text selected');
+        if (!toolbar.openAskPrompt('later')) throw new UserError('error.noSelection');
         return null;
       },
     });

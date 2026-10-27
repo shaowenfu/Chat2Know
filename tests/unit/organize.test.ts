@@ -22,8 +22,8 @@ describe('organize', () => {
   it('rejects malformed output, empty and oversized input', async () => {
     await expect(organize(reply({ cards: [{ question: 'q' }] }), 'x')).rejects.toThrow('Expected non-empty string "summary"');
     await expect(organize(reply({}), 'x')).rejects.toThrow('Expected "cards" to be a list');
-    await expect(organize(reply({ cards: [] }), '   ')).rejects.toThrow('Nothing to organize');
-    await expect(organize(reply({ cards: [] }), 'a'.repeat(MAX_ORGANIZE_CHARS + 1))).rejects.toThrow('too long');
+    await expect(organize(reply({ cards: [] }), '   ')).rejects.toThrow('error.nothingToOrganize');
+    await expect(organize(reply({ cards: [] }), 'a'.repeat(MAX_ORGANIZE_CHARS + 1))).rejects.toThrow('error.tooLong');
   });
 });
 
@@ -48,7 +48,7 @@ describe('addCards', () => {
   it('pasted cards have no source; a blank title aborts the whole batch', async () => {
     await repo.addCards([{ title: 'Q', summary: 'S', quote: 'q' }]);
     expect((await repo.listNodes())[0]!.sources).toEqual([]);
-    await expect(repo.addCards([{ title: 'ok', summary: 's', quote: '' }, { title: ' ', summary: 's', quote: '' }])).rejects.toThrow('required');
+    await expect(repo.addCards([{ title: 'ok', summary: 's', quote: '' }, { title: ' ', summary: 's', quote: '' }])).rejects.toThrow('error.titleSummaryRequired');
     expect(await repo.listNodes()).toHaveLength(1);
   });
 });

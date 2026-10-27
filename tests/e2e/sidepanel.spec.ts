@@ -79,7 +79,7 @@ test('capturing with nothing selected reports an error', async ({ context, exten
   const panel = await context.newPage();
   await panel.goto(`chrome-extension://${extensionId}/sidepanel.html`);
   const res = await send(panel, 'capture/fromTab', { type: 'knowledge', tabId: await tabIdOf(panel, url) });
-  expect(res).toMatchObject({ ok: false, error: 'No text selected' });
+  expect(res).toMatchObject({ ok: false, key: 'error.noSelection' });
 });
 
 test('opening a source jumps back to the page and highlights the quote', async ({ context, extensionId, fixtureServer }) => {

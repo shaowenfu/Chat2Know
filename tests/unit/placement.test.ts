@@ -66,6 +66,24 @@ describe('suggestPlacement', () => {
   });
 });
 
+describe('placement limits', () => {
+  it('a card that already has a parent gets no placement suggestions', async () => {
+    const a = await card('What is attention?', 'Attention weighs tokens.');
+    const b = await card('Why scale attention?', 'Scaling keeps attention stable.');
+    await repo.moveNode(b, a);
+    expect(await suggestPlacement(repo, client, 'e', b)).toEqual({ parents: [] });
+    expect(embedCalls).toHaveLength(0);
+  });
+
+  it('embeds a large library in batches', async () => {
+    const titles = Array.from({ length: 130 }, (_, i) => `Card ${i}`);
+    await repo.addCards(titles.map((t) => ({ title: t, summary: t, quote: '' })));
+    const [last] = await repo.addCards([{ title: 'Card query', summary: 'q', quote: '' }]);
+    await suggestPlacement(repo, client, 'e', last!);
+    expect(embedCalls.map((c) => c.length)).toEqual([128, 3]);
+  });
+});
+
 describe('mergeInto', () => {
   it('moves sources and children, sums ask counts and removes the duplicate', async () => {
     const target = await card('VLM', 'Vision + language.');

@@ -15,18 +15,19 @@ const run = useRun();
 const place = usePlace();
 
 // Candidates arrive after distillation, possibly after this card was first rendered.
+// Watch their content, not the array: every panel refresh brings a new array.
 const pick = ref('');
 watch(
-  () => props.node.titleCandidates,
-  (candidates) => {
-    if (candidates && !candidates.includes(pick.value)) pick.value = candidates[0]!;
+  () => props.node.titleCandidates?.join('\n'),
+  () => {
+    if (props.node.titleCandidates) pick.value = props.node.titleCandidates[0]!;
   },
   { immediate: true },
 );
 
 async function confirmTitle() {
   const ok = await run(() => sendMessage('nodes/confirmTitle', { id: props.node.id, title: pick.value }));
-  if (ok !== undefined && !props.node.parent) await place(props.node.id);
+  if (ok !== undefined) await place(props.node.id);
 }
 
 async function retry() {

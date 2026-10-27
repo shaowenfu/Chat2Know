@@ -18,9 +18,12 @@ export class Distiller {
 
   async distill(nodeId: string): Promise<void> {
     if (this.running.has(nodeId)) return;
+    this.running.add(nodeId); // claim before any await so concurrent calls cannot both run
     const client = await this.client();
-    if (!client) return; // model not configured yet: the card stays pending until settings are saved
-    this.running.add(nodeId);
+    if (!client) {
+      this.running.delete(nodeId); // model not configured yet: the card stays pending until settings are saved
+      return;
+    }
     try {
       const node = await this.repo.getNode(nodeId);
       if (!node?.body) throw new Error('Card has no text to distill');

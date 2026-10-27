@@ -97,6 +97,8 @@ test('captured knowledge is distilled; failures keep the raw text and can be ret
   await panel.getByTestId('card-retry').click();
   await expect(panel.getByTestId('card-summary')).toHaveText('Distilled: In short: attention is a learned, content-based lookup.');
   await panel.getByRole('textbox', { name: 'Or write your own question' }).fill('What is attention, in one line?');
+  // Any data change refreshes the panel; the typed title must survive it.
+  await send(panel, 'nodes/setMastery', { id: (await send<NodeView[]>(panel, 'nodes/list', {})).data[0]!.id, mastery: null });
   await panel.getByTestId('card-confirm').click();
   await expect(panel.getByTestId('card-title')).toHaveText('What is attention, in one line?');
   await expect(panel.getByTestId('title-picker')).toHaveCount(0);

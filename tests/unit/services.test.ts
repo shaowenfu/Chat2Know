@@ -94,7 +94,7 @@ describe('follow-ups', () => {
   it('rejects empty follow-ups and unknown parents', async () => {
     await expect(repo.askFollowUp('nope', 'q')).rejects.toThrow('not found');
     const card = await repo.capture('idea', capture('x'));
-    await expect(repo.askFollowUp(card.id, '  ')).rejects.toThrow('Question is empty');
+    await expect(repo.askFollowUp(card.id, '  ')).rejects.toThrow('error.questionEmpty');
   });
 });
 
@@ -151,6 +151,13 @@ describe('keep', () => {
     expect(await db.nodes.where('type').equals('topic').toArray()).toMatchObject([{ title: 'VLM', status: 'confirmed' }]);
   });
 
+  it('keeping one answer accounts for every answer to that question', async () => {
+    const first = await answered('VLM', '');
+    const second = await answerQuestion(repo, clientReplying('Second answer.').client, first.questionNodeId, (x) => x);
+    await repo.keep(second.id, { title: 'T1', summary: 'S1' });
+    expect((await repo.listInbox()).every((i) => i.promotedNodeId === first.questionNodeId)).toBe(true);
+  });
+
   it('can still keep an answer after dismissing its question', async () => {
     const item = await answered('VLM', '');
     await dismissQuestion(repo, item.questionNodeId, concept);
@@ -197,6 +204,14 @@ describe('Distiller', () => {
     const after = (await repo.getNode(node.id))!;
     expect(after.distillError).toBeUndefined();
     expect(after.summary).toBe('s');
+  });
+
+  it('concurrent distill calls for one card make one model request', async () => {
+    const node = await card();
+    const { client, prompts } = clientReplying({ titles: ['a', 'b', 'c'], summary: 's' });
+    const distiller = new Distiller(repo, async () => client, () => {});
+    await Promise.all([distiller.distill(node.id), distiller.distill(node.id), distiller.drain()]);
+    expect(prompts).toHaveLength(1);
   });
 
   it('leaves cards pending while no model is configured, then drains them', async () => {

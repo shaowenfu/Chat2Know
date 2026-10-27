@@ -24,6 +24,21 @@ test('ask now answers in the side panel without touching the host page', async (
   await expect(panel.getByTestId('queue-answer')).toHaveText('Mock answer to: Why softmax here?');
 });
 
+test('Esc or clicking away cancels ask now without calling the model', async ({ context, extensionId, fixtureServer, mockLlm }) => {
+  const { page, panel } = await openPageAndPanel(context, extensionId, `${fixtureServer}/${EN}`);
+  await configureModel(panel, mockLlm.url);
+  const before = mockLlm.requests.length;
+  await selectText(page, '#intro', 'token');
+  await page.getByRole('button', { name: 'Ask now', exact: true }).click();
+  await page.keyboard.press('Escape');
+  await selectText(page, '#intro', 'token');
+  await page.getByRole('button', { name: 'Ask now', exact: true }).click();
+  await page.mouse.click(5, 5);
+  await expect(page.getByRole('toolbar')).toBeHidden();
+  expect(mockLlm.requests.length).toBe(before);
+  expect((await send<NodeView[]>(panel, 'nodes/list', {})).data).toEqual([]);
+});
+
 test('ask now shows the model error on the page toolbar', async ({ context, extensionId, fixtureServer, mockLlm }) => {
   const { page, panel } = await openPageAndPanel(context, extensionId, `${fixtureServer}/${EN}`);
   await configureModel(panel, mockLlm.url, 'wrong-key');

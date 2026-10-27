@@ -114,6 +114,13 @@ describe('askLater', () => {
     expect(await db.sources.where('nodeId').equals(first.nodeId).count()).toBe(3);
   });
 
+  it('ask now never merges into an older open question', async () => {
+    const first = await ask('VLM', 'What is VLM?');
+    const now = await repo.askLater({ term: 'VLM', question: 'Why VLM?', capture: capture('VLM again.') }, { merge: false });
+    expect(now).toMatchObject({ merged: false, askCount: 1 });
+    expect(now.nodeId).not.toBe(first.nodeId);
+  });
+
   it('starts a new question once the old one is resolved', async () => {
     const first = await ask('VLM', '');
     await repo.deleteNode(first.nodeId);
@@ -156,9 +163,9 @@ describe('schema migration', () => {
 
 describe('parseExport', () => {
   it('rejects foreign or malformed files', () => {
-    expect(() => parseExport('{}')).toThrow('Not a Chat2Know export');
-    expect(() => parseExport({ format: 'chat2know', version: 99 })).toThrow('Unsupported export version');
-    expect(() => parseExport({ format: 'chat2know', version: 1, nodes: [{}], edges: [], sources: [], reviews: [] })).toThrow('Invalid "nodes"');
+    expect(() => parseExport('{}')).toThrow('error.notExport');
+    expect(() => parseExport({ format: 'chat2know', version: 99 })).toThrow('error.exportVersion');
+    expect(() => parseExport({ format: 'chat2know', version: 1, nodes: [{}], edges: [], sources: [], reviews: [] })).toThrow('error.invalidExport');
     expect(() => parseExport('not json')).toThrow();
   });
 });

@@ -1,6 +1,7 @@
 import { i18n } from '#i18n';
 import type { AskDraft } from './ask';
 import { UI_ATTR } from './text-quote';
+import { errorText } from '@/src/errors';
 
 export type SaveType = 'knowledge' | 'idea';
 
@@ -23,6 +24,7 @@ const CSS_TEXT = `
   border-radius: 8px; background: #1f2328; color: #fff; box-shadow: 0 4px 16px rgba(0,0,0,.25);
   font: 13px/1.2 system-ui, -apple-system, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
 }
+.bar[hidden] { display: none; } /* author display:flex would otherwise override [hidden] */
 .bar.ask { flex-direction: column; gap: 6px; padding: 8px; width: 320px; }
 button {
   all: unset; cursor: pointer; padding: 5px 9px; border-radius: 6px; color: #fff;
@@ -83,9 +85,9 @@ export class SelectionToolbar {
 
   private readonly onPointerDown = (e: Event) => {
     if (this.isOwnEvent(e)) return;
-    // Clicking away from an open prompt still saves the question: nothing is lost.
-    if (this.pending) void this.commitAsk();
-    else this.hide();
+    // Clicking away saves an ask-later question (nothing is lost) but cancels ask-now (it would cost a model call).
+    if (this.pending?.mode === 'later') void this.commitAsk();
+    else this.cancelAsk();
   };
 
   private readonly onPointerUp = (e: Event) => {
@@ -102,6 +104,12 @@ export class SelectionToolbar {
   private readonly onScroll = () => {
     if (!this.pending) this.hide();
   };
+
+  /** Shows the bar, cancelling a pending auto-hide from an earlier status message. */
+  private show(): void {
+    clearTimeout(this.hideTimer);
+    this.bar.hidden = false;
+  }
 
   readonly hide = () => {
     clearTimeout(this.hideTimer);
@@ -127,7 +135,7 @@ export class SelectionToolbar {
       this.button(i18n.t('toolbar.askNow'), () => this.openAskPrompt('now')),
     );
     this.place(sel.getRangeAt(0).getBoundingClientRect(), 36);
-    this.bar.hidden = false;
+    this.show();
   }
 
   private button(label: string, onClick: () => void): HTMLButtonElement {
@@ -169,7 +177,10 @@ export class SelectionToolbar {
     for (const type of ['keydown', 'keypress', 'keyup'] as const) input.addEventListener(type, (e) => e.stopPropagation());
     input.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && !e.isComposing) void this.commitAsk();
-      else if (e.key === 'Escape') void this.commitAsk(); // save now, write the question later
+      else if (e.key === 'Escape') {
+        if (mode === 'later') void this.commitAsk(); // save now, write the question later
+        else this.cancelAsk();
+      }
     });
 
     const chips = this.doc.createElement('div');
@@ -195,9 +206,14 @@ export class SelectionToolbar {
     this.bar.classList.add('ask');
     this.bar.replaceChildren(term, input, chips, hint);
     this.place(draft.termRange.getBoundingClientRect(), 130);
-    this.bar.hidden = false;
+    this.show();
     input.focus();
     return true;
+  }
+
+  private cancelAsk(): void {
+    this.pending = null;
+    this.hide();
   }
 
   private async commitAsk(): Promise<void> {
@@ -209,13 +225,13 @@ export class SelectionToolbar {
       if (pending.mode === 'now') {
         this.flash(i18n.t('ask.asking'), false);
         await this.handlers.askNow(pending.draft, pending.input.value);
-        this.flash(i18n.t('ask.answered'), false);
+        if (!this.pending) this.flash(i18n.t('ask.answered'), false); // never cover a newer prompt
       } else {
         const count = await this.handlers.askLater(pending.draft, pending.input.value);
         this.flash(count > 1 ? i18n.t('ask.savedRepeat', [String(count)]) : i18n.t('ask.saved'), false);
       }
     } catch (err) {
-      this.flash(err instanceof Error ? err.message : i18n.t('toolbar.failed'), true);
+      if (!this.pending) this.flash(errorText(err), true);
     }
   }
 
@@ -225,8 +241,7 @@ export class SelectionToolbar {
     status.setAttribute('role', 'status');
     status.textContent = text;
     this.bar.replaceChildren(status);
-    this.bar.hidden = false;
-    clearTimeout(this.hideTimer);
+    this.show();
     this.hideTimer = setTimeout(this.hide, error ? 5000 : 1500);
   }
 }

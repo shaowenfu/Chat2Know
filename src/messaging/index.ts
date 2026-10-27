@@ -1,4 +1,5 @@
 import { browser } from 'wxt/browser';
+import { UserError } from '@/src/errors';
 import {
   isEnvelope,
   unwrap,
@@ -44,7 +45,11 @@ export function onMessages(handlers: Handlers): void {
       .then(
         (data) => sendResponse({ ok: true, data } satisfies Result<unknown>),
         (err: unknown) =>
-          sendResponse({ ok: false, error: err instanceof Error ? err.message : String(err) } satisfies Result<unknown>),
+          sendResponse(
+            (err instanceof UserError
+              ? { ok: false, error: err.message, key: err.key, subs: err.subs }
+              : { ok: false, error: err instanceof Error ? err.message : String(err) }) satisfies Result<unknown>,
+          ),
       );
     return true; // keep the channel open for the async response
   });

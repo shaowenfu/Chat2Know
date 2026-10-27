@@ -44,8 +44,8 @@ describe('moveNode and buildTree', () => {
     const a = await card('A');
     const b = await card('B');
     await repo.moveNode(b, a);
-    await expect(repo.moveNode(a, b)).rejects.toThrow('cannot be moved under itself');
-    await expect(repo.moveNode(a, a)).rejects.toThrow('cannot be moved under itself');
+    await expect(repo.moveNode(a, b)).rejects.toThrow('error.cardUnderItself');
+    await expect(repo.moveNode(a, a)).rejects.toThrow('error.cardUnderItself');
     await repo.moveNode(b, null);
     expect(await tree()).toEqual(['B', 'A']);
   });

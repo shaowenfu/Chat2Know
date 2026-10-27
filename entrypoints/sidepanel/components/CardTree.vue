@@ -32,7 +32,7 @@ function start(event: DragEvent, id: string) {
 async function drop(parentId: string, beforeId?: string) {
   const id = dragging.value;
   dragging.value = null;
-  if (!id || id === beforeId) return;
+  if (!id || id === beforeId || id === parentId) return; // dropped where it already is
   await run(() => sendMessage('nodes/move', { id, parentId, ...(beforeId ? { beforeId } : {}) }));
 }
 </script>

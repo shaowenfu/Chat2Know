@@ -56,6 +56,13 @@ describe('quiz', () => {
     expect((await repo.dueForQuiz()).map((n) => n.id)).toEqual([id]);
   });
 
+  it('an open question marked "know by heart" waits until it is kept', async () => {
+    const { nodeId } = await repo.askLater({ term: 'VLM', question: '', capture: { markdown: 's', quote: { exact: 's', prefix: '', suffix: '' }, url: 'u', pageTitle: 'p' } });
+    await repo.setMastery(nodeId, 'internalize');
+    expect(await repo.dueForQuiz()).toEqual([]);
+    expect((await repo.stats()).mustKnow).toBe(0);
+  });
+
   it('draft cards are not quizzed until their title is confirmed', async () => {
     const node = await repo.capture('knowledge', { markdown: 'x', quote: { exact: 'x', prefix: '', suffix: '' }, url: 'u', pageTitle: 'p' });
     await repo.setMastery(node.id, 'internalize');

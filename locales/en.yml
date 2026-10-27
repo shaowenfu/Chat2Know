@@ -43,7 +43,7 @@ type:
 ask:
   label: Ask later about
   labelNow: Ask now about
-  hintNow: Enter to ask · the answer appears in the side panel
+  hintNow: Enter to ask · Esc to cancel · the answer appears in the side panel
   asking: Asking…
   answered: Answer is in the side panel
   placeholder: Your question (optional)
@@ -164,3 +164,17 @@ organize:
     0: No cards kept
     1: Kept 1 card
     n: Kept $1 cards
+error:
+  modelNotConfigured: "Set up a model first (⚙ Model settings)."
+  noSelection: No text selected
+  baseUrlProtocol: Base URL must start with http:// or https://
+  nothingToOrganize: Nothing to organize
+  tooLong: "Text is too long to organize at once ($1 characters, limit $2). Paste a part instead."
+  questionEmpty: Question is empty
+  titleEmpty: Title is empty
+  titleSummaryRequired: Title and summary are required
+  answerExpired: This answer has expired
+  cardUnderItself: A card cannot be moved under itself
+  notExport: Not a Chat2Know export file
+  exportVersion: "Unsupported export version: $1"
+  invalidExport: "Invalid \"$1\" in export file"

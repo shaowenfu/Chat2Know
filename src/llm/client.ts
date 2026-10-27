@@ -1,3 +1,4 @@
+import { UserError } from '@/src/errors';
 /** Model connection the user configures: any OpenAI-compatible endpoint. */
 export interface ModelSettings {
   baseUrl: string; // e.g. https://api.openai.com/v1
@@ -25,7 +26,7 @@ export class LlmClient {
     private readonly settings: ModelSettings,
     private readonly fetchFn: Fetch = (...args) => fetch(...args),
   ) {
-    if (!settings.baseUrl || !settings.model || !settings.apiKey) throw new LlmError('Model is not configured');
+    if (!settings.baseUrl || !settings.model || !settings.apiKey) throw new UserError('error.modelNotConfigured');
   }
 
   private async post(path: string, body: object): Promise<unknown> {

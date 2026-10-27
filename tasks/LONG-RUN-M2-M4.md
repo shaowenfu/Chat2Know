@@ -69,7 +69,7 @@ and `docs/project-plan.md`, check `git log`, and continue from the first uncheck
 
 ## Final
 
-- [ ] F1 Self-review of the whole diff vs `main`: bugs, dead code, redundant fallbacks, over-design, naming; fix.
+- [x] F1 Self-review of the whole diff vs `main`: bugs, dead code, redundant fallbacks, over-design, naming; fix.
 - [ ] F2 Docs: CHANGELOG, README usage, plan progress notes, CLAUDE.md if rules changed.
 - [ ] F3 `npm run check` green; fast-forward `main`; push `main` and this branch.
 
@@ -85,3 +85,4 @@ Short notes on deviations and why, newest last.
 - M4.3: Already delivered in M2.3 (preferences recorded on keep/dismiss; last 8 sent as examples in the suggestion prompt; unit-tested). Whether the model actually stops suggesting deleted info types is a real-model property, measured by the eval harness.
 - M4.4: Candidates are transient (not persisted); one model request per pass, input capped at 100k characters with an explicit error. Organized cards are confirmed knowledge with the model's verbatim quote as source (page) or no source (paste).
 - M4.5: Harness verified with the mock server only. No real baseline yet: the owner runs `npm run eval` with a real provider and commits results/latest.json. masteryAgreement is against labels written alongside the rule, so it only guards against regressions, not quality.
+- F1 review (code-review skill, high, plus my own pass) found and fixed: open questions marked "know by heart" leaking into Quiz me and the north star; ask-now merging into an older question and answering the wrong one; a typed custom title reset by panel refreshes; a slow ask-now answer covering a newer prompt; a distill race making two model calls; a second answer overwriting an already kept card; placement replacing a follow-up's arose_from edge; unbatched embeddings; Esc/click-away on ask-now sending a paid request; drop-on-self error; preferences missing from export. Writing the cancel test exposed two M1 bugs: the toolbar never actually hid (`display:flex` overrode `[hidden]`), and a status message's auto-hide also hid the next toolbar. User-reachable errors now carry i18n keys (`UserError`); internal invariants and provider errors stay verbatim.

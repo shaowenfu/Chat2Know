@@ -43,7 +43,7 @@ type:
 ask:
   label: 稍后问：
   labelNow: 现在问：
-  hintNow: 回车提问 · 答案显示在侧栏
+  hintNow: 回车提问 · Esc 取消 · 答案显示在侧栏
   asking: 正在问…
   answered: 答案已在侧栏
   placeholder: 你的疑问（可以先不写）
@@ -164,3 +164,17 @@ organize:
     0: 没有记下卡片
     1: 已记下 1 张卡片
     n: 已记下 $1 张卡片
+error:
+  modelNotConfigured: 请先配置模型（⚙ 模型设置）。
+  noSelection: 没有选中文字
+  baseUrlProtocol: 接口地址必须以 http:// 或 https:// 开头
+  nothingToOrganize: 没有可整理的内容
+  tooLong: "文本太长，无法一次整理（$1 个字符，上限 $2）。请分段粘贴。"
+  questionEmpty: 问题不能为空
+  titleEmpty: 标题不能为空
+  titleSummaryRequired: 标题和内容都不能为空
+  answerExpired: 这条回答已过期
+  cardUnderItself: 卡片不能放到它自己下面
+  notExport: 不是 Chat2Know 导出文件
+  exportVersion: "不支持的导出版本：$1"
+  invalidExport: "导出文件中的\"$1\"无效"

@@ -1,3 +1,4 @@
+import { UserError } from '@/src/errors';
 import { generateKeyBetween } from 'fractional-indexing';
 import { monotonicFactory } from 'ulid';
 import type { CapturedSelection } from '@/src/capture/selection';
@@ -52,6 +53,9 @@ export interface PageQuestion {
 }
 
 const stripHash = (url: string) => url.replace(/#.*$/, '');
+
+/** Kept knowledge the user must know by heart. Open questions marked "know by heart" wait until they are kept. */
+const isQuizzable = (n: KNode) => n.type === 'knowledge' && n.status !== 'draft' && n.mastery === 'internalize';
 
 export const INBOX_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -120,13 +124,15 @@ export class Repository {
    * still open merges into the existing question: one more source sentence and
    * a higher askCount, which signals the term matters.
    */
-  async askLater(input: AskLaterInput): Promise<AskLaterResult> {
+  async askLater(input: AskLaterInput, { merge = true } = {}): Promise<AskLaterResult> {
     const at = this.now();
     const question = input.question.trim();
     return this.db.transaction('rw', this.db.nodes, this.db.sources, this.db.oplog, async () => {
-      const existing = (await this.db.nodes.where('term').equalsIgnoreCase(input.term.trim()).toArray()).find(
-        (n) => n.type === 'question' && n.status === 'open' && n.deletedAt === undefined,
-      );
+      const existing = !merge
+        ? undefined
+        : (await this.db.nodes.where('term').equalsIgnoreCase(input.term.trim()).toArray()).find(
+            (n) => n.type === 'question' && n.status === 'open' && n.deletedAt === undefined,
+          );
       if (existing) {
         const source = this.newSource(existing.id, input.capture, at);
         const patch: Partial<KNode> = { askCount: existing.askCount + 1, updatedAt: this.clock.tick() };
@@ -185,7 +191,7 @@ export class Repository {
   /** A question asked about a card or an answer: a child node that arose from it. */
   async askFollowUp(parentId: string, question: string): Promise<KNode> {
     const q = question.trim();
-    if (!q) throw new Error('Question is empty');
+    if (!q) throw new UserError('error.questionEmpty');
     return this.db.transaction('rw', [this.db.nodes, this.db.edges, this.db.oplog], async () => {
       if (!(await this.db.nodes.get(parentId))) throw new Error(`Node ${parentId} not found`);
       const at = this.now();
@@ -259,7 +265,7 @@ export class Repository {
           createdAt: at,
           updatedAt: this.clock.tick(),
         };
-        if (!node.title || !node.summary) throw new Error('Title and summary are required');
+        if (!node.title || !node.summary) throw new UserError('error.titleSummaryRequired');
         await this.db.nodes.add(node);
         await this.db.oplog.add(this.log('nodes', node.id, 'put', node));
         if (page) {
@@ -299,7 +305,7 @@ export class Repository {
   /** The user picked or wrote the question title for a draft card. */
   async confirmTitle(id: string, title: string): Promise<void> {
     const t = title.trim();
-    if (!t) throw new Error('Title is empty');
+    if (!t) throw new UserError('error.titleEmpty');
     await this.db.transaction('rw', this.db.nodes, this.db.oplog, () =>
       this.patchNode(id, { title: t, status: 'confirmed', titleCandidates: undefined }),
     );
@@ -322,7 +328,7 @@ export class Repository {
 
   async getInboxItem(id: string): Promise<InboxItem> {
     const item = await this.db.inbox.get(id);
-    if (!item) throw new Error('Answer not found (it may have expired)');
+    if (!item) throw new UserError('error.answerExpired');
     return item;
   }
 
@@ -334,7 +340,7 @@ export class Repository {
   async keep(inboxId: string, decision: KeepDecision): Promise<KNode> {
     const title = decision.title.trim();
     const summary = decision.summary.trim();
-    if (!title || !summary) throw new Error('Title and summary are required');
+    if (!title || !summary) throw new UserError('error.titleSummaryRequired');
     return this.db.transaction('rw', [this.db.nodes, this.db.edges, this.db.inbox, this.db.oplog], async () => {
       const item = await this.getInboxItem(inboxId);
       const patch: Partial<KNode> = { type: 'knowledge', title, summary, status: 'confirmed', deletedAt: undefined };
@@ -344,7 +350,8 @@ export class Repository {
         const concept = await this.findOrCreateTopic(decision.concept);
         await this.replaceParent(node.id, concept.id, 'instance_of');
       }
-      await this.db.inbox.update(inboxId, { promotedNodeId: node.id });
+      // Every answer to this question is now accounted for, so none resurfaces as a leftover.
+      await this.db.inbox.where('questionNodeId').equals(item.questionNodeId).modify({ promotedNodeId: node.id });
       return node;
     });
   }
@@ -394,7 +401,7 @@ export class Repository {
         return;
       }
       for (let up: string | undefined = parentId; up; up = (await this.db.edges.where('to').equals(up).first())?.from) {
-        if (up === childId) throw new Error('A card cannot be moved under itself');
+        if (up === childId) throw new UserError('error.cardUnderItself');
       }
       const old = await this.db.edges.where('to').equals(childId).first();
       await this.replaceParent(childId, parentId, old?.from === parentId ? old.kind : 'child', beforeId);
@@ -475,7 +482,7 @@ export class Repository {
     const now = this.now();
     const latest = await this.latestReviews();
     return (await this.listNodes())
-      .filter((n) => n.mastery === 'internalize' && n.status !== 'draft' && isDue(latest.get(n.id), now))
+      .filter((n) => isQuizzable(n) && isDue(latest.get(n.id), now))
       .sort((a, b) => (latest.get(a.id)?.dueAt ?? 0) - (latest.get(b.id)?.dueAt ?? 0));
   }
 
@@ -497,7 +504,7 @@ export class Repository {
   async stats(): Promise<{ masteredThisWeek: number; due: number; mustKnow: number; openQuestions: number }> {
     const now = this.now();
     const nodes = await this.listNodes();
-    const mustKnow = new Set(nodes.filter((n) => n.mastery === 'internalize').map((n) => n.id));
+    const mustKnow = new Set(nodes.filter(isQuizzable).map((n) => n.id));
     const passed = (await this.db.reviews.where('createdAt').aboveOrEqual(now - 7 * DAY_MS).toArray()).filter(
       (r) => r.verdict === 'pass' && mustKnow.has(r.nodeId),
     );
@@ -574,15 +581,15 @@ function isRow(value: unknown): value is { id: string } {
 
 export function parseExport(data: unknown): ExportFile {
   const file = (typeof data === 'string' ? JSON.parse(data) : data) as Partial<ExportFile> | null;
-  if (!file || file.format !== EXPORT_FORMAT) throw new Error('Not a Chat2Know export file');
-  if (file.version !== EXPORT_VERSION) throw new Error(`Unsupported export version: ${String(file.version)}`);
+  if (!file || file.format !== EXPORT_FORMAT) throw new UserError('error.notExport');
+  if (file.version !== EXPORT_VERSION) throw new UserError('error.exportVersion', [String(file.version)]);
   for (const key of ['nodes', 'edges', 'sources', 'reviews'] as const) {
     const rows = file[key];
-    if (!Array.isArray(rows) || !rows.every(isRow)) throw new Error(`Invalid "${key}" in export file`);
+    if (!Array.isArray(rows) || !rows.every(isRow)) throw new UserError('error.invalidExport', [key]);
   }
   // Exports made before schema v2 lack askCount and preferences.
   for (const node of file.nodes as Partial<KNode>[]) node.askCount ??= 0;
   file.preferences ??= [];
-  if (!Array.isArray(file.preferences) || !file.preferences.every(isRow)) throw new Error('Invalid "preferences" in export file');
+  if (!Array.isArray(file.preferences) || !file.preferences.every(isRow)) throw new UserError('error.invalidExport', ['preferences']);
   return file as ExportFile;
 }

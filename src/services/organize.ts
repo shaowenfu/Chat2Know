@@ -1,3 +1,4 @@
+import { UserError } from '@/src/errors';
 import type { LlmClient } from '@/src/llm/client';
 import { organizePrompt, parseCandidates, type CandidateCard } from '@/src/llm/prompts';
 
@@ -6,9 +7,7 @@ export const MAX_ORGANIZE_CHARS = 100_000;
 
 export async function organize(client: LlmClient, text: string): Promise<CandidateCard[]> {
   const body = text.trim();
-  if (!body) throw new Error('Nothing to organize');
-  if (body.length > MAX_ORGANIZE_CHARS) {
-    throw new Error(`Text is too long to organize at once (${body.length} characters, limit ${MAX_ORGANIZE_CHARS}). Paste a part instead.`);
-  }
+  if (!body) throw new UserError('error.nothingToOrganize');
+  if (body.length > MAX_ORGANIZE_CHARS) throw new UserError('error.tooLong', [String(body.length), String(MAX_ORGANIZE_CHARS)]);
   return client.json(organizePrompt(body), parseCandidates);
 }

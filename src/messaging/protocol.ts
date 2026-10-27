@@ -4,6 +4,7 @@
  */
 
 import type { CapturedSelection } from '@/src/capture/selection';
+import { UserError } from '@/src/errors';
 import type { TextQuote } from '@/src/capture/text-quote';
 import type { AskLaterResult, CaptureType, ImportResult, KeepDecision, PageQuestion } from '@/src/db/repository';
 import type { InboxItem, Mastery, Review, Verdict } from '@/src/db/types';
@@ -94,8 +95,8 @@ export interface Envelope<K extends MessageType = MessageType> {
   payload: Req<K>;
 }
 
-/** Responses are wrapped so errors cross the context boundary intact. */
-export type Result<T> = { ok: true; data: T } | { ok: false; error: string };
+/** Responses are wrapped so errors cross the context boundary intact (with their i18n key for user errors). */
+export type Result<T> = { ok: true; data: T } | { ok: false; error: string; key?: string; subs?: string[] };
 
 export function isEnvelope(value: unknown): value is Envelope {
   return (
@@ -108,6 +109,6 @@ export function isEnvelope(value: unknown): value is Envelope {
 
 export function unwrap<T>(result: Result<T> | undefined): T {
   if (!result) throw new Error('No response from receiver');
-  if (!result.ok) throw new Error(result.error);
+  if (!result.ok) throw result.key ? new UserError(result.key, result.subs) : new Error(result.error);
   return result.data;
 }

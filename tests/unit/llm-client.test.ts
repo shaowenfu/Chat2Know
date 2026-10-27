@@ -14,7 +14,7 @@ const reply = (content: string) => ({ choices: [{ message: { content } }] });
 
 describe('LlmClient', () => {
   it('refuses to exist without base URL, model and key', () => {
-    expect(() => new LlmClient({ ...settings, apiKey: '' })).toThrow('Model is not configured');
+    expect(() => new LlmClient({ ...settings, apiKey: '' })).toThrow('error.modelNotConfigured');
   });
 
   it('posts an OpenAI-compatible chat request', async () => {

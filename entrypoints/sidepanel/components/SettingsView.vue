@@ -3,6 +3,7 @@ import { inject, ref } from 'vue';
 import { browser } from 'wxt/browser';
 import { i18n } from '#i18n';
 import { sendMessage } from '@/src/messaging';
+import { UserError } from '@/src/errors';
 import type { PublicSettings } from '@/src/llm/settings';
 import { NOTIFY, useRun } from '../notify';
 
@@ -20,7 +21,7 @@ async function save() {
   await run(async () => {
     // Host access to the model endpoint is granted per origin, at the moment it is needed.
     const origin = `${new URL(baseUrl.value.trim()).origin}/*`;
-    if (!(await browser.permissions.request({ origins: [origin] }))) throw new Error(i18n.t('settings.permissionDenied', [origin]));
+    if (!(await browser.permissions.request({ origins: [origin] }))) throw new UserError('settings.permissionDenied', [origin]);
     await sendMessage('settings/save', {
       baseUrl: baseUrl.value,
       model: model.value,

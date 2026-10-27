@@ -8,6 +8,7 @@ import { Repository, type CaptureType } from '@/src/db/repository';
 import { nodesToMarkdown } from '@/src/export/markdown';
 import { textFragmentUrl } from '@/src/capture/text-fragment';
 import { LlmClient } from '@/src/llm/client';
+import { UserError } from '@/src/errors';
 import { isConfigured, loadSettings, saveSettings, toPublic } from '@/src/llm/settings';
 import { answerQuestion, confirmKeep, dismissQuestion, suggestKeep } from '@/src/services/ask';
 import { Distiller } from '@/src/services/distill';
@@ -83,7 +84,7 @@ async function captureFromTab(type: CaptureType, tabId?: number): Promise<{ node
   const id = await resolveTabId(tabId);
   await inject(id);
   const capture = await sendTabMessage(id, 'content/capture', {});
-  if (!capture) throw new Error('No text selected');
+  if (!capture) throw new UserError('error.noSelection');
   return save(type, capture);
 }
 
@@ -187,7 +188,8 @@ export default defineBackground(() => {
     'ask/forUrl': async ({ url }) => (await repo()).questionsForUrl(url),
     'ask/now': async (input) => {
       const r = await repo();
-      const { nodeId } = await r.askLater(input);
+      // Asked now, the question is answered as asked, so it is never merged into an older one.
+      const { nodeId } = await r.askLater(input, { merge: false });
       notifyChanged();
       const item = await answerQuestion(r, await client(), nodeId, defaultQuestion);
       notifyChanged();
@@ -275,7 +277,7 @@ export default defineBackground(() => {
     'settings/save': async ({ baseUrl, model, embeddingModel, apiKey }) => {
       const current = await loadSettings();
       const url = new URL(baseUrl.trim()); // throws on an invalid URL
-      if (!/^https?:$/.test(url.protocol)) throw new Error('Base URL must start with http:// or https://');
+      if (!/^https?:$/.test(url.protocol)) throw new UserError('error.baseUrlProtocol');
       const next = {
         baseUrl: url.href.replace(/\/+$/, ''),
         model: model.trim(),
