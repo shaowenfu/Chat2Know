@@ -53,11 +53,12 @@ describe('Repository', () => {
     await repo.capture('knowledge', capture('Formula $E=mc^2$\n\n| a | b |\n| --- | --- |\n| 1 | 2 |'));
     const deleted = await repo.capture('idea', capture('gone'));
     await repo.deleteNode(deleted.id);
+    await repo.addPreference({ questionType: 'instance', suggestion: 'Who made X — Y', userAction: 'delete' });
     const exported = await repo.exportData();
 
     const other = setup('import');
     const json = JSON.stringify(exported);
-    expect(await other.repo.importData(json)).toEqual({ nodes: 2, edges: 0, sources: 2, reviews: 0 });
+    expect(await other.repo.importData(json)).toEqual({ nodes: 2, edges: 0, sources: 2, reviews: 0, preferences: 1 });
     const reexported = await other.repo.exportData();
     expect({ ...reexported, exportedAt: 0 }).toEqual({ ...exported, exportedAt: 0 });
     await other.db.delete();

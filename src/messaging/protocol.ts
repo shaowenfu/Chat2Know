@@ -41,7 +41,7 @@ export interface MessageMap {
   'ask/dismiss': { req: { questionId: string; suggestion?: Suggestion }; res: null };
   'inbox/list': { req: Record<string, never>; res: InboxItem[] };
   'keep/suggest': { req: { inboxId: string }; res: Suggestion };
-  'keep/confirm': { req: { inboxId: string; suggestion: Suggestion; decision: KeepDecision }; res: null };
+  'keep/confirm': { req: { inboxId: string; suggestion: Suggestion; decision: KeepDecision }; res: { nodeId: string } };
   'nodes/confirmTitle': { req: { id: string; title: string }; res: null };
   'nodes/retryDistill': { req: { id: string }; res: null };
   /** Move a card under another (before a sibling, or last), or to the top level with parentId null. */

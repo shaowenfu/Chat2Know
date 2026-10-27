@@ -19,6 +19,7 @@ export interface ExportFile {
   edges: Edge[];
   sources: Source[];
   reviews: Review[];
+  preferences: Preference[];
 }
 
 export interface ImportResult {
@@ -26,6 +27,7 @@ export interface ImportResult {
   edges: number;
   sources: number;
   reviews: number;
+  preferences: number;
 }
 
 export type CaptureType = Extract<KNode['type'], 'knowledge' | 'idea'>;
@@ -336,7 +338,7 @@ export class Repository {
     return this.db.transaction('rw', [this.db.nodes, this.db.edges, this.db.inbox, this.db.oplog], async () => {
       const item = await this.getInboxItem(inboxId);
       const patch: Partial<KNode> = { type: 'knowledge', title, summary, status: 'confirmed', deletedAt: undefined };
-      if (decision.concept) patch.mastery = 'index' satisfies Mastery;
+      if (decision.concept) patch.mastery = 'index'; // an example only needs to be findable
       const node = await this.patchNode(item.questionNodeId, patch);
       if (decision.concept) {
         const concept = await this.findOrCreateTopic(decision.concept);
@@ -522,7 +524,7 @@ export class Repository {
   }
 
   async exportData(): Promise<ExportFile> {
-    return this.db.transaction('r', this.db.nodes, this.db.edges, this.db.sources, this.db.reviews, async () => ({
+    return this.db.transaction('r', [this.db.nodes, this.db.edges, this.db.sources, this.db.reviews, this.db.preferences], async () => ({
       format: EXPORT_FORMAT,
       version: EXPORT_VERSION,
       exportedAt: this.now(),
@@ -530,6 +532,7 @@ export class Repository {
       edges: await this.db.edges.toArray(),
       sources: await this.db.sources.toArray(),
       reviews: await this.db.reviews.toArray(),
+      preferences: await this.db.preferences.toArray(),
     }));
   }
 
@@ -539,17 +542,19 @@ export class Repository {
     for (const n of file.nodes) this.clock.receive(n.updatedAt);
     await this.db.transaction(
       'rw',
-      [this.db.nodes, this.db.edges, this.db.sources, this.db.reviews, this.db.oplog],
+      [this.db.nodes, this.db.edges, this.db.sources, this.db.reviews, this.db.preferences, this.db.oplog],
       async () => {
         await this.db.nodes.bulkPut(file.nodes);
         await this.db.edges.bulkPut(file.edges);
         await this.db.sources.bulkPut(file.sources);
         await this.db.reviews.bulkPut(file.reviews);
+        await this.db.preferences.bulkPut(file.preferences);
         await this.db.oplog.bulkAdd([
           ...file.nodes.map((r) => this.log('nodes', r.id, 'put', r)),
           ...file.edges.map((r) => this.log('edges', r.id, 'put', r)),
           ...file.sources.map((r) => this.log('sources', r.id, 'put', r)),
           ...file.reviews.map((r) => this.log('reviews', r.id, 'put', r)),
+          ...file.preferences.map((r) => this.log('preferences', r.id, 'put', r)),
         ]);
       },
     );
@@ -558,6 +563,7 @@ export class Repository {
       edges: file.edges.length,
       sources: file.sources.length,
       reviews: file.reviews.length,
+      preferences: file.preferences.length,
     };
   }
 }
@@ -574,6 +580,9 @@ export function parseExport(data: unknown): ExportFile {
     const rows = file[key];
     if (!Array.isArray(rows) || !rows.every(isRow)) throw new Error(`Invalid "${key}" in export file`);
   }
-  for (const node of file.nodes as Partial<KNode>[]) node.askCount ??= 0; // exports made before schema v2
+  // Exports made before schema v2 lack askCount and preferences.
+  for (const node of file.nodes as Partial<KNode>[]) node.askCount ??= 0;
+  file.preferences ??= [];
+  if (!Array.isArray(file.preferences) || !file.preferences.every(isRow)) throw new Error('Invalid "preferences" in export file');
   return file as ExportFile;
 }

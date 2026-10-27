@@ -39,11 +39,11 @@ onMounted(async () => {
 async function confirm() {
   const s = suggestion.value!;
   const decision = { title: title.value, summary: summary.value, ...(s.kind === 'instance' && concept.value.trim() ? { concept: concept.value } : {}) };
-  const ok = await run(() => sendMessage('keep/confirm', { inboxId: props.inboxId, suggestion: s, decision }));
-  if (ok === undefined) return;
+  const kept = await run(() => sendMessage('keep/confirm', { inboxId: props.inboxId, suggestion: s, decision }));
+  if (!kept) return;
   emit('done');
   // Instances already hang under their concept; anything else gets placement help.
-  if (s.kind !== 'instance' && props.questionId) await place(props.questionId);
+  if (s.kind !== 'instance') await place(kept.nodeId);
 }
 
 async function skip() {

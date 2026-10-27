@@ -214,9 +214,9 @@ export default defineBackground(() => {
     'inbox/list': async () => (await repo()).listInbox(),
     'keep/suggest': async ({ inboxId }) => suggestKeep(await repo(), await client(), inboxId),
     'keep/confirm': async ({ inboxId, suggestion, decision }) => {
-      await confirmKeep(await repo(), inboxId, suggestion, decision);
+      const node = await confirmKeep(await repo(), inboxId, suggestion, decision);
       notifyChanged();
-      return null;
+      return { nodeId: node.id };
     },
     'nodes/confirmTitle': async ({ id, title }) => {
       await (await repo()).confirmTitle(id, title);
