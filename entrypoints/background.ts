@@ -209,6 +209,11 @@ export default defineBackground(() => {
       await (await distiller()).retry(id);
       return null;
     },
+    'nodes/move': async ({ id, parentId, beforeId }) => {
+      await (await repo()).moveNode(id, parentId, beforeId);
+      notifyChanged();
+      return null;
+    },
     'nodes/setMastery': async ({ id, mastery }) => {
       await (await repo()).setMastery(id, mastery ?? undefined);
       notifyChanged();

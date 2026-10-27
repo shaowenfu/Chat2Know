@@ -422,3 +422,42 @@ button.danger:hover {
 .verdict-fail {
   color: var(--bad);
 }
+
+.mode {
+  display: flex;
+  gap: 4px;
+}
+
+.tree .tree {
+  margin-top: 8px;
+  padding-left: 14px;
+  border-left: 2px solid var(--border);
+}
+
+.dragging {
+  opacity: 0.4;
+}
+
+.drop-before {
+  height: 10px;
+  margin-bottom: 4px;
+  border-radius: 4px;
+  background: var(--surface);
+  outline: 1px dashed var(--accent);
+}
+
+.drop-root {
+  padding: 12px;
+  border: 1px dashed var(--accent);
+  border-radius: 8px;
+  color: var(--muted);
+  text-align: center;
+  font-size: 12px;
+}
+
+.outline {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+  line-height: 1.6;
+}

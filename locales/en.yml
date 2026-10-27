@@ -125,3 +125,8 @@ quiz:
   verdict_pass: Got it
   verdict_partial: Partly
   verdict_fail: Forgot
+tree:
+  explore: Questions
+  conclusion: Conclusions
+  dropBefore: Place here
+  dropRoot: Drop here to move to the top level

@@ -56,7 +56,7 @@ and `docs/project-plan.md`, check `git log`, and continue from the first uncheck
 ## M3: minimal quiz, tree, ask now
 
 - [x] M3.1 Mastery selector on cards with everyday labels (must know by heart / understand / know where to find). Quiz view: due internalize cards, answer, reveal, self-grade or AI judge, schedule, `mastered` on pass. Stats: north star this week, due count.
-- [ ] M3.2 Question tree view (explore) and conclusion view; drag a node onto another to make it a child, reorder persisted with fractional index.
+- [x] M3.2 Question tree view (explore) and conclusion view; drag a node onto another to make it a child, reorder persisted with fractional index.
 - [ ] M3.3 Ask now from the toolbar (inbox answer) and follow-up questions in the panel that create child nodes. Assert host page DOM unchanged (excluding our UI host) during ask now.
 
 ## M4: semantic help and organizing

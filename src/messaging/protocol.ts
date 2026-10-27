@@ -39,6 +39,8 @@ export interface MessageMap {
   'keep/confirm': { req: { inboxId: string; suggestion: Suggestion; decision: KeepDecision }; res: null };
   'nodes/confirmTitle': { req: { id: string; title: string }; res: null };
   'nodes/retryDistill': { req: { id: string }; res: null };
+  /** Move a card under another (before a sibling, or last), or to the top level with parentId null. */
+  'nodes/move': { req: { id: string; parentId: string | null; beforeId?: string }; res: null };
   'nodes/setMastery': { req: { id: string; mastery: Mastery | null }; res: null };
   'quiz/due': { req: Record<string, never>; res: NodeView[] };
   'quiz/grade': { req: { nodeId: string; answer: string; verdict: Verdict }; res: Review };

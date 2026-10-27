@@ -1,77 +1,44 @@
 <script setup lang="ts">
-import { ref, watchEffect } from 'vue';
+import { computed, provide, ref } from 'vue';
 import { i18n } from '#i18n';
 import { sendMessage } from '@/src/messaging';
 import type { NodeView } from '@/src/db/types';
-import MasteryPicker from './MasteryPicker.vue';
-import TitlePicker from './TitlePicker.vue';
+import { buildTree } from '@/src/graph/tree';
+import CardTree from './CardTree.vue';
+import { DRAGGING } from '../dnd';
 import { useRun } from '../notify';
 
 const props = defineProps<{ cards: NodeView[]; configured: boolean }>();
 const emit = defineEmits<{ openSource: [sourceId: string] }>();
 const run = useRun();
 
-/** Chosen title per draft card, starting at the first candidate. */
-const picks = ref<Record<string, string>>({});
-watchEffect(() => {
-  for (const n of props.cards) if (n.titleCandidates) picks.value[n.id] ??= n.titleCandidates[0]!;
-});
+/** Explore: the question tree as it grew. Conclusion: the same tree as an outline of statements. */
+const mode = ref<'explore' | 'conclusion'>('explore');
+const tree = computed(() => buildTree(props.cards));
+const dragging = ref<string | null>(null);
+provide(DRAGGING, dragging);
 
-async function confirmTitle(node: NodeView) {
-  await run(() => sendMessage('nodes/confirmTitle', { id: node.id, title: picks.value[node.id]! }));
-}
-
-async function retry(node: NodeView) {
-  await run(() => sendMessage('nodes/retryDistill', { id: node.id }));
-}
-
-async function remove(node: NodeView) {
-  await run(() => sendMessage('nodes/delete', { id: node.id }));
-}
-
-function host(url: string): string {
-  return URL.canParse(url) ? new URL(url).host : url;
+async function toTopLevel() {
+  const id = dragging.value;
+  dragging.value = null;
+  if (id) await run(() => sendMessage('nodes/move', { id, parentId: null }));
 }
 </script>
 
 <template>
   <p v-if="cards.length === 0" class="empty" data-testid="empty">{{ i18n.t('panel.empty') }}</p>
-  <ul class="cards">
-    <li v-for="node in cards" :key="node.id" class="card" data-testid="card">
-      <div class="card-head">
-        <span v-if="node.type === 'idea'" class="badge" data-type="idea">{{ i18n.t('type.idea') }}</span>
-        <button type="button" class="link danger" :aria-label="i18n.t('panel.delete')" @click="remove(node)">{{ i18n.t('panel.delete') }}</button>
-      </div>
-      <div class="title" data-testid="card-title">{{ node.title }}</div>
-      <p v-if="node.summary" class="summary" data-testid="card-summary">{{ node.summary }}</p>
-
-      <template v-if="node.status === 'draft' && node.type === 'knowledge'">
-        <form v-if="node.titleCandidates" class="keep-form" @submit.prevent="confirmTitle(node)">
-          <TitlePicker v-model="picks[node.id]!" :candidates="node.titleCandidates" />
-          <div class="row-actions">
-            <button type="submit" data-testid="card-confirm">{{ i18n.t('keep.confirm') }}</button>
-          </div>
-        </form>
-        <p v-else-if="node.distillError" class="error" data-testid="card-error">
-          {{ i18n.t('card.distillFailed', [node.distillError]) }}
-          <button type="button" class="link" data-testid="card-retry" @click="retry(node)">{{ i18n.t('card.retry') }}</button>
-        </p>
-        <p v-else class="muted" data-testid="card-pending">{{ configured ? i18n.t('card.distilling') : i18n.t('card.needsModel') }}</p>
-      </template>
-
-      <MasteryPicker v-if="node.type === 'knowledge' && node.status !== 'draft'" :node="node" />
-      <pre v-if="node.body" class="body">{{ node.body }}</pre>
-      <button
-        v-for="source in node.sources"
-        :key="source.id"
-        type="button"
-        class="link source"
-        data-testid="open-source"
-        :title="source.url"
-        @click="emit('openSource', source.id)"
-      >
-        ↗ {{ source.pageTitle || host(source.url) }}
+  <template v-else>
+    <div class="mode" role="group">
+      <button type="button" class="chip" :aria-pressed="mode === 'explore'" data-testid="mode-explore" @click="mode = 'explore'">
+        {{ i18n.t('tree.explore') }}
       </button>
-    </li>
-  </ul>
+      <button type="button" class="chip" :aria-pressed="mode === 'conclusion'" data-testid="mode-conclusion" @click="mode = 'conclusion'">
+        {{ i18n.t('tree.conclusion') }}
+      </button>
+    </div>
+    <CardTree :items="tree" :parent-id="null" :mode="mode" :configured="configured" @open-source="emit('openSource', $event)" />
+    <div v-if="dragging" class="drop-root" data-testid="drop-root" @dragover.prevent @drop.prevent="toTopLevel">
+      {{ i18n.t('tree.dropRoot') }}
+    </div>
+  </template>
 </template>

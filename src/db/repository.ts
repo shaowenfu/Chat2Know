@@ -264,15 +264,43 @@ export class Repository {
     return node;
   }
 
-  /** Makes `parentId` the only tree parent of `childId`, appended after existing siblings. */
-  private async replaceParent(childId: string, parentId: string, kind: EdgeKind): Promise<Edge> {
-    for (const old of await this.db.edges.where('to').equals(childId).toArray()) {
-      await this.db.edges.delete(old.id);
-      await this.db.oplog.add(this.log('edges', old.id, 'delete', {}));
-    }
-    const siblings = await this.db.edges.where('from').equals(parentId).toArray();
-    const last = siblings.map((e) => e.order).sort().at(-1) ?? null;
-    return this.addEdge(parentId, childId, kind, generateKeyBetween(last, null));
+  private async removeParent(childId: string): Promise<Edge | undefined> {
+    const [old] = await this.db.edges.where('to').equals(childId).toArray();
+    if (!old) return undefined;
+    await this.db.edges.delete(old.id);
+    await this.db.oplog.add(this.log('edges', old.id, 'delete', {}));
+    return old;
+  }
+
+  /**
+   * Makes `parentId` the only tree parent of `childId`, placed before sibling
+   * `beforeId` or after the last sibling. Only the moved edge gets a new order key.
+   */
+  private async replaceParent(childId: string, parentId: string, kind: EdgeKind, beforeId?: string): Promise<Edge> {
+    await this.removeParent(childId);
+    const siblings = (await this.db.edges.where('from').equals(parentId).toArray()).sort((a, b) => (a.order < b.order ? -1 : 1));
+    const at = beforeId === undefined ? siblings.length : siblings.findIndex((e) => e.to === beforeId);
+    if (at < 0) throw new Error('Sibling not found under the target parent');
+    return this.addEdge(parentId, childId, kind, generateKeyBetween(siblings[at - 1]?.order ?? null, siblings[at]?.order ?? null));
+  }
+
+  /**
+   * Moves a card in the tree: under `parentId` (before `beforeId` if given), or
+   * to the top level when `parentId` is null. A move keeps the relation kind
+   * when the parent stays the same; otherwise it becomes a plain child.
+   */
+  async moveNode(childId: string, parentId: string | null, beforeId?: string): Promise<void> {
+    await this.db.transaction('rw', this.db.nodes, this.db.edges, this.db.oplog, async () => {
+      if (parentId === null) {
+        await this.removeParent(childId);
+        return;
+      }
+      for (let up: string | undefined = parentId; up; up = (await this.db.edges.where('to').equals(up).first())?.from) {
+        if (up === childId) throw new Error('A card cannot be moved under itself');
+      }
+      const old = await this.db.edges.where('to').equals(childId).first();
+      await this.replaceParent(childId, parentId, old?.from === parentId ? old.kind : 'child', beforeId);
+    });
   }
 
   async addPreference(pref: Omit<Preference, 'id' | 'createdAt'>): Promise<void> {

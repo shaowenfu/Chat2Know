@@ -125,3 +125,8 @@ quiz:
   verdict_pass: 记得
   verdict_partial: 模糊
   verdict_fail: 忘了
+tree:
+  explore: 问题
+  conclusion: 结论
+  dropBefore: 放到这里
+  dropRoot: 拖到这里移到顶层
