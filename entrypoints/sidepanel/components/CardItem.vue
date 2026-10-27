@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, watch } from 'vue';
 import { i18n } from '#i18n';
 import { sendMessage } from '@/src/messaging';
 import type { NodeView } from '@/src/db/types';
@@ -11,7 +11,15 @@ const props = defineProps<{ node: NodeView; configured: boolean }>();
 const emit = defineEmits<{ openSource: [sourceId: string] }>();
 const run = useRun();
 
-const pick = ref(props.node.titleCandidates?.[0] ?? '');
+// Candidates arrive after distillation, possibly after this card was first rendered.
+const pick = ref('');
+watch(
+  () => props.node.titleCandidates,
+  (candidates) => {
+    if (candidates && !candidates.includes(pick.value)) pick.value = candidates[0]!;
+  },
+  { immediate: true },
+);
 
 async function confirmTitle() {
   await run(() => sendMessage('nodes/confirmTitle', { id: props.node.id, title: pick.value }));
