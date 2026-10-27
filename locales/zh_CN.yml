@@ -61,4 +61,47 @@ queue:
   copy: 复制追问
   copied: 已复制，粘贴到对话里即可追问。
   remove: 移除
+  askHere: 在这里问
+  answering: 正在问…
+  keep: 记下
+  dontKeep: 不记
   followUp: "关于这句话：\"$1\"\n我的疑问：$2"
+card:
+  distilling: 正在提炼…
+  needsModel: 配置模型后会自动提炼这张卡片。
+  distillFailed: "提炼失败：$1"
+  retry: 重试
+keep:
+  thinking: 正在判断哪些值得记…
+  hintConcept: 值得记下。记它的结构和原理，而不是字面定义。
+  hintInstance: "这是\"$1\"的一个例子，只记这层关系就够了。"
+  hintCuriosity: 一次性好奇，建议不记。
+  dontKeep: 不记
+  keepAnyway: 仍然记下
+  pickTitle: 用哪个问题来复习它
+  customTitle: 或者自己写一个问题
+  summary: 要记下的内容（陈述句）
+  concept: 是哪个概念的例子
+  confirm: 记下
+  cancel: 取消
+inbox:
+  title: 最近的回答
+  explain: 没有记下的回答会在这里保留 7 天，之后自动清理。
+  expires: $1 天后清理
+settings:
+  title: 模型设置
+  explain: Chat2Know 调用你配置的模型。任何兼容 OpenAI 格式的接口都可以。
+  baseUrl: 接口地址（Base URL）
+  model: 模型
+  apiKey: API Key
+  keyStored: 已保存。留空则保持不变。
+  embeddingModel: 嵌入模型（可选）
+  embeddingHint: 用于推荐挂载位置和发现重复概念。
+  save: 保存
+  saved: 设置已保存
+  test: 测试连接
+  testing: 测试中…
+  testOk: "连接成功，模型回复：$1"
+  permissionDenied: "没有获得访问 $1 的权限"
+  needed: 配置模型后，才能回答待问和提炼卡片。
+  privacy: Key 只保存在本浏览器里。只有你提问的内容会发给你配置的模型服务商。

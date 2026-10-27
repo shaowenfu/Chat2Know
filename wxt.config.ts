@@ -16,6 +16,8 @@ export default defineConfig({
     description: '__MSG_extDescription__',
     default_locale: 'en',
     permissions: ['sidePanel', 'storage', 'activeTab', 'scripting', 'contextMenus'],
+    // The model endpoint is requested at runtime when the user saves settings.
+    optional_host_permissions: ['https://*/*', 'http://*/*'],
     ...(isE2E ? { host_permissions: ['<all_urls>'] } : {}),
     action: {
       default_title: '__MSG_actionTitle__',

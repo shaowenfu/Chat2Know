@@ -49,3 +49,31 @@ export async function selectText(page: Page, selector: string, text: string): Pr
     [selector, text] as const,
   );
 }
+
+export function configureModel(panel: Page, baseUrl: string, apiKey = 'test-key') {
+  return send(panel, 'settings/save', { baseUrl, model: 'mock-model', embeddingModel: 'mock-embed', apiKey });
+}
+
+/** Opens the fixture page and the side panel page, with the toolbar injected into the fixture. */
+export async function openPageAndPanel(
+  context: import('@playwright/test').BrowserContext,
+  extensionId: string,
+  url: string,
+): Promise<{ page: Page; panel: Page }> {
+  const page = await context.newPage();
+  await page.goto(url);
+  const panel = await context.newPage();
+  await panel.goto(`chrome-extension://${extensionId}/sidepanel.html`);
+  const res = await send(panel, 'page/activate', { tabId: await tabIdOf(panel, url) });
+  if (!res.ok) throw new Error(res.error);
+  return { page, panel };
+}
+
+/** Saves an ask-later question about `term` (first occurrence inside `selector`). */
+export async function askLater(page: Page, selector: string, term: string, question = ''): Promise<void> {
+  await selectText(page, selector, term);
+  await page.getByRole('button', { name: /^(Ask later|稍后问)$/ }).click();
+  if (question) await page.getByRole('textbox').fill(question);
+  await page.keyboard.press('Enter');
+  await page.getByRole('status').waitFor();
+}

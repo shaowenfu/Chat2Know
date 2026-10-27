@@ -61,4 +61,47 @@ queue:
   copy: Copy follow-up
   copied: Copied. Paste it into the chat to ask there.
   remove: Remove
+  askHere: Ask here
+  answering: Asking…
+  keep: Keep
+  dontKeep: Don't keep
   followUp: "About this sentence: \"$1\"\nMy question: $2"
+card:
+  distilling: Distilling…
+  needsModel: Set up a model to distill this card.
+  distillFailed: "Distilling failed: $1"
+  retry: Retry
+keep:
+  thinking: Thinking about what's worth keeping…
+  hintConcept: Worth keeping. Keep the structure and the why, not a literal definition.
+  hintInstance: "This is an example of \"$1\". Keep just that relation."
+  hintCuriosity: One-off curiosity. Suggest not keeping it.
+  dontKeep: Don't keep
+  keepAnyway: Keep anyway
+  pickTitle: Question to review it by
+  customTitle: Or write your own question
+  summary: What to keep (statement)
+  concept: Example of
+  confirm: Keep
+  cancel: Cancel
+inbox:
+  title: Recent answers
+  explain: Answers you didn't keep stay here for 7 days, then disappear.
+  expires: Expires in $1 days
+settings:
+  title: Model settings
+  explain: Chat2Know calls the model you configure. Any OpenAI-compatible endpoint works.
+  baseUrl: Base URL
+  model: Model
+  apiKey: API key
+  keyStored: Stored. Leave empty to keep it.
+  embeddingModel: Embedding model (optional)
+  embeddingHint: Enables placement suggestions and duplicate detection.
+  save: Save
+  saved: Settings saved
+  test: Test connection
+  testing: Testing…
+  testOk: "Connected. The model replied: $1"
+  permissionDenied: "Permission to reach $1 was not granted"
+  needed: Set up a model to answer questions and distill cards.
+  privacy: Your key stays in this browser. Only the text you ask about is sent to your model provider.

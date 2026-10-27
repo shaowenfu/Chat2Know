@@ -47,11 +47,11 @@ and `docs/project-plan.md`, check `git log`, and continue from the first uncheck
 
 ## M2: model + ask/keep separation
 
-- [ ] M2.1 Settings view (base URL, model, API key, embedding model optional), permission request, test connection. LLM client in `src/llm/`. Mock LLM server + E2E harness.
-- [ ] M2.2 Answer a queued question in the panel → inbox item (expires in 7 days, purged). Errors (bad key, offline) shown verbatim; question stays queued.
-- [ ] M2.3 Keep flow: recording suggestion (concept / instance / curiosity), 3 title candidates + custom, statement summary, instance → `instance_of` edge to a concept node, curiosity → suggest not keeping. Record preferences (accept / edit / delete).
-- [ ] M2.4 Async distill for captured knowledge cards: summary + 3 title candidates; card stays `draft` until the user picks a title; `distillError` + retry. Capture still stores raw text when the model fails.
-- [ ] M2.5 Acceptance: E2E full flow on mock server; key never in exports/DB/oplog (assert); concept / instance / curiosity fixtures give the right form.
+- [x] M2.1 Settings view (base URL, model, API key, embedding model optional), permission request, test connection. LLM client in `src/llm/`. Mock LLM server + E2E harness.
+- [x] M2.2 Answer a queued question in the panel → inbox item (expires in 7 days, purged). Errors (bad key, offline) shown verbatim; question stays queued.
+- [x] M2.3 Keep flow: recording suggestion (concept / instance / curiosity), 3 title candidates + custom, statement summary, instance → `instance_of` edge to a concept node, curiosity → suggest not keeping. Record preferences (accept / edit / delete).
+- [x] M2.4 Async distill for captured knowledge cards: summary + 3 title candidates; card stays `draft` until the user picks a title; `distillError` + retry. Capture still stores raw text when the model fails.
+- [x] M2.5 Acceptance: E2E full flow on mock server; key never in exports/DB/oplog (assert); concept / instance / curiosity fixtures give the right form.
 
 ## M3: minimal quiz, tree, ask now
 
@@ -76,3 +76,6 @@ and `docs/project-plan.md`, check `git log`, and continue from the first uncheck
 ## Log
 
 Short notes on deviations and why, newest last.
+
+- M2: Added `term`, `titleCandidates`, `distillError` on nodes and `questionNodeId` on inbox items (schema v3). Needed to merge repeat asks, hold title candidates until the user picks, and link answers to questions. Ideas are now saved as `confirmed` (they are never distilled or titled).
+- M2: Tree edges are directed parent → child for every kind (`child`, `arose_from`, `instance_of`), one incoming tree edge per node. Keeps M3's tree a single query.

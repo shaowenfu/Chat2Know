@@ -1,26 +1,57 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue';
+import { computed, onMounted, onUnmounted, provide, ref } from 'vue';
 import { browser } from 'wxt/browser';
 import { i18n } from '#i18n';
 import { onMessages, sendMessage } from '@/src/messaging';
-import type { NodeView } from '@/src/db/types';
+import type { InboxItem, NodeView } from '@/src/db/types';
+import type { PublicSettings } from '@/src/llm/settings';
 import AskQueue from './components/AskQueue.vue';
+import CardList from './components/CardList.vue';
+import SettingsView from './components/SettingsView.vue';
+import { NOTIFY, errorText } from './notify';
+
+type View = 'queue' | 'cards' | 'settings';
+const view = ref<View>('cards');
 
 const nodes = ref<NodeView[]>([]);
+const inbox = ref<InboxItem[]>([]);
+const settings = ref<PublicSettings | null>(null);
 const toolbarUnavailable = ref(false);
 const notice = ref<{ text: string; error: boolean } | null>(null);
 const fileInput = ref<HTMLInputElement | null>(null);
 
-type Tab = 'cards' | 'queue';
-const tab = ref<Tab>('cards');
+let noticeTimer: ReturnType<typeof setTimeout> | undefined;
+function notify(text: string, error = false) {
+  notice.value = { text, error };
+  clearTimeout(noticeTimer);
+  noticeTimer = setTimeout(() => (notice.value = null), error ? 8000 : 4000);
+}
+provide(NOTIFY, notify);
 
 // Ask-later questions live in their own queue; everything else is a card.
 const queue = computed(() => nodes.value.filter((n) => n.type === 'question' && n.status === 'open'));
 const cards = computed(() => nodes.value.filter((n) => n.type !== 'question'));
 const countLabel = computed(() => i18n.t('panel.cardCount', cards.value.length));
+const configured = computed(() => Boolean(settings.value?.baseUrl && settings.value.model && settings.value.hasKey));
+
+/** Latest answer per open question. */
+const answers = computed(() => {
+  const map = new Map<string, InboxItem>();
+  for (const item of inbox.value) if (!item.promotedNodeId && !map.has(item.questionNodeId)) map.set(item.questionNodeId, item);
+  return map;
+});
+/** Answers whose question was dismissed: still keepable until they expire. */
+const leftovers = computed(() => {
+  const open = new Set(queue.value.map((q) => q.id));
+  return inbox.value.filter((i) => !i.promotedNodeId && !open.has(i.questionNodeId));
+});
 
 async function refresh() {
-  nodes.value = await sendMessage('nodes/list', {});
+  [nodes.value, inbox.value, settings.value] = await Promise.all([
+    sendMessage('nodes/list', {}),
+    sendMessage('inbox/list', {}),
+    sendMessage('settings/get', {}),
+  ]);
 }
 
 async function activate() {
@@ -28,13 +59,9 @@ async function activate() {
     await sendMessage('page/activate', {});
     toolbarUnavailable.value = false;
   } catch {
+    // Expected on pages we may not script (chrome://, the store, tabs without activeTab).
     toolbarUnavailable.value = true;
   }
-}
-
-function flash(text: string, error = false) {
-  notice.value = { text, error };
-  setTimeout(() => (notice.value = null), 4000);
 }
 
 function download(name: string, text: string, type: string) {
@@ -63,36 +90,24 @@ async function importJson(event: Event) {
   if (!file) return;
   try {
     const result = await sendMessage('data/importJson', { json: await file.text() });
-    flash(i18n.t('panel.imported', result.nodes));
+    notify(i18n.t('panel.imported', result.nodes));
   } catch (err) {
-    flash(i18n.t('panel.importFailed', [err instanceof Error ? err.message : String(err)]), true);
+    notify(i18n.t('panel.importFailed', [errorText(err)]), true);
   }
 }
 
 async function openSource(sourceId: string) {
   try {
     await sendMessage('source/open', { sourceId });
-  } catch {
-    flash(i18n.t('panel.sourceUnavailable'), true);
-  }
-}
-
-async function remove(id: string) {
-  await sendMessage('nodes/delete', { id });
-}
-
-function host(url: string): string {
-  try {
-    return new URL(url).host;
-  } catch {
-    return url;
+  } catch (err) {
+    notify(errorText(err), true);
   }
 }
 
 const onTabActivated = () => void activate();
 
 onMessages({
-  'event/nodesChanged': async () => {
+  'event/dataChanged': async () => {
     await refresh();
     return null;
   },
@@ -109,58 +124,55 @@ onUnmounted(() => browser.tabs.onActivated.removeListener(onTabActivated));
 
 <template>
   <main class="panel">
-    <header>
-      <h1>Chat2Know</h1>
-      <p class="tagline">{{ i18n.t('panel.tagline') }}</p>
+    <header class="top">
+      <div>
+        <h1>Chat2Know</h1>
+        <p class="tagline">{{ i18n.t('panel.tagline') }}</p>
+      </div>
+      <button
+        type="button"
+        class="gear"
+        :aria-pressed="view === 'settings'"
+        :aria-label="i18n.t('settings.title')"
+        data-testid="open-settings"
+        @click="view = view === 'settings' ? 'cards' : 'settings'"
+      >
+        ⚙
+      </button>
     </header>
 
     <p v-if="toolbarUnavailable" class="hint" data-testid="toolbar-unavailable">{{ i18n.t('panel.toolbarUnavailable') }}</p>
-
-    <nav class="tabs" role="tablist">
-      <button type="button" role="tab" :aria-selected="tab === 'queue'" data-testid="tab-queue" @click="tab = 'queue'">
-        {{ i18n.t('queue.tab') }}<span v-if="queue.length" class="pill">{{ queue.length }}</span>
-      </button>
-      <button type="button" role="tab" :aria-selected="tab === 'cards'" data-testid="tab-cards" @click="tab = 'cards'">
-        {{ i18n.t('queue.cardsTab') }}<span v-if="cards.length" class="pill">{{ cards.length }}</span>
-      </button>
-    </nav>
+    <p v-if="settings && !configured && view !== 'settings'" class="hint" data-testid="needs-model">
+      {{ i18n.t('settings.needed') }}
+      <button type="button" class="link" @click="view = 'settings'">{{ i18n.t('settings.title') }}</button>
+    </p>
 
     <p v-if="notice" class="notice" :class="{ error: notice.error }" role="status">{{ notice.text }}</p>
 
-    <AskQueue v-if="tab === 'queue'" :items="queue" @open-source="openSource" @notice="flash" />
+    <SettingsView v-if="view === 'settings' && settings" :key="settings.baseUrl + settings.model" :settings="settings" />
 
     <template v-else>
-      <section class="actions">
-        <span class="count" data-testid="card-count">{{ countLabel }}</span>
-        <button type="button" data-testid="export-json" @click="exportJson">{{ i18n.t('panel.exportJson') }}</button>
-        <button type="button" data-testid="export-md" @click="exportMarkdown">{{ i18n.t('panel.exportMarkdown') }}</button>
-        <button type="button" data-testid="import-json" @click="fileInput?.click()">{{ i18n.t('panel.importJson') }}</button>
-        <input ref="fileInput" type="file" accept="application/json,.json" hidden data-testid="import-input" @change="importJson">
-      </section>
+      <nav class="tabs" role="tablist">
+        <button type="button" role="tab" :aria-selected="view === 'queue'" data-testid="tab-queue" @click="view = 'queue'">
+          {{ i18n.t('queue.tab') }}<span v-if="queue.length" class="pill">{{ queue.length }}</span>
+        </button>
+        <button type="button" role="tab" :aria-selected="view === 'cards'" data-testid="tab-cards" @click="view = 'cards'">
+          {{ i18n.t('queue.cardsTab') }}<span v-if="cards.length" class="pill">{{ cards.length }}</span>
+        </button>
+      </nav>
 
-      <p v-if="cards.length === 0" class="empty" data-testid="empty">{{ i18n.t('panel.empty') }}</p>
+      <AskQueue v-if="view === 'queue'" :items="queue" :answers="answers" :leftovers="leftovers" @open-source="openSource" />
 
-      <ul class="cards">
-        <li v-for="node in cards" :key="node.id" class="card" data-testid="card">
-          <div class="card-head">
-            <span v-if="node.type === 'idea'" class="badge" data-type="idea">{{ i18n.t('type.idea') }}</span>
-            <button type="button" class="link danger" :aria-label="i18n.t('panel.delete')" @click="remove(node.id)">{{ i18n.t('panel.delete') }}</button>
-          </div>
-          <div class="title">{{ node.title }}</div>
-          <pre class="body">{{ node.body }}</pre>
-          <button
-            v-for="source in node.sources"
-            :key="source.id"
-            type="button"
-            class="link source"
-            data-testid="open-source"
-            :title="source.url"
-            @click="openSource(source.id)"
-          >
-            ↗ {{ source.pageTitle || host(source.url) }}
-          </button>
-        </li>
-      </ul>
+      <template v-else>
+        <section class="actions">
+          <span class="count" data-testid="card-count">{{ countLabel }}</span>
+          <button type="button" data-testid="export-json" @click="exportJson">{{ i18n.t('panel.exportJson') }}</button>
+          <button type="button" data-testid="export-md" @click="exportMarkdown">{{ i18n.t('panel.exportMarkdown') }}</button>
+          <button type="button" data-testid="import-json" @click="fileInput?.click()">{{ i18n.t('panel.importJson') }}</button>
+          <input ref="fileInput" type="file" accept="application/json,.json" hidden data-testid="import-input" @change="importJson">
+        </section>
+        <CardList :cards="cards" :configured="configured" @open-source="openSource" />
+      </template>
     </template>
   </main>
 </template>

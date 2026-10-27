@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import type { AddressInfo } from 'node:net';
+import { startMockLlm, type MockLlm } from '../mock-llm/server';
 /// <reference types="chrome" />
 import { test as base, expect as baseExpect, chromium, type BrowserContext, type Worker } from '@playwright/test';
 
@@ -15,8 +16,16 @@ const executablePath = process.env.CHROMIUM_PATH ?? (existsSync(PREINSTALLED) ? 
 
 export const test = base.extend<
   { context: BrowserContext; serviceWorker: Worker; extensionId: string },
-  { fixtureServer: string }
+  { fixtureServer: string; mockLlm: MockLlm }
 >({
+  mockLlm: [
+    async ({}, use) => {
+      const llm = await startMockLlm();
+      await use(llm);
+      await llm.close();
+    },
+    { scope: 'worker' },
+  ],
   fixtureServer: [
     async ({}, use) => {
       const server: Server = createServer(async (req, res) => {

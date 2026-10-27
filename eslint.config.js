@@ -20,6 +20,7 @@ export default tseslint.config(
   {
     languageOptions: { globals: { ...globals.browser, ...globals.node, Browser: 'readonly' } },
     rules: {
+      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
       'vue/max-attributes-per-line': 'off',
       'vue/singleline-html-element-content-newline': 'off',
     },

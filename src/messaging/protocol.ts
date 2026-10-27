@@ -5,7 +5,10 @@
 
 import type { CapturedSelection } from '@/src/capture/selection';
 import type { TextQuote } from '@/src/capture/text-quote';
-import type { AskLaterResult, CaptureType, ImportResult, PageQuestion } from '@/src/db/repository';
+import type { AskLaterResult, CaptureType, ImportResult, KeepDecision, PageQuestion } from '@/src/db/repository';
+import type { InboxItem } from '@/src/db/types';
+import type { Suggestion } from '@/src/llm/prompts';
+import type { PublicSettings } from '@/src/llm/settings';
 import type { NodeView } from '@/src/db/types';
 
 export type Context = 'content' | 'background' | 'sidepanel';
@@ -27,6 +30,19 @@ export interface MessageMap {
   /** Open the ask-later prompt in a tab (shortcut and context-menu path). */
   'ask/fromTab': { req: { tabId?: number }; res: null };
   'ask/forUrl': { req: { url: string }; res: PageQuestion[] };
+  /** Answer a queued question with the model; the answer lands in the inbox. */
+  'ask/answer': { req: { questionId: string }; res: InboxItem };
+  /** Drop a question from the queue (its answer stays in the inbox until it expires). */
+  'ask/dismiss': { req: { questionId: string; suggestion?: Suggestion }; res: null };
+  'inbox/list': { req: Record<string, never>; res: InboxItem[] };
+  'keep/suggest': { req: { inboxId: string }; res: Suggestion };
+  'keep/confirm': { req: { inboxId: string; suggestion: Suggestion; decision: KeepDecision }; res: null };
+  'nodes/confirmTitle': { req: { id: string; title: string }; res: null };
+  'nodes/retryDistill': { req: { id: string }; res: null };
+  'settings/get': { req: Record<string, never>; res: PublicSettings };
+  /** Omitting apiKey keeps the stored key. */
+  'settings/save': { req: { baseUrl: string; model: string; embeddingModel: string; apiKey?: string }; res: PublicSettings };
+  'settings/test': { req: Record<string, never>; res: { reply: string } };
   'nodes/list': { req: Record<string, never>; res: NodeView[] };
   'nodes/delete': { req: { id: string }; res: null };
   /** Open a source page and highlight the quote. */
@@ -41,7 +57,8 @@ export interface MessageMap {
   'content/highlight': { req: { quote: TextQuote }; res: { found: boolean } };
 
   // Background -> side panel (broadcast)
-  'event/nodesChanged': { req: Record<string, never>; res: null };
+  /** Nodes, inbox or settings changed; the side panel reloads. */
+  'event/dataChanged': { req: Record<string, never>; res: null };
 }
 
 export type MessageType = keyof MessageMap;

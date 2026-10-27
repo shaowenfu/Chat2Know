@@ -36,5 +36,7 @@ export class Chat2KnowDB extends Dexie {
             node.askCount ??= 0;
           }),
       );
+    // v3: inbox items link back to their question node.
+    this.version(3).stores({ inbox: 'id, questionNodeId, createdAt, expiresAt' });
   }
 }

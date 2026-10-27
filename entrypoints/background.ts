@@ -7,6 +7,10 @@ import { Hlc } from '@/src/db/hlc';
 import { Repository, type CaptureType } from '@/src/db/repository';
 import { nodesToMarkdown } from '@/src/export/markdown';
 import { textFragmentUrl } from '@/src/capture/text-fragment';
+import { LlmClient } from '@/src/llm/client';
+import { isConfigured, loadSettings, saveSettings, toPublic } from '@/src/llm/settings';
+import { answerQuestion, confirmKeep, dismissQuestion, suggestKeep } from '@/src/services/ask';
+import { Distiller } from '@/src/services/distill';
 
 const CONTENT_SCRIPT = '/content-scripts/content.js';
 
@@ -24,6 +28,29 @@ function repo(): Promise<Repository> {
   return repoPromise;
 }
 
+/** A client for an explicit user action: throws "Model is not configured" when settings are missing. */
+async function client(): Promise<LlmClient> {
+  return new LlmClient(await loadSettings());
+}
+
+let distillerPromise: Promise<Distiller> | undefined;
+function distiller(): Promise<Distiller> {
+  distillerPromise ??= repo().then(
+    (r) =>
+      new Distiller(
+        r,
+        async () => {
+          const s = await loadSettings();
+          return isConfigured(s) ? new LlmClient(s) : null;
+        },
+        notifyChanged,
+      ),
+  );
+  return distillerPromise;
+}
+
+const defaultQuestion = (term: string) => i18n.t('ask.chipWhat', [term]);
+
 async function resolveTabId(tabId?: number): Promise<number> {
   if (tabId !== undefined) return tabId;
   const [tab] = await browser.tabs.query({ active: true, lastFocusedWindow: true });
@@ -36,15 +63,16 @@ async function inject(tabId: number): Promise<void> {
   await browser.scripting.executeScript({ target: { tabId }, files: [CONTENT_SCRIPT] });
 }
 
-function notifyNodesChanged(): void {
-  const event: Envelope<'event/nodesChanged'> = { type: 'event/nodesChanged', payload: {} };
+function notifyChanged(): void {
+  const event: Envelope<'event/dataChanged'> = { type: 'event/dataChanged', payload: {} };
   // Rejects when no side panel is open; that is fine.
   browser.runtime.sendMessage(event).catch(() => {});
 }
 
 async function save(type: CaptureType, capture: Parameters<Repository['capture']>[1]): Promise<{ nodeId: string }> {
   const node = await (await repo()).capture(type, capture);
-  notifyNodesChanged();
+  notifyChanged();
+  if (type === 'knowledge') void distiller().then((d) => d.distill(node.id));
   return { nodeId: node.id };
 }
 
@@ -102,6 +130,8 @@ const MENU_ASK = 'chat2know-ask-later';
 
 export default defineBackground(() => {
   void browser.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
+  // Cards captured while the worker was asleep or the model was unreachable.
+  void distiller().then((d) => d.drain());
 
   browser.runtime.onInstalled.addListener(() => {
     void browser.contextMenus.removeAll().then(() => {
@@ -142,20 +172,63 @@ export default defineBackground(() => {
     'capture/fromTab': ({ type, tabId }) => captureFromTab(type, tabId),
     'ask/save': async (input) => {
       const res = await (await repo()).askLater(input);
-      notifyNodesChanged();
+      notifyChanged();
       return res;
     },
     'ask/update': async ({ id, question }) => {
       await (await repo()).updateQuestion(id, question);
-      notifyNodesChanged();
+      notifyChanged();
       return null;
     },
     'ask/fromTab': ({ tabId }) => askFromTab(tabId),
     'ask/forUrl': async ({ url }) => (await repo()).questionsForUrl(url),
+    'ask/answer': async ({ questionId }) => {
+      const item = await answerQuestion(await repo(), await client(), questionId, defaultQuestion);
+      notifyChanged();
+      return item;
+    },
+    'ask/dismiss': async ({ questionId, suggestion }) => {
+      await dismissQuestion(await repo(), questionId, suggestion);
+      notifyChanged();
+      return null;
+    },
+    'inbox/list': async () => (await repo()).listInbox(),
+    'keep/suggest': async ({ inboxId }) => suggestKeep(await repo(), await client(), inboxId),
+    'keep/confirm': async ({ inboxId, suggestion, decision }) => {
+      await confirmKeep(await repo(), inboxId, suggestion, decision);
+      notifyChanged();
+      return null;
+    },
+    'nodes/confirmTitle': async ({ id, title }) => {
+      await (await repo()).confirmTitle(id, title);
+      notifyChanged();
+      return null;
+    },
+    'nodes/retryDistill': async ({ id }) => {
+      await (await distiller()).retry(id);
+      return null;
+    },
+    'settings/get': async () => toPublic(await loadSettings()),
+    'settings/save': async ({ baseUrl, model, embeddingModel, apiKey }) => {
+      const current = await loadSettings();
+      const url = new URL(baseUrl.trim()); // throws on an invalid URL
+      if (!/^https?:$/.test(url.protocol)) throw new Error('Base URL must start with http:// or https://');
+      const next = {
+        baseUrl: url.href.replace(/\/+$/, ''),
+        model: model.trim(),
+        embeddingModel: embeddingModel.trim(),
+        apiKey: apiKey?.trim() || current.apiKey,
+      };
+      await saveSettings(next);
+      notifyChanged();
+      void distiller().then((d) => d.drain());
+      return toPublic(next);
+    },
+    'settings/test': async () => ({ reply: await (await client()).chat([{ role: 'user', content: 'Reply with the single word OK.' }]) }),
     'nodes/list': async () => (await repo()).listNodes(),
     'nodes/delete': async ({ id }) => {
       await (await repo()).deleteNode(id);
-      notifyNodesChanged();
+      notifyChanged();
       return null;
     },
     'source/open': ({ sourceId }) => openSource(sourceId),
@@ -163,7 +236,7 @@ export default defineBackground(() => {
     'data/exportMarkdown': async () => nodesToMarkdown(await (await repo()).listNodes(), new Date()),
     'data/importJson': async ({ json }) => {
       const result = await (await repo()).importData(json);
-      notifyNodesChanged();
+      notifyChanged();
       return result;
     },
   });

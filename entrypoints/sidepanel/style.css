@@ -243,3 +243,125 @@ button.danger:hover {
   white-space: nowrap;
   font-size: 12px;
 }
+
+.top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.gear {
+  border: none;
+  font-size: 18px;
+  color: var(--muted);
+}
+
+.gear[aria-pressed='true'] {
+  color: var(--accent);
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.small {
+  font-size: 12px;
+}
+
+.error {
+  color: var(--bad);
+  font-size: 13px;
+}
+
+.summary {
+  margin: 0;
+}
+
+.answer {
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: var(--surface);
+  font-size: 13px;
+  white-space: pre-wrap;
+}
+
+.keep {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+}
+
+.keep .hint {
+  padding: 0;
+  background: none;
+}
+
+.keep-form,
+.settings {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.settings h2,
+.leftovers h2 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.picker {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.picker legend {
+  margin-bottom: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.choice {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  font-size: 13px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.custom,
+.field input,
+.field textarea {
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--fg);
+  font: inherit;
+  font-size: 13px;
+}
+
+.leftovers {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.leftovers p {
+  margin: 0;
+  font-size: 12px;
+}

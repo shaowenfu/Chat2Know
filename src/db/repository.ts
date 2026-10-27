@@ -1,8 +1,9 @@
+import { generateKeyBetween } from 'fractional-indexing';
 import { monotonicFactory } from 'ulid';
 import type { CapturedSelection } from '@/src/capture/selection';
 import { Hlc } from './hlc';
 import type { Chat2KnowDB } from './schema';
-import type { Edge, Entity, KNode, NodeView, OpLogEntry, Review, Source } from './types';
+import type { Edge, EdgeKind, Entity, InboxItem, KNode, Mastery, NodeView, OpLogEntry, Preference, Review, Source } from './types';
 import type { TextQuote } from '@/src/capture/text-quote';
 import { titleFromMarkdown } from './title';
 
@@ -49,6 +50,16 @@ export interface PageQuestion {
 
 const stripHash = (url: string) => url.replace(/#.*$/, '');
 
+export const INBOX_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+/** The user's final decision when keeping an answered question. */
+export interface KeepDecision {
+  title: string;
+  summary: string;
+  /** For instances: the concept the kept node is an example of. */
+  concept?: string;
+}
+
 /**
  * The only write path to the database. Every write also appends to the oplog
  * in the same transaction, so a future sync layer can replay changes.
@@ -73,7 +84,8 @@ export class Repository {
       type,
       title: titleFromMarkdown(input.markdown) || titleFromMarkdown(input.quote.exact),
       body: input.markdown,
-      status: 'draft',
+      // Knowledge waits for the user to pick a question title; ideas are kept as-is.
+      status: type === 'knowledge' ? 'draft' : 'confirmed',
       askCount: 0,
       createdAt: at,
       updatedAt: this.clock.tick(),
@@ -139,6 +151,140 @@ export class Repository {
       await this.db.oplog.bulkAdd([this.log('nodes', node.id, 'put', node), this.log('sources', source.id, 'put', source)]);
       return { nodeId: node.id, askCount: 1, merged: false };
     });
+  }
+
+  /** Applies a patch to a node and logs it. Must run inside a transaction covering nodes and oplog. */
+  private async patchNode(id: string, patch: Partial<KNode>): Promise<KNode> {
+    const node = await this.db.nodes.get(id);
+    if (!node) throw new Error(`Node ${id} not found`);
+    const full = { ...patch, updatedAt: this.clock.tick() };
+    await this.db.nodes.update(id, full);
+    await this.db.oplog.add(this.log('nodes', id, 'put', full));
+    return { ...node, ...full };
+  }
+
+  private async addEdge(from: string, to: string, kind: EdgeKind, order: string): Promise<Edge> {
+    const edge: Edge = { id: this.ulid(this.now()), from, to, kind, order };
+    await this.db.edges.add(edge);
+    await this.db.oplog.add(this.log('edges', edge.id, 'put', edge));
+    return edge;
+  }
+
+  async getNode(id: string): Promise<KNode | undefined> {
+    return this.db.nodes.get(id);
+  }
+
+  async sourcesOf(nodeId: string): Promise<Source[]> {
+    return this.db.sources.where('nodeId').equals(nodeId).toArray();
+  }
+
+  // ------------------------------------------------------------ distillation
+
+  /** Knowledge cards still waiting for a summary (and not failed). Derived from data, so it survives worker restarts. */
+  async pendingDistills(): Promise<KNode[]> {
+    return (await this.db.nodes.where('status').equals('draft').toArray()).filter(
+      (n) => n.type === 'knowledge' && n.deletedAt === undefined && !n.summary && !n.distillError,
+    );
+  }
+
+  async setDistillation(id: string, summary: string, titleCandidates: string[]): Promise<void> {
+    await this.db.transaction('rw', this.db.nodes, this.db.oplog, () =>
+      this.patchNode(id, { summary, titleCandidates, distillError: undefined }),
+    );
+  }
+
+  async setDistillError(id: string, message: string | undefined): Promise<void> {
+    await this.db.transaction('rw', this.db.nodes, this.db.oplog, () => this.patchNode(id, { distillError: message }));
+  }
+
+  /** The user picked or wrote the question title for a draft card. */
+  async confirmTitle(id: string, title: string): Promise<void> {
+    const t = title.trim();
+    if (!t) throw new Error('Title is empty');
+    await this.db.transaction('rw', this.db.nodes, this.db.oplog, () =>
+      this.patchNode(id, { title: t, status: 'confirmed', titleCandidates: undefined }),
+    );
+  }
+
+  // ------------------------------------------------------------ inbox (not logged: disposable)
+
+  async addInboxItem(item: Omit<InboxItem, 'id' | 'createdAt' | 'expiresAt'>): Promise<InboxItem> {
+    const at = this.now();
+    const full: InboxItem = { ...item, id: this.ulid(at), createdAt: at, expiresAt: at + INBOX_TTL_MS };
+    await this.db.inbox.add(full);
+    return full;
+  }
+
+  /** Live inbox items, newest first. Expired items are purged first. */
+  async listInbox(): Promise<InboxItem[]> {
+    await this.db.inbox.where('expiresAt').belowOrEqual(this.now()).delete();
+    return this.db.inbox.orderBy('createdAt').reverse().toArray();
+  }
+
+  async getInboxItem(id: string): Promise<InboxItem> {
+    const item = await this.db.inbox.get(id);
+    if (!item) throw new Error('Answer not found (it may have expired)');
+    return item;
+  }
+
+  /**
+   * Turns an answered question into kept knowledge. The question node itself is
+   * promoted (restored if the user had dismissed it), so its sources and ask
+   * history stay. Instances additionally hang under their concept node.
+   */
+  async keep(inboxId: string, decision: KeepDecision): Promise<KNode> {
+    const title = decision.title.trim();
+    const summary = decision.summary.trim();
+    if (!title || !summary) throw new Error('Title and summary are required');
+    return this.db.transaction('rw', [this.db.nodes, this.db.edges, this.db.inbox, this.db.oplog], async () => {
+      const item = await this.getInboxItem(inboxId);
+      const patch: Partial<KNode> = { type: 'knowledge', title, summary, status: 'confirmed', deletedAt: undefined };
+      if (decision.concept) patch.mastery = 'index' satisfies Mastery;
+      const node = await this.patchNode(item.questionNodeId, patch);
+      if (decision.concept) {
+        const concept = await this.findOrCreateTopic(decision.concept);
+        await this.replaceParent(node.id, concept.id, 'instance_of');
+      }
+      await this.db.inbox.update(inboxId, { promotedNodeId: node.id });
+      return node;
+    });
+  }
+
+  private async findOrCreateTopic(title: string): Promise<KNode> {
+    const wanted = title.trim().toLowerCase();
+    const existing = (await this.db.nodes.toArray()).find(
+      (n) => n.deletedAt === undefined && (n.type === 'topic' || n.type === 'knowledge') && n.title.trim().toLowerCase() === wanted,
+    );
+    if (existing) return existing;
+    const at = this.now();
+    const node: KNode = { id: this.ulid(at), type: 'topic', title: title.trim(), status: 'confirmed', askCount: 0, createdAt: at, updatedAt: this.clock.tick() };
+    await this.db.nodes.add(node);
+    await this.db.oplog.add(this.log('nodes', node.id, 'put', node));
+    return node;
+  }
+
+  /** Makes `parentId` the only tree parent of `childId`, appended after existing siblings. */
+  private async replaceParent(childId: string, parentId: string, kind: EdgeKind): Promise<Edge> {
+    for (const old of await this.db.edges.where('to').equals(childId).toArray()) {
+      await this.db.edges.delete(old.id);
+      await this.db.oplog.add(this.log('edges', old.id, 'delete', {}));
+    }
+    const siblings = await this.db.edges.where('from').equals(parentId).toArray();
+    const last = siblings.map((e) => e.order).sort().at(-1) ?? null;
+    return this.addEdge(parentId, childId, kind, generateKeyBetween(last, null));
+  }
+
+  async addPreference(pref: Omit<Preference, 'id' | 'createdAt'>): Promise<void> {
+    const at = this.now();
+    const full: Preference = { ...pref, id: this.ulid(at), createdAt: at };
+    await this.db.transaction('rw', this.db.preferences, this.db.oplog, async () => {
+      await this.db.preferences.add(full);
+      await this.db.oplog.add(this.log('preferences', full.id, 'put', full));
+    });
+  }
+
+  async recentPreferences(limit: number): Promise<Preference[]> {
+    return this.db.preferences.orderBy('createdAt').reverse().limit(limit).toArray();
   }
 
   /** Sets or edits the question text of an ask-later node. */

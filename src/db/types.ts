@@ -13,6 +13,8 @@ export interface KNode {
   mastery?: Mastery; // chosen by the user (AI suggests from M4); not set for ideas and topics
   status: NodeStatus; // `open` = unresolved question; `mastered` is only set by a passed review
   askCount: number; // times this was asked later; repetition signals importance
+  titleCandidates?: string[]; // AI-proposed question titles awaiting the user's pick (draft cards)
+  distillError?: string; // last distillation failure, shown with a retry button
   createdAt: number;
   updatedAt: string; // hybrid logical clock, for future conflict merging
   deletedAt?: number; // soft delete
@@ -20,6 +22,12 @@ export interface KNode {
 
 export type EdgeKind = 'child' | 'arose_from' | 'instance_of' | 'related' | 'derived';
 
+/**
+ * Tree edges point from parent (`from`) to child (`to`); `kind` says how the
+ * child relates to the parent: a plain child, a question that arose from the
+ * parent's answer, or an instance of the parent concept. A node has at most
+ * one incoming tree edge.
+ */
 export interface Edge {
   id: string;
   from: string;
@@ -56,6 +64,7 @@ export interface Review {
 /** Temporary inbox: answers to ask-now / ask-later live here until the user keeps them. Not synced. */
 export interface InboxItem {
   id: string;
+  questionNodeId: string;
   question: string;
   quote: string;
   answer: string;
