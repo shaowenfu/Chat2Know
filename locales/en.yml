@@ -26,6 +26,9 @@ panel:
     n: $1 cards
   exportJson: Export JSON
   exportMarkdown: Export Markdown
+  export: Export ▾
+  exportOpml: Export OPML (mind map)
+  exportAnki: Export to Anki (CSV)
   importJson: Import JSON
   imported:
     1: Imported 1 card
@@ -118,6 +121,7 @@ mastery:
 quiz:
   tab: Quiz me
   masteredThisWeek: mastered this week
+  earlierWeeks: "weeks before: $1"
   dueNow: due now
   mustKnow: to know by heart
   noneMarked: Mark cards as "Know by heart" to be quizzed on them.

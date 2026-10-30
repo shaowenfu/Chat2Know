@@ -112,6 +112,7 @@ test('export JSON, delete, import restores the card; Markdown export works', asy
   await send(panel, 'capture/fromTab', { type: 'knowledge', tabId: await tabIdOf(panel, url) });
   await expect(panel.getByTestId('card')).toHaveCount(1);
 
+  await panel.getByTestId('export-menu').click();
   const [jsonDownload] = await Promise.all([panel.waitForEvent('download'), panel.getByTestId('export-json').click()]);
   const jsonPath = await jsonDownload.path();
   expect(jsonDownload.suggestedFilename()).toMatch(/^chat2know-\d{4}-\d{2}-\d{2}\.json$/);
@@ -120,6 +121,10 @@ test('export JSON, delete, import restores the card; Markdown export works', asy
   const md = await (await import('node:fs/promises')).readFile(await mdDownload.path(), 'utf8');
   expect(md).toContain('# Chat2Know export');
   expect(md).toContain(`Source: [Synthetic chat: attention](${url})`);
+  const [opml] = await Promise.all([panel.waitForEvent('download'), panel.getByTestId('export-opml').click()]);
+  expect(opml.suggestedFilename()).toMatch(/\.opml$/);
+  const [anki] = await Promise.all([panel.waitForEvent('download'), panel.getByTestId('export-anki').click()]);
+  expect(anki.suggestedFilename()).toMatch(/^chat2know-anki-.*\.csv$/);
 
   await panel.getByRole('button', { name: 'Delete' }).click();
   await expect(panel.getByTestId('card')).toHaveCount(0);

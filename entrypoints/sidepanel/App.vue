@@ -5,6 +5,7 @@ import { i18n } from '#i18n';
 import { onMessages, sendMessage } from '@/src/messaging';
 import type { Ask, InboxItem, NodeView, QuizItem } from '@/src/db/types';
 import type { RecordingSettings } from '@/src/recording/settings';
+import type { Stats } from '@/src/db/repository';
 import type { PublicSettings } from '@/src/llm/settings';
 import AskQueue from './components/AskQueue.vue';
 import CardList from './components/CardList.vue';
@@ -24,7 +25,7 @@ const nodes = ref<NodeView[]>([]);
 const inbox = ref<InboxItem[]>([]);
 const settings = ref<PublicSettings | null>(null);
 const due = ref<QuizItem[]>([]);
-const stats = ref({ masteredThisWeek: 0, due: 0, mustKnow: 0, openQuestions: 0 });
+const stats = ref<Stats>({ masteredThisWeek: 0, earlierWeeks: [0, 0, 0], due: 0, mustKnow: 0, openQuestions: 0 });
 const asks = ref<Ask[]>([]);
 const recording = ref<RecordingSettings>({ origins: [], paused: false, excluded: [] });
 const toolbarUnavailable = ref(false);
@@ -109,6 +110,14 @@ async function exportJson() {
 
 async function exportMarkdown() {
   download(`chat2know-${stamp()}.md`, await sendMessage('data/exportMarkdown', {}), 'text/markdown');
+}
+
+async function exportOpml() {
+  download(`chat2know-${stamp()}.opml`, await sendMessage('data/exportOpml', {}), 'text/x-opml');
+}
+
+async function exportAnki() {
+  download(`chat2know-anki-${stamp()}.csv`, await sendMessage('data/exportAnki', {}), 'text/csv');
 }
 
 async function importJson(event: Event) {
@@ -215,8 +224,15 @@ onUnmounted(() => browser.tabs.onActivated.removeListener(onTabActivated));
       <template v-else>
         <section class="actions">
           <span class="count" data-testid="card-count">{{ countLabel }}</span>
-          <button type="button" data-testid="export-json" @click="exportJson">{{ i18n.t('panel.exportJson') }}</button>
-          <button type="button" data-testid="export-md" @click="exportMarkdown">{{ i18n.t('panel.exportMarkdown') }}</button>
+          <details class="menu">
+            <summary data-testid="export-menu">{{ i18n.t('panel.export') }}</summary>
+            <div class="menu-items">
+              <button type="button" data-testid="export-json" @click="exportJson">{{ i18n.t('panel.exportJson') }}</button>
+              <button type="button" data-testid="export-md" @click="exportMarkdown">{{ i18n.t('panel.exportMarkdown') }}</button>
+              <button type="button" data-testid="export-opml" @click="exportOpml">{{ i18n.t('panel.exportOpml') }}</button>
+              <button type="button" data-testid="export-anki" @click="exportAnki">{{ i18n.t('panel.exportAnki') }}</button>
+            </div>
+          </details>
           <button type="button" data-testid="import-json" @click="fileInput?.click()">{{ i18n.t('panel.importJson') }}</button>
           <button type="button" data-testid="organize-page" :disabled="!configured" @click="view = 'organize-page'">{{ i18n.t('organize.page') }}</button>
           <button type="button" data-testid="organize-paste" :disabled="!configured" @click="view = 'organize-paste'">{{ i18n.t('organize.paste') }}</button>

@@ -26,6 +26,9 @@ panel:
     n: $1 张卡片
   exportJson: 导出 JSON
   exportMarkdown: 导出 Markdown
+  export: 导出 ▾
+  exportOpml: 导出 OPML（导图）
+  exportAnki: 导出到 Anki（CSV）
   importJson: 导入 JSON
   imported:
     1: 已导入 1 张卡片
@@ -118,6 +121,7 @@ mastery:
 quiz:
   tab: 考我
   masteredThisWeek: 本周掌握
+  earlierWeeks: "前几周：$1"
   dueNow: 待复习
   mustKnow: 要熟记
   noneMarked: 把卡片标为"要熟记"，就会在这里考你。

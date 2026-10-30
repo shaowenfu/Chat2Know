@@ -3,13 +3,14 @@ import { computed, ref, watch } from 'vue';
 import { i18n } from '#i18n';
 import { sendMessage } from '@/src/messaging';
 import type { QuizItem, Review, Verdict } from '@/src/db/types';
+import type { Stats } from '@/src/db/repository';
 import { useRun } from '../notify';
 
 /**
  * Quiz me: one due card at a time. Recall: answer from memory, then grade yourself
  * or let the model judge. Apply: solve a problem the model writes, judged by the model.
  */
-const props = defineProps<{ due: QuizItem[]; configured: boolean; stats: { masteredThisWeek: number; due: number; mustKnow: number } }>();
+const props = defineProps<{ due: QuizItem[]; configured: boolean; stats: Stats }>();
 const run = useRun();
 
 const answer = ref('');
@@ -56,6 +57,7 @@ const verdictLabel = (v: Verdict) => i18n.t(`quiz.verdict_${v}`);
     <div>
       <strong data-testid="stat-north-star">{{ stats.masteredThisWeek }}</strong>
       <span>{{ i18n.t('quiz.masteredThisWeek') }}</span>
+      <small class="muted" data-testid="stat-earlier-weeks">{{ i18n.t('quiz.earlierWeeks', [stats.earlierWeeks.join(' · ')]) }}</small>
     </div>
     <div>
       <strong>{{ stats.due }}</strong>

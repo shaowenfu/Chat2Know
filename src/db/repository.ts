@@ -57,6 +57,15 @@ const stripHash = (url: string) => url.replace(/#.*$/, '');
 /** Kept knowledge the user must know by heart. Open questions marked "know by heart" wait until they are kept. */
 const isQuizzable = (n: KNode) => n.type === 'knowledge' && n.status !== 'draft' && n.mastery === 'internalize';
 
+export interface Stats {
+  masteredThisWeek: number;
+  /** The north star for the week before this one, then the one before that, and so on (3 weeks). */
+  earlierWeeks: number[];
+  due: number;
+  mustKnow: number;
+  openQuestions: number;
+}
+
 export const INBOX_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 /** The user's final decision when keeping an answered question. */
@@ -550,16 +559,21 @@ export class Repository {
     });
   }
 
-  /** North star and queue sizes for the stats panel. */
-  async stats(): Promise<{ masteredThisWeek: number; due: number; mustKnow: number; openQuestions: number }> {
+  /**
+   * North star (cards to know by heart that passed a check in the last 7 days),
+   * the same count for the three weeks before, and queue sizes.
+   */
+  async stats(): Promise<Stats> {
     const now = this.now();
     const nodes = await this.listNodes();
     const mustKnow = new Set(nodes.filter(isQuizzable).map((n) => n.id));
-    const passed = (await this.db.reviews.where('createdAt').aboveOrEqual(now - 7 * DAY_MS).toArray()).filter(
-      (r) => r.verdict === 'pass' && mustKnow.has(r.nodeId),
-    );
+    const weeks = [0, 1, 2, 3].map(() => new Set<string>());
+    for (const r of await this.db.reviews.where('createdAt').aboveOrEqual(now - 28 * DAY_MS).toArray()) {
+      if (r.verdict === 'pass' && mustKnow.has(r.nodeId)) weeks[Math.min(3, Math.floor((now - r.createdAt) / (7 * DAY_MS)))]!.add(r.nodeId);
+    }
     return {
-      masteredThisWeek: new Set(passed.map((r) => r.nodeId)).size,
+      masteredThisWeek: weeks[0]!.size,
+      earlierWeeks: weeks.slice(1).map((w) => w.size),
       due: (await this.dueForQuiz(false)).length,
       mustKnow: mustKnow.size,
       openQuestions: nodes.filter((n) => n.type === 'question' && n.status === 'open').length,

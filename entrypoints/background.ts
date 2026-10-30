@@ -6,6 +6,8 @@ import { Chat2KnowDB } from '@/src/db/schema';
 import { Hlc } from '@/src/db/hlc';
 import { Repository, type CaptureType } from '@/src/db/repository';
 import { nodesToMarkdown } from '@/src/export/markdown';
+import { nodesToOpml } from '@/src/export/opml';
+import { nodesToAnki } from '@/src/export/anki';
 import { textFragmentUrl } from '@/src/capture/text-fragment';
 import { LlmClient } from '@/src/llm/client';
 import { UserError } from '@/src/errors';
@@ -349,6 +351,8 @@ export default defineBackground(() => {
     'source/open': ({ sourceId }) => openSource(sourceId),
     'data/exportJson': async () => JSON.stringify(await (await repo()).exportData(), null, 2),
     'data/exportMarkdown': async () => nodesToMarkdown(await (await repo()).listNodes(), new Date()),
+    'data/exportOpml': async () => nodesToOpml(await (await repo()).listNodes(), new Date()),
+    'data/exportAnki': async () => nodesToAnki(await (await repo()).listNodes()),
     'data/importJson': async ({ json }) => {
       const result = await (await repo()).importData(json);
       notifyChanged();

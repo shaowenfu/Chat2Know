@@ -70,7 +70,7 @@ check `git log`, and continue from the first unchecked box.
 - [x] M5.1 Apply mode for internalize cards (alternating with recall, model-written problem, model judge); north star counts passes of every mode.
 - [x] M5.2 Explain it to me: card + subtree explanation judged per node, reviews per node, failed nodes red in the tree.
 - [x] M5.3 One-minute script for a card / subtree, copy button.
-- [ ] M5.4 Stats: last 4 weeks of the north star. Exports: tree-ordered Markdown, OPML, Anki CSV, one export menu.
+- [x] M5.4 Stats: last 4 weeks of the north star. Exports: tree-ordered Markdown, OPML, Anki CSV, one export menu.
 
 ## D2: concept tags and prerequisite graph
 
@@ -102,3 +102,4 @@ Short notes on deviations and why, newest last.
 - D1.3: Unticking a site does not remove its host permission (Chrome refuses to remove a required one in the E2E build, and the recorder is already unregistered). Access is still requested only at the moment a site is ticked. The "this site" option is the active tab's origin when no site config covers it.
 - M5.1: The apply problem is plain text (no JSON); it is kept as the review's prompt. Apply is judged by the model only (there is no stored answer to reveal for self-grading); the statement is shown after judging.
 - M5.2: "Explain it to me" is offered on kept knowledge and topic cards (a topic's branch is explained through its kept children); at most 20 kept cards per explanation. A card shows "missed last check" when its latest review in any mode is fail or partial. NodeView gained `lastVerdict`.
+- M5.4: Stats keep `masteredThisWeek` and add `earlierWeeks` (3 rolling 7-day windows before it). Anki rows are kept knowledge cards with a statement; tags `chat2know` and `mastery::<level>`. Asks are not in any of these exports (D1 has its own).

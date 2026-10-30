@@ -6,7 +6,7 @@
 import type { CapturedSelection } from '@/src/capture/selection';
 import { UserError } from '@/src/errors';
 import type { TextQuote } from '@/src/capture/text-quote';
-import type { AskLaterResult, CaptureType, ImportResult, KeepDecision, PageQuestion } from '@/src/db/repository';
+import type { AskLaterResult, CaptureType, ImportResult, KeepDecision, PageQuestion, Stats } from '@/src/db/repository';
 import type { Ask, InboxItem, Mastery, QuizItem, Review, Verdict } from '@/src/db/types';
 import type { RecordingSettings } from '@/src/recording/settings';
 import type { CandidateCard, Suggestion } from '@/src/llm/prompts';
@@ -71,7 +71,7 @@ export interface MessageMap {
   'explain/check': { req: { nodeId: string; explanation: string }; res: ExplainResult };
   /** A one-minute script to say out loud for a card and its branch. */
   'explain/oneMinute': { req: { nodeId: string }; res: { script: string } };
-  'stats/get': { req: Record<string, never>; res: { masteredThisWeek: number; due: number; mustKnow: number; openQuestions: number } };
+  'stats/get': { req: Record<string, never>; res: Stats };
   'settings/get': { req: Record<string, never>; res: PublicSettings };
   /** Omitting apiKey keeps the stored key. */
   'settings/save': { req: { baseUrl: string; model: string; embeddingModel: string; apiKey?: string }; res: PublicSettings };
@@ -82,6 +82,8 @@ export interface MessageMap {
   'source/open': { req: { sourceId: string }; res: { tabId: number; highlighted: boolean } };
   'data/exportJson': { req: Record<string, never>; res: string };
   'data/exportMarkdown': { req: Record<string, never>; res: string };
+  'data/exportOpml': { req: Record<string, never>; res: string };
+  'data/exportAnki': { req: Record<string, never>; res: string };
   'data/importJson': { req: { json: string }; res: ImportResult };
 
   // Recording the user's sent questions (learning diagnosis)

@@ -77,9 +77,9 @@ describe('quiz', () => {
     const r2 = await selfGrade(repo, id, 'keeps softmax from saturating', 'pass');
     expect(r2.interval).toBe(2.5); // fail reset it to 1 day; a pass grows it
     expect((await repo.getNode(id))!.status).toBe('mastered');
-    expect(await repo.stats()).toEqual({ masteredThisWeek: 1, due: 0, mustKnow: 1, openQuestions: 0 });
+    expect(await repo.stats()).toEqual({ masteredThisWeek: 1, earlierWeeks: [0, 0, 0], due: 0, mustKnow: 1, openQuestions: 0 });
     t += 8 * DAY_MS;
-    expect((await repo.stats()).masteredThisWeek).toBe(0);
+    expect(await repo.stats()).toMatchObject({ masteredThisWeek: 0, earlierWeeks: [1, 0, 0] });
   });
 
   it('AI judge compares with the kept statement and records its verdict', async () => {
