@@ -12,6 +12,15 @@ export function nextInterval(previous: number | undefined, verdict: Verdict): nu
   return Math.max(1, Math.round(previous * GROWTH[verdict] * 10) / 10);
 }
 
+/**
+ * Verification strength follows the mastery requirement: a card to know by heart
+ * alternates between recalling it and using it to solve a problem. Apply needs a
+ * model (it writes the problem and judges the solution).
+ */
+export function quizMode(earlierQuizzes: number, modelConfigured: boolean): 'recall' | 'apply' {
+  return modelConfigured && earlierQuizzes % 2 === 1 ? 'apply' : 'recall';
+}
+
 /** A card is due when it has never been reviewed or its last review's due time has passed. */
 export function isDue(latest: Review | undefined, now: number): boolean {
   return !latest || latest.dueAt <= now;

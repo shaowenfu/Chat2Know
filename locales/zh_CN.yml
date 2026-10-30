@@ -129,6 +129,9 @@ quiz:
   verdict_pass: 记得
   verdict_partial: 模糊
   verdict_fail: 忘了
+  useIt: "用它解题：$1"
+  writingProblem: 正在出题…
+  solvePlaceholder: 你的解答
 tree:
   explore: 问题
   conclusion: 结论

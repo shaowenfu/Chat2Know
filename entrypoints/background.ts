@@ -12,7 +12,7 @@ import { UserError } from '@/src/errors';
 import { isConfigured, loadSettings, saveSettings, toPublic } from '@/src/llm/settings';
 import { answerQuestion, confirmKeep, dismissQuestion, suggestKeep } from '@/src/services/ask';
 import { Distiller } from '@/src/services/distill';
-import { judge, selfGrade } from '@/src/services/quiz';
+import { judge, problemFor, selfGrade } from '@/src/services/quiz';
 import { suggestPlacement } from '@/src/services/placement';
 import { organize } from '@/src/services/organize';
 import { isRecording, loadRecording, saveRecording, shouldRecord, type RecordingSettings } from '@/src/recording/settings';
@@ -303,14 +303,15 @@ export default defineBackground(() => {
       notifyChanged();
       return null;
     },
-    'quiz/due': async () => (await repo()).dueForQuiz(),
+    'quiz/due': async () => (await repo()).dueForQuiz(isConfigured(await loadSettings())),
+    'quiz/problem': async ({ nodeId }) => ({ problem: await problemFor(await repo(), await client(), nodeId) }),
     'quiz/grade': async ({ nodeId, answer, verdict }) => {
       const review = await selfGrade(await repo(), nodeId, answer, verdict);
       notifyChanged();
       return review;
     },
-    'quiz/judge': async ({ nodeId, answer }) => {
-      const review = await judge(await repo(), await client(), nodeId, answer);
+    'quiz/judge': async ({ nodeId, answer, problem }) => {
+      const review = await judge(await repo(), await client(), nodeId, answer, problem);
       notifyChanged();
       return review;
     },

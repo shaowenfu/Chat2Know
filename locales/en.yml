@@ -129,6 +129,9 @@ quiz:
   verdict_pass: Got it
   verdict_partial: Partly
   verdict_fail: Forgot
+  useIt: "Use it: $1"
+  writingProblem: Writing a problem…
+  solvePlaceholder: Your solution
 tree:
   explore: Questions
   conclusion: Conclusions

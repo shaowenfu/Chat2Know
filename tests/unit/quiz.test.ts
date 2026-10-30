@@ -4,8 +4,8 @@ import { Chat2KnowDB } from '@/src/db/schema';
 import { Hlc } from '@/src/db/hlc';
 import { Repository } from '@/src/db/repository';
 import { LlmClient } from '@/src/llm/client';
-import { DAY_MS, nextInterval } from '@/src/review/schedule';
-import { judge, selfGrade } from '@/src/services/quiz';
+import { DAY_MS, nextInterval, quizMode } from '@/src/review/schedule';
+import { judge, problemFor, selfGrade } from '@/src/services/quiz';
 
 let seq = 0;
 let t: number;
@@ -49,24 +49,24 @@ describe('quiz', () => {
     const id = await mustKnowCard();
     const other = await mustKnowCard('other');
     await repo.setMastery(other, 'understand');
-    expect((await repo.dueForQuiz()).map((n) => n.id)).toEqual([id]);
+    expect((await repo.dueForQuiz(false)).map((n) => n.id)).toEqual([id]);
     await selfGrade(repo, id, 'it avoids saturation', 'pass');
-    expect(await repo.dueForQuiz()).toEqual([]);
+    expect(await repo.dueForQuiz(false)).toEqual([]);
     t += 2 * DAY_MS;
-    expect((await repo.dueForQuiz()).map((n) => n.id)).toEqual([id]);
+    expect((await repo.dueForQuiz(false)).map((n) => n.id)).toEqual([id]);
   });
 
   it('an open question marked "know by heart" waits until it is kept', async () => {
     const { nodeId } = await repo.askLater({ term: 'VLM', question: '', capture: { markdown: 's', quote: { exact: 's', prefix: '', suffix: '' }, url: 'u', pageTitle: 'p' } });
     await repo.setMastery(nodeId, 'internalize');
-    expect(await repo.dueForQuiz()).toEqual([]);
+    expect(await repo.dueForQuiz(false)).toEqual([]);
     expect((await repo.stats()).mustKnow).toBe(0);
   });
 
   it('draft cards are not quizzed until their title is confirmed', async () => {
     const node = await repo.capture('knowledge', { markdown: 'x', quote: { exact: 'x', prefix: '', suffix: '' }, url: 'u', pageTitle: 'p' });
     await repo.setMastery(node.id, 'internalize');
-    expect(await repo.dueForQuiz()).toEqual([]);
+    expect(await repo.dueForQuiz(false)).toEqual([]);
   });
 
   it('pass masters the card, fail sets it back; the north star counts passes this week', async () => {
@@ -92,5 +92,34 @@ describe('quiz', () => {
     const review = await judge(repo, client, id, 'it makes numbers smaller');
     expect(review).toMatchObject({ verdict: 'partial', feedback: 'Mention saturation.', answer: 'it makes numbers smaller' });
     expect((await repo.getNode(id))!.status).toBe('confirmed'); // partial does not change status
+  });
+
+  it('a card to know by heart alternates recall and apply once a model is set up', async () => {
+    expect([0, 1, 2, 3].map((n) => quizMode(n, true))).toEqual(['recall', 'apply', 'recall', 'apply']);
+    expect(quizMode(1, false)).toBe('recall');
+    const id = await mustKnowCard();
+    expect((await repo.dueForQuiz(true))[0]!.mode).toBe('recall');
+    await selfGrade(repo, id, 'keeps softmax from saturating', 'pass');
+    t += 2 * DAY_MS;
+    expect((await repo.dueForQuiz(true))[0]!.mode).toBe('apply');
+    expect((await repo.dueForQuiz(false))[0]!.mode).toBe('recall');
+  });
+
+  it('apply: the model writes a problem, then judges the solution against the statement', async () => {
+    const id = await mustKnowCard();
+    const replies = ['A model with d=512 saturates. What do you change?', '{"verdict":"pass","feedback":"Right: scale the scores."}'];
+    const bodies: string[] = [];
+    const fetchFn = vi.fn(async (_u: string | URL | Request, init?: RequestInit) => {
+      bodies.push(init!.body as string);
+      return new Response(JSON.stringify({ choices: [{ message: { content: replies.shift() } }] }));
+    });
+    const client = new LlmClient({ baseUrl: 'https://m.dev', model: 'm', apiKey: 'k', embeddingModel: '' }, fetchFn);
+    const problem = await problemFor(repo, client, id);
+    expect(bodies[0]).toContain('[task:problem]');
+    const review = await judge(repo, client, id, 'divide the scores by sqrt(d)', problem);
+    expect(bodies[1]).toContain('[task:judgeApply]');
+    expect(bodies[1]).toContain('Scaling keeps the softmax out of saturation.');
+    expect(review).toMatchObject({ mode: 'apply', prompt: problem, verdict: 'pass' });
+    expect((await repo.stats()).masteredThisWeek).toBe(1); // a pass in any mode counts for the north star
   });
 });

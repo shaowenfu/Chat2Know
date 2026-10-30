@@ -4,8 +4,8 @@ import { monotonicFactory } from 'ulid';
 import type { CapturedSelection } from '@/src/capture/selection';
 import { Hlc } from './hlc';
 import type { Chat2KnowDB } from './schema';
-import type { Ask, Edge, EdgeKind, Embedding, Entity, InboxItem, KNode, Mastery, NodeView, OpLogEntry, Preference, Review, Source, Verdict } from './types';
-import { DAY_MS, isDue, nextInterval } from '@/src/review/schedule';
+import type { Ask, Edge, EdgeKind, Embedding, Entity, InboxItem, KNode, Mastery, NodeView, OpLogEntry, Preference, QuizItem, Review, ReviewMode, Source, Verdict } from './types';
+import { DAY_MS, isDue, nextInterval, quizMode } from '@/src/review/schedule';
 import type { TextQuote } from '@/src/capture/text-quote';
 import { titleFromMarkdown } from './title';
 
@@ -503,22 +503,25 @@ export class Repository {
     return latest;
   }
 
-  /** Cards the user must know by heart whose review is due, oldest due first. */
-  async dueForQuiz(): Promise<NodeView[]> {
+  /** Cards the user must know by heart whose review is due, oldest due first, each with how it is checked this time. */
+  async dueForQuiz(modelConfigured: boolean): Promise<QuizItem[]> {
     const now = this.now();
     const latest = await this.latestReviews();
+    const quizzed = new Map<string, number>();
+    for (const r of await this.db.reviews.toArray()) if (r.mode !== 'explain') quizzed.set(r.nodeId, (quizzed.get(r.nodeId) ?? 0) + 1);
     return (await this.listNodes())
       .filter((n) => isQuizzable(n) && isDue(latest.get(n.id), now))
-      .sort((a, b) => (latest.get(a.id)?.dueAt ?? 0) - (latest.get(b.id)?.dueAt ?? 0));
+      .sort((a, b) => (latest.get(a.id)?.dueAt ?? 0) - (latest.get(b.id)?.dueAt ?? 0))
+      .map((n) => ({ ...n, mode: quizMode(quizzed.get(n.id) ?? 0, modelConfigured) }));
   }
 
-  /** Records a recall review, schedules the next one and moves the card in or out of `mastered`. */
-  async recordReview(input: { nodeId: string; prompt: string; answer: string; verdict: Verdict; feedback?: string }): Promise<Review> {
+  /** Records a review, schedules the next one and moves the card in or out of `mastered`. */
+  async recordReview(input: { nodeId: string; mode: ReviewMode; prompt: string; answer: string; verdict: Verdict; feedback?: string }): Promise<Review> {
     return this.db.transaction('rw', [this.db.nodes, this.db.reviews, this.db.oplog], async () => {
       const previous = (await this.db.reviews.where('nodeId').equals(input.nodeId).sortBy('createdAt')).at(-1);
       const at = this.now();
       const interval = nextInterval(previous?.interval, input.verdict);
-      const review: Review = { ...input, id: this.ulid(at), mode: 'recall', interval, dueAt: at + interval * DAY_MS, createdAt: at };
+      const review: Review = { ...input, id: this.ulid(at), interval, dueAt: at + interval * DAY_MS, createdAt: at };
       await this.db.reviews.add(review);
       await this.db.oplog.add(this.log('reviews', review.id, 'put', review));
       if (input.verdict !== 'partial') await this.patchNode(input.nodeId, { status: input.verdict === 'pass' ? 'mastered' : 'confirmed' });
@@ -536,7 +539,7 @@ export class Repository {
     );
     return {
       masteredThisWeek: new Set(passed.map((r) => r.nodeId)).size,
-      due: (await this.dueForQuiz()).length,
+      due: (await this.dueForQuiz(false)).length,
       mustKnow: mustKnow.size,
       openQuestions: nodes.filter((n) => n.type === 'question' && n.status === 'open').length,
     };

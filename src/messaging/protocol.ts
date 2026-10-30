@@ -7,7 +7,7 @@ import type { CapturedSelection } from '@/src/capture/selection';
 import { UserError } from '@/src/errors';
 import type { TextQuote } from '@/src/capture/text-quote';
 import type { AskLaterResult, CaptureType, ImportResult, KeepDecision, PageQuestion } from '@/src/db/repository';
-import type { Ask, InboxItem, Mastery, Review, Verdict } from '@/src/db/types';
+import type { Ask, InboxItem, Mastery, QuizItem, Review, Verdict } from '@/src/db/types';
 import type { RecordingSettings } from '@/src/recording/settings';
 import type { CandidateCard, Suggestion } from '@/src/llm/prompts';
 import type { Placement } from '@/src/services/placement';
@@ -60,9 +60,12 @@ export interface MessageMap {
     res: { kept: number };
   };
   'nodes/setMastery': { req: { id: string; mastery: Mastery | null }; res: null };
-  'quiz/due': { req: Record<string, never>; res: NodeView[] };
+  'quiz/due': { req: Record<string, never>; res: QuizItem[] };
   'quiz/grade': { req: { nodeId: string; answer: string; verdict: Verdict }; res: Review };
-  'quiz/judge': { req: { nodeId: string; answer: string }; res: Review };
+  /** A problem that needs the card's knowledge (apply mode). */
+  'quiz/problem': { req: { nodeId: string }; res: { problem: string } };
+  /** Model judge; with `problem`, the answer is judged as a solution to it (apply mode). */
+  'quiz/judge': { req: { nodeId: string; answer: string; problem?: string }; res: Review };
   'stats/get': { req: Record<string, never>; res: { masteredThisWeek: number; due: number; mustKnow: number; openQuestions: number } };
   'settings/get': { req: Record<string, never>; res: PublicSettings };
   /** Omitting apiKey keeps the stored key. */

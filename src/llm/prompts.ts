@@ -134,6 +134,28 @@ export function parseJudgement(value: unknown): Judgement {
   return { verdict: oneOf(o, 'verdict', VERDICTS), feedback: str(o, 'feedback') };
 }
 
+// ---------------------------------------------------------------- apply (use it to solve a problem)
+
+export function problemPrompt(input: { question: string; statement: string }): ChatMessage[] {
+  return [
+    system(
+      'problem',
+      `Write one short problem (2–4 sentences) that the learner can only solve by using the knowledge below: a concrete situation, case or small calculation, not a request to restate the knowledge. Do not include the answer or hints. Reply with the problem only, in plain Markdown, formulas in LaTeX. ${SAME_LANGUAGE}`,
+    ),
+    { role: 'user', content: `Knowledge question: ${input.question}\n\nKnowledge:\n${input.statement}` },
+  ];
+}
+
+export function applyJudgePrompt(input: { problem: string; statement: string; answer: string }): ChatMessage[] {
+  return [
+    system(
+      'judgeApply',
+      `You check whether a learner used a piece of knowledge correctly to solve a problem. "pass": the solution is correct and uses the knowledge. "partial": on the right track but incomplete or with a slip. "fail": wrong, or the knowledge is not used. Return JSON only: {"verdict": "pass" | "partial" | "fail", "feedback": "one or two sentences: what was right, what was missing or wrong"}. ${SAME_LANGUAGE}`,
+    ),
+    { role: 'user', content: `Problem:\n${input.problem}\n\nKnowledge it needs:\n${input.statement}\n\nLearner's solution:\n${input.answer}` },
+  ];
+}
+
 // ---------------------------------------------------------------- organize (whole page / paste)
 
 export interface CandidateCard {

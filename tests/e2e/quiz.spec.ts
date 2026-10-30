@@ -1,7 +1,7 @@
 /// <reference types="chrome" />
 import { mkdirSync } from 'node:fs';
 import { expect, test } from './fixtures';
-import { configureModel, openPageAndPanel, selectBetween } from './helpers';
+import { configureModel, openPageAndPanel, selectBetween, send } from './helpers';
 
 const EN = 'synthetic-chat-katex.html';
 
@@ -50,4 +50,34 @@ test('cards not marked "know by heart" are never quizzed', async ({ context, ext
   await panel.goto(`chrome-extension://${extensionId}/sidepanel.html`);
   await panel.getByTestId('tab-quiz').click();
   await expect(panel.getByTestId('quiz-empty')).toHaveText('Mark cards as "Know by heart" to be quizzed on them.');
+});
+
+test('the next quiz of a card asks to use it on a problem the model writes', async ({ context, extensionId, mockLlm }) => {
+  const panel = await context.newPage();
+  await panel.goto(`chrome-extension://${extensionId}/sidepanel.html`);
+  await configureModel(panel, mockLlm.url);
+  // A card to know by heart, recalled once before and due again.
+  const day = 24 * 60 * 60 * 1000;
+  const now = Date.now();
+  const node = {
+    id: '01JAPPLYCARD0000000000000',
+    type: 'knowledge',
+    title: 'Why scale attention scores?',
+    summary: 'Scaling keeps the softmax away from saturation.',
+    mastery: 'internalize',
+    status: 'mastered',
+    askCount: 0,
+    createdAt: now - 3 * day,
+    updatedAt: '0000000000001-0000-imp',
+  };
+  const review = { id: '01JAPPLYREVIEW00000000000', nodeId: node.id, mode: 'recall', prompt: node.title, answer: 'saturation', verdict: 'pass', dueAt: now - day, interval: 1, createdAt: now - 2 * day };
+  const file = { format: 'chat2know', version: 1, exportedAt: now, nodes: [node], edges: [], sources: [], reviews: [review], preferences: [] };
+  expect((await send(panel, 'data/importJson', { json: JSON.stringify(file) })).ok).toBe(true);
+
+  await panel.getByTestId('tab-quiz').click();
+  await expect(panel.getByTestId('quiz-problem')).toHaveText('Problem: use this to solve a case. Why scale attention scores?');
+  await panel.getByRole('textbox', { name: 'Your solution' }).fill('divide by sqrt(d) to avoid saturation');
+  await panel.getByTestId('quiz-judge').click();
+  await expect(panel.getByTestId('quiz-result')).toHaveText('Got it · Covers the key point.');
+  await expect(panel.getByTestId('stat-north-star')).toHaveText('1');
 });

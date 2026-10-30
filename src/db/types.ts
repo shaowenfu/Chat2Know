@@ -49,10 +49,13 @@ export interface Source {
 
 export type Verdict = 'pass' | 'partial' | 'fail';
 
+/** recall: answer the question title from memory; apply: solve a problem with it; explain: teach it back. */
+export type ReviewMode = 'recall' | 'apply' | 'explain';
+
 export interface Review {
   id: string;
   nodeId: string;
-  mode: 'recall' | 'explain';
+  mode: ReviewMode;
   prompt: string;
   answer: string;
   verdict: Verdict;
@@ -112,6 +115,11 @@ export interface OpLogEntry {
   entityId: string;
   op: 'put' | 'delete';
   patch: Record<string, unknown>;
+}
+
+/** A due card and how it is checked this time. */
+export interface QuizItem extends NodeView {
+  mode: Extract<ReviewMode, 'recall' | 'apply'>;
 }
 
 /** A node as the side panel shows it. */
