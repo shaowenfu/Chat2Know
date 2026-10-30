@@ -74,7 +74,7 @@ check `git log`, and continue from the first unchecked box.
 
 ## D2: concept tags and prerequisite graph
 
-- [ ] D2.1 Tables `askTags`, `concepts`, `prereqEdges`; tagging batches (auto at ≥ 10 untagged, manual "Analyze now"); per-domain graph generated once and extended; errors shown in the tab.
+- [x] D2.1 Tables `askTags`, `concepts`, `prereqEdges`; tagging batches (auto at ≥ 10 untagged, manual "Analyze now"); per-domain graph generated once and extended; errors shown in the tab.
 - [ ] D2.2 Concept ↔ node linking; concept chips on recorded questions; eval dataset and metric for tag accuracy.
 
 ## D3: signals and root cause
@@ -103,3 +103,4 @@ Short notes on deviations and why, newest last.
 - M5.1: The apply problem is plain text (no JSON); it is kept as the review's prompt. Apply is judged by the model only (there is no stored answer to reveal for self-grading); the statement is shown after judging.
 - M5.2: "Explain it to me" is offered on kept knowledge and topic cards (a topic's branch is explained through its kept children); at most 20 kept cards per explanation. A card shows "missed last check" when its latest review in any mode is fail or partial. NodeView gained `lastVerdict`.
 - M5.4: Stats keep `masteredThisWeek` and add `earlierWeeks` (3 rolling 7-day windows before it). Anki rows are kept knowledge cards with a statement; tags `chat2know` and `mastery::<level>`. Asks are not in any of these exports (D1 has its own).
+- D2.1: Dropped `askTags.confidence` and `prereqEdges.source` / `concepts.source` and `level` (nothing reads them; level is derived from the graph). Domains and concept names match case-insensitively. A tagging batch makes one tag call plus one graph call per domain with new concepts; the merged graph is checked for cycles before saving. Unit tests use the mock server in a node environment (happy-dom fetch has CORS).

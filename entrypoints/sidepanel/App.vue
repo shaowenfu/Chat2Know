@@ -28,6 +28,7 @@ const due = ref<QuizItem[]>([]);
 const stats = ref<Stats>({ masteredThisWeek: 0, earlierWeeks: [0, 0, 0], due: 0, mustKnow: 0, openQuestions: 0 });
 const asks = ref<Ask[]>([]);
 const recording = ref<RecordingSettings>({ origins: [], paused: false, excluded: [] });
+const analysis = ref<{ pending: number; lastError?: string }>({ pending: 0 });
 const toolbarUnavailable = ref(false);
 const notice = ref<{ text: string; error: boolean } | null>(null);
 const fileInput = ref<HTMLInputElement | null>(null);
@@ -72,7 +73,7 @@ const leftovers = computed(() => {
 });
 
 async function refresh() {
-  [nodes.value, inbox.value, settings.value, due.value, stats.value, asks.value, recording.value] = await Promise.all([
+  [nodes.value, inbox.value, settings.value, due.value, stats.value, asks.value, recording.value, analysis.value] = await Promise.all([
     sendMessage('nodes/list', {}),
     sendMessage('inbox/list', {}),
     sendMessage('settings/get', {}),
@@ -80,6 +81,7 @@ async function refresh() {
     sendMessage('stats/get', {}),
     sendMessage('asks/list', {}),
     sendMessage('recording/get', {}),
+    sendMessage('analysis/get', {}),
   ]);
 }
 
@@ -215,7 +217,7 @@ onUnmounted(() => browser.tabs.onActivated.removeListener(onTabActivated));
         </button>
       </nav>
 
-      <LearnView v-if="view === 'learn'" :asks="asks" :recording="recording" />
+      <LearnView v-if="view === 'learn'" :asks="asks" :recording="recording" :analysis="analysis" :configured="configured" />
 
       <QuizView v-else-if="view === 'quiz'" :due="due" :configured="configured" :stats="stats" />
 

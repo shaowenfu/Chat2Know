@@ -1,6 +1,6 @@
 /// <reference types="chrome" />
 import { expect, test } from './fixtures';
-import { send, tabIdOf } from './helpers';
+import { configureModel, send, tabIdOf } from './helpers';
 
 const PAGE = 'synthetic-chat-input.html';
 
@@ -99,4 +99,28 @@ test('Learning tab: tick sites, pause, search and delete recorded questions', as
   panel.once('dialog', (d) => void d.accept());
   await panel.getByTestId('asks-clear').click();
   await expect(panel.getByTestId('asks-empty')).toBeVisible();
+});
+
+test('Analyze now tags waiting questions; a failure is kept and shown', async ({ context, extensionId, fixtureServer, mockLlm }) => {
+  const page = await context.newPage();
+  await page.goto(`${fixtureServer}/${PAGE}`);
+  const panel = await context.newPage();
+  await panel.goto(`chrome-extension://${extensionId}/sidepanel.html`);
+  await configureModel(panel, mockLlm.url, 'wrong-key');
+  await send(panel, 'recording/setOrigins', { origins: [fixtureServer] });
+  for (const q of ['why does the transpose reverse a product?', 'what is the trace of AB?']) {
+    await page.locator('#prompt').fill(q);
+    await page.locator('#prompt').press('Enter');
+    await page.locator('#prompt').fill('');
+  }
+  await panel.getByTestId('tab-learn').click();
+  await expect(panel.getByTestId('analysis-pending')).toHaveText('2 questions waiting for analysis');
+
+  await panel.getByTestId('analyze-now').click();
+  await expect(panel.getByTestId('analysis-error')).toHaveText('Last analysis failed: HTTP 401: Invalid API key');
+
+  await configureModel(panel, mockLlm.url);
+  await panel.getByTestId('analyze-now').click();
+  await expect(panel.getByTestId('analysis-pending')).toHaveCount(0);
+  await expect(panel.getByTestId('analysis-error')).toHaveCount(0);
 });

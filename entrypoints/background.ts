@@ -10,7 +10,7 @@ import { nodesToOpml } from '@/src/export/opml';
 import { nodesToAnki } from '@/src/export/anki';
 import { textFragmentUrl } from '@/src/capture/text-fragment';
 import { LlmClient } from '@/src/llm/client';
-import { UserError } from '@/src/errors';
+import { UserError, errorText } from '@/src/errors';
 import { isConfigured, loadSettings, saveSettings, toPublic } from '@/src/llm/settings';
 import { answerQuestion, confirmKeep, dismissQuestion, suggestKeep } from '@/src/services/ask';
 import { Distiller } from '@/src/services/distill';
@@ -18,7 +18,8 @@ import { judge, problemFor, selfGrade } from '@/src/services/quiz';
 import { suggestPlacement } from '@/src/services/placement';
 import { organize } from '@/src/services/organize';
 import { checkExplanation, oneMinuteScript } from '@/src/services/explain';
-import { isRecording, loadRecording, saveRecording, shouldRecord, type RecordingSettings } from '@/src/recording/settings';
+import { isRecording, loadAnalysis, loadRecording, saveAnalysis, saveRecording, shouldRecord, type RecordingSettings } from '@/src/recording/settings';
+import { AUTO_ANALYZE_AT, analyze } from '@/src/services/analysis';
 import { siteFor } from '@/src/capture/sites';
 
 const CONTENT_SCRIPT = '/content-scripts/content.js';
@@ -133,6 +134,25 @@ async function openSource(sourceId: string): Promise<{ tabId: number; highlighte
   } catch {
     return { tabId, highlighted: false };
   }
+}
+
+let analysis: Promise<void> | undefined;
+
+/** One analysis at a time. Its outcome is kept for the Learning tab; a manual run also gets the error. */
+function runAnalysis(): Promise<void> {
+  analysis ??= (async () => {
+    try {
+      await analyze(await repo(), await client());
+      await saveAnalysis({});
+    } catch (err) {
+      await saveAnalysis({ lastError: errorText(err) });
+      throw err;
+    } finally {
+      analysis = undefined;
+      notifyChanged();
+    }
+  })();
+  return analysis;
 }
 
 const matchesOf = (origins: string[]) => origins.map((o) => `${o}/*`);
@@ -376,8 +396,11 @@ export default defineBackground(() => {
       const url = sender.url;
       if (!url || sender.id !== browser.runtime.id || !shouldRecord(await loadRecording(), url)) return { recorded: false };
       const host = new URL(url).hostname;
-      await (await repo()).recordAsk({ site: siteFor(host)?.id ?? host, conversationUrl: url, text });
+      const r = await repo();
+      await r.recordAsk({ site: siteFor(host)?.id ?? host, conversationUrl: url, text });
       notifyChanged();
+      // Recording never waits on a model; a batch is analyzed in the background, its failure kept for the tab.
+      if (isConfigured(await loadSettings()) && (await r.untaggedAsks()).length >= AUTO_ANALYZE_AT) runAnalysis().catch(() => {});
       return { recorded: true };
     },
     'asks/list': async () => (await repo()).listAsks(),
@@ -399,6 +422,11 @@ export default defineBackground(() => {
       await (await repo()).deleteConversationAsks(url);
       notifyChanged();
       return next;
+    },
+    'analysis/get': async () => ({ pending: (await (await repo()).untaggedAsks()).length, ...(await loadAnalysis()) }),
+    'analysis/run': async () => {
+      await runAnalysis();
+      return null;
     },
     'asks/export': async () =>
       JSON.stringify({ format: 'chat2know-asks', version: 1, exportedAt: Date.now(), asks: await (await repo()).listAsks() }, null, 2),

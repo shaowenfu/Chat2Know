@@ -105,6 +105,30 @@ export interface Ask {
   conversationUrl: string; // page URL without the hash; tells "same conversation" from "across conversations"
   text: string;
   sentAt: number;
+  taggedAt?: number; // set once concept tagging has looked at it, even when it found no concept
+}
+
+/** A concept in a domain's prerequisite graph (learning diagnosis). Local only. */
+export interface Concept {
+  id: string;
+  domain: string;
+  name: string;
+  nodeId?: string; // the note card about this concept, when there is one
+  createdAt: number;
+}
+
+/** `from` must be understood before `to`. */
+export interface PrereqEdge {
+  id: string;
+  from: string;
+  to: string;
+}
+
+/** A recorded question is about this concept. */
+export interface AskTag {
+  id: string;
+  askId: string;
+  conceptId: string;
 }
 
 export type Entity = 'nodes' | 'edges' | 'sources' | 'reviews' | 'preferences';

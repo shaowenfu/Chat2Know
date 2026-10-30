@@ -10,7 +10,7 @@ import type { RecordingSettings } from '@/src/recording/settings';
 import { NOTIFY, useRun } from '../notify';
 
 /** Learning diagnosis: which sites record the questions you send, and what was recorded. */
-const props = defineProps<{ asks: Ask[]; recording: RecordingSettings }>();
+const props = defineProps<{ asks: Ask[]; recording: RecordingSettings; analysis: { pending: number; lastError?: string }; configured: boolean }>();
 const notify = inject(NOTIFY)!;
 const run = useRun();
 
@@ -67,6 +67,13 @@ async function exportAsks() {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+const analyzing = ref(false);
+async function analyzeNow() {
+  analyzing.value = true;
+  await run(() => sendMessage('analysis/run', {}));
+  analyzing.value = false;
+}
+
 async function exclude(ask: Ask) {
   const ok = await run(() => sendMessage('asks/exclude', { conversationUrl: ask.conversationUrl }));
   if (ok) notify(i18n.t('learn.excluded'));
@@ -88,6 +95,16 @@ async function exclude(ask: Ask) {
         {{ recording.paused ? i18n.t('learn.resume') : i18n.t('learn.pause') }}
       </button>
       <span class="muted" data-testid="recording-state">{{ recording.paused ? i18n.t('learn.paused') : i18n.t('learn.recording') }}</span>
+    </div>
+
+    <div v-if="analysis.pending || analysis.lastError" class="analysis">
+      <p v-if="analysis.lastError" class="error" data-testid="analysis-error">{{ i18n.t('learn.analysisFailed', [analysis.lastError]) }}</p>
+      <div v-if="analysis.pending" class="row-actions">
+        <span class="muted" data-testid="analysis-pending">{{ i18n.t('learn.pending', analysis.pending) }}</span>
+        <button v-if="configured" type="button" data-testid="analyze-now" :disabled="analyzing" @click="analyzeNow">
+          {{ analyzing ? i18n.t('learn.analyzing') : i18n.t('learn.analyzeNow') }}
+        </button>
+      </div>
     </div>
 
     <h2>{{ i18n.t('learn.asksTitle', asks.length) }}</h2>

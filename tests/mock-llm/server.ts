@@ -35,6 +35,52 @@ function between(text: string, start: string, end = '\n'): string {
   return (stop < 0 ? rest : rest.slice(0, stop)).trim();
 }
 
+/**
+ * What the mock "knows" about prerequisites, per domain, and which words in a
+ * question point to which concept. Enough structure for diagnosis tests:
+ * transpose, multiplication order and trace all rest on "Matrix operation rules".
+ */
+const MOCK_GRAPH: Record<string, [string, string][]> = {
+  'Linear algebra': [
+    ['Matrix basics', 'Matrix operation rules'],
+    ['Matrix operation rules', 'Transpose properties'],
+    ['Matrix operation rules', 'Matrix multiplication order'],
+    ['Matrix operation rules', 'Trace properties'],
+  ],
+  'Matrix calculus': [
+    ['Derivative basics', 'Layout conventions'],
+    ['Layout conventions', 'Matrix derivatives'],
+  ],
+};
+const MOCK_TAGS: [RegExp, string, string][] = [
+  [/transpose|转置/i, 'Linear algebra', 'Transpose properties'],
+  [/multipl|乘法/i, 'Linear algebra', 'Matrix multiplication order'],
+  [/trace|迹/i, 'Linear algebra', 'Trace properties'],
+  [/derivative|gradient|求导|梯度/i, 'Matrix calculus', 'Matrix derivatives'],
+  [/layout|布局/i, 'Matrix calculus', 'Layout conventions'],
+];
+
+function tagReply(user: string): string {
+  const tags = [...user.matchAll(/^\[(\d+)\] (.*)$/gm)].map(([, n, text]) => {
+    const hits = MOCK_TAGS.filter(([re]) => re.test(text!));
+    return { ask: Number(n), domain: hits[0]?.[1] ?? '', concepts: [...new Set(hits.filter((h) => h[1] === hits[0]![1]).map((h) => h[2]))] };
+  });
+  return JSON.stringify({ tags });
+}
+
+function prereqReply(user: string): string {
+  const domain = between(user, 'Domain:');
+  const existing = new Set(between(user, 'Existing concepts:').split('; ').filter(Boolean));
+  const required = between(user, 'Required concepts:').split('; ').filter(Boolean);
+  const graph = MOCK_GRAPH[domain] ?? [];
+  const names = [...new Set([...graph.flat(), ...required])];
+  const concepts = names.filter((n) => !existing.has(n));
+  // Unknown required concepts hang under the domain's first concept.
+  const extra = required.filter((r) => !graph.flat().includes(r) && graph.length).map((r) => [graph[0]![0], r] as [string, string]);
+  const edges = [...graph, ...extra].map(([from, to]) => ({ from, to }));
+  return JSON.stringify({ concepts, edges: existing.size ? edges.filter((e) => concepts.includes(e.to)) : edges });
+}
+
 function chatReply(task: string, user: string): string {
   switch (task) {
     case 'ping':
@@ -85,6 +131,10 @@ function chatReply(task: string, user: string): string {
     }
     case 'oneMinute':
       return `In one minute: ${between(user, 'Topic:')} comes down to ${user.match(/^- /gm)?.length ?? 0} points.`;
+    case 'tag':
+      return tagReply(user);
+    case 'prereq':
+      return prereqReply(user);
     case 'organize': {
       // One card per substantial paragraph, quoting its first sentence verbatim.
       const cards = user

@@ -1,5 +1,5 @@
 import Dexie, { type EntityTable, type Table } from 'dexie';
-import type { Ask, Edge, Embedding, InboxItem, KNode, OpLogEntry, Preference, Review, Source } from './types';
+import type { Ask, AskTag, Concept, Edge, Embedding, InboxItem, KNode, OpLogEntry, PrereqEdge, Preference, Review, Source } from './types';
 
 export class Chat2KnowDB extends Dexie {
   nodes!: EntityTable<KNode, 'id'>;
@@ -11,6 +11,9 @@ export class Chat2KnowDB extends Dexie {
   inbox!: EntityTable<InboxItem, 'id'>;
   preferences!: EntityTable<Preference, 'id'>;
   asks!: EntityTable<Ask, 'id'>;
+  askTags!: EntityTable<AskTag, 'id'>;
+  concepts!: EntityTable<Concept, 'id'>;
+  prereqEdges!: EntityTable<PrereqEdge, 'id'>;
 
   constructor(name = 'chat2know') {
     super(name);
@@ -39,7 +42,13 @@ export class Chat2KnowDB extends Dexie {
       );
     // v3: inbox items link back to their question node; reviews are read by time for stats.
     this.version(3).stores({ inbox: 'id, questionNodeId, createdAt, expiresAt', reviews: 'id, nodeId, dueAt, createdAt' });
-    // v4: learning diagnosis. Recorded questions (local only, not logged).
-    this.version(4).stores({ asks: 'id, sentAt, conversationUrl' });
+    // v4: learning diagnosis, local only and not logged: recorded questions, their concept
+    // tags, and the prerequisite graph of concepts.
+    this.version(4).stores({
+      asks: 'id, sentAt, conversationUrl',
+      askTags: 'id, askId, conceptId',
+      concepts: 'id, domain',
+      prereqEdges: 'id, from, to',
+    });
   }
 }

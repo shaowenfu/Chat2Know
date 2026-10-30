@@ -4,10 +4,11 @@ import { monotonicFactory } from 'ulid';
 import type { CapturedSelection } from '@/src/capture/selection';
 import { Hlc } from './hlc';
 import type { Chat2KnowDB } from './schema';
-import type { Ask, Edge, EdgeKind, Embedding, Entity, InboxItem, KNode, Mastery, NodeView, OpLogEntry, Preference, QuizItem, Review, ReviewMode, Source, Verdict } from './types';
+import type { Ask, AskTag, Concept, Edge, EdgeKind, Embedding, Entity, InboxItem, KNode, Mastery, NodeView, OpLogEntry, Preference, PrereqEdge, QuizItem, Review, ReviewMode, Source, Verdict } from './types';
 import { DAY_MS, isDue, nextInterval, quizMode } from '@/src/review/schedule';
 import type { TextQuote } from '@/src/capture/text-quote';
 import { titleFromMarkdown } from './title';
+import { conceptKey } from '@/src/graph/prereq';
 
 export const EXPORT_FORMAT = 'chat2know';
 export const EXPORT_VERSION = 1;
@@ -226,16 +227,81 @@ export class Repository {
     return this.db.asks.orderBy('sentAt').reverse().toArray();
   }
 
+  /** Deleting a question also deletes what was inferred from it. */
+  private async deleteAsks(ids: string[]): Promise<void> {
+    await this.db.transaction('rw', this.db.asks, this.db.askTags, async () => {
+      await this.db.askTags.where('askId').anyOf(ids).delete();
+      await this.db.asks.bulkDelete(ids);
+    });
+  }
+
   async deleteAsk(id: string): Promise<void> {
-    await this.db.asks.delete(id);
+    await this.deleteAsks([id]);
   }
 
   async clearAsks(): Promise<void> {
-    await this.db.asks.clear();
+    await this.deleteAsks(await this.db.asks.toCollection().primaryKeys());
   }
 
   async deleteConversationAsks(conversationUrl: string): Promise<void> {
-    await this.db.asks.where('conversationUrl').equals(stripHash(conversationUrl)).delete();
+    await this.deleteAsks(await this.db.asks.where('conversationUrl').equals(stripHash(conversationUrl)).primaryKeys());
+  }
+
+  /** Questions concept tagging has not looked at yet, oldest first. */
+  async untaggedAsks(): Promise<Ask[]> {
+    return (await this.db.asks.orderBy('sentAt').toArray()).filter((a) => a.taggedAt === undefined);
+  }
+
+  async listAskTags(): Promise<AskTag[]> {
+    return this.db.askTags.toArray();
+  }
+
+  /** Records which concepts each question is about, and that it was looked at. */
+  async saveTags(tags: { askId: string; conceptIds: string[] }[]): Promise<void> {
+    const at = this.now();
+    await this.db.transaction('rw', this.db.asks, this.db.askTags, async () => {
+      for (const { askId, conceptIds } of tags) {
+        await this.db.askTags.bulkAdd([...new Set(conceptIds)].map((conceptId) => ({ id: this.ulid(at), askId, conceptId })));
+        await this.db.asks.update(askId, { taggedAt: at });
+      }
+    });
+  }
+
+  // ------------------------------------------------------------ prerequisite graph (local only, not logged)
+
+  async listConcepts(): Promise<Concept[]> {
+    return this.db.concepts.toArray();
+  }
+
+  async listPrereqEdges(): Promise<PrereqEdge[]> {
+    return this.db.prereqEdges.toArray();
+  }
+
+  /**
+   * Adds concepts and prerequisite edges, by name, to a domain's graph. Names
+   * already in the domain are reused; edges already there are skipped.
+   */
+  async addToGraph(domain: string, names: string[], edges: { from: string; to: string }[]): Promise<void> {
+    await this.db.transaction('rw', this.db.concepts, this.db.prereqEdges, async () => {
+      const at = this.now();
+      const inDomain = (await this.db.concepts.toArray()).filter((c) => conceptKey(c.domain) === conceptKey(domain));
+      const byKey = new Map(inDomain.map((c) => [conceptKey(c.name), c]));
+      const domainName = inDomain[0]?.domain ?? domain.trim();
+      for (const name of [...names, ...edges.flatMap((e) => [e.from, e.to])]) {
+        if (byKey.has(conceptKey(name))) continue;
+        const concept: Concept = { id: this.ulid(at), domain: domainName, name: name.trim(), createdAt: at };
+        await this.db.concepts.add(concept);
+        byKey.set(conceptKey(name), concept);
+      }
+      const existing = new Set((await this.db.prereqEdges.toArray()).map((e) => `${e.from}>${e.to}`));
+      for (const e of edges) {
+        const from = byKey.get(conceptKey(e.from))!.id;
+        const to = byKey.get(conceptKey(e.to))!.id;
+        if (existing.has(`${from}>${to}`)) continue;
+        existing.add(`${from}>${to}`);
+        await this.db.prereqEdges.add({ id: this.ulid(at), from, to });
+      }
+    });
   }
 
   // ------------------------------------------------------------ embeddings (cache, not logged)

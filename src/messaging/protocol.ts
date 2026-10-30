@@ -99,6 +99,10 @@ export interface MessageMap {
   /** Stop recording a conversation and delete what was recorded in it. */
   'asks/exclude': { req: { conversationUrl: string }; res: RecordingSettings };
   'asks/export': { req: Record<string, never>; res: string };
+  /** Questions waiting for analysis and the last background failure. */
+  'analysis/get': { req: Record<string, never>; res: { pending: number; lastError?: string } };
+  /** Analyze now: tag every waiting question. Errors go to the caller. */
+  'analysis/run': { req: Record<string, never>; res: null };
 
   // Background -> content script
   'content/capture': { req: Record<string, never>; res: CapturedSelection | null };

@@ -181,6 +181,12 @@ error:
   exportVersion: "不支持的导出版本：$1"
   invalidExport: "导出文件中的\"$1\"无效"
 learn:
+  pending:
+    1: 1 条提问等待分析
+    n: $1 条提问等待分析
+  analyzeNow: 立即分析
+  analyzing: 正在分析…
+  analysisFailed: "上次分析失败：$1"
   tab: 学习诊断
   privacy: "勾选网站后才会开启。你在这些网站上发出的提问只保存在本浏览器里。为了找出值得系统回顾的地方，Chat2Know 之后会把提问分批发送给你配置的模型服务商。你可以随时暂停、排除某段对话或删除任何记录。"
   sites: 记录我在这些网站上的提问

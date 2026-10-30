@@ -181,6 +181,12 @@ error:
   exportVersion: "Unsupported export version: $1"
   invalidExport: "Invalid \"$1\" in export file"
 learn:
+  pending:
+    1: 1 question waiting for analysis
+    n: $1 questions waiting for analysis
+  analyzeNow: Analyze now
+  analyzing: Analyzing…
+  analysisFailed: "Last analysis failed: $1"
   tab: Learning
   privacy: "Off until you tick a site. The questions you send there are kept only in this browser. To find what is worth reviewing, Chat2Know later sends them in batches to the model provider you set up. You can pause, exclude a conversation, or delete anything."
   sites: Record the questions I send on
