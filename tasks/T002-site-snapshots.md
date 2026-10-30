@@ -64,7 +64,7 @@ Saved pages contain live session tokens and keys (the 2026-10-30 ChatGPT page ca
 CHAT2KNOW_REDACT='your name|your handle' npm run sanitize -- tests/fixtures/pages/*.html tests/fixtures/sites/*.html
 ```
 
-It removes all `<script>` blocks (except formula scripts), token meta tags, API keys, JWTs, account/user ids, avatar URLs, emails, and the names you list. Then search the files yourself for your name and email once more. `npm run check` fails if anything is left (unit test `fixtures-clean`).
+It removes all `<script>` blocks (except formula scripts), token meta tags, API keys, JWTs, account/user ids, avatar URLs, emails, and the names you list. Then search the files yourself for your name and email once more. `npm run check` fails if anything is left (unit test `fixtures-clean`), and after `npm install` a pre-commit hook refuses to commit an unsanitized page under `tests/`.
 
 ### 4. Generate expected output (can be a local agent)
 Run `npx vitest run tests/unit/fixtures.test.ts -u`. This writes `tests/fixtures/expected/<name>.md` for each new page. Commit them as generated; do **not** edit them by hand. The main engineer reviews them and fixes the converter where the output is wrong.
@@ -77,12 +77,12 @@ Run `npx vitest run tests/unit/fixtures.test.ts -u`. This writes `tests/fixtures
 
 ## Acceptance criteria
 - [x] arXiv and a blog (Zhihu) page.
-- [ ] Conversation pages for all 6 chat sites, saved with `copy(document.documentElement.outerHTML)` so the conversation is included.
-- [ ] Each chat page contains at least one formula, one code block and one table.
+- [ ] Conversation pages for all 6 chat sites, saved with `copy(document.documentElement.outerHTML)` so the conversation is included. (5 of 6 done 2026-10-30; Kimi missing.)
+- [x] Each chat page contains at least one formula, one code block and one table.
 - [x] Element samples for all 6 chat sites (from Notion, turned into `tests/fixtures/sites/<site>-elements.html` and checked by `tests/unit/sites.test.ts`).
-- [ ] Missing samples listed in `tests/fixtures/sites/README.md` (ChatGPT/Claude send button, Doubao user message with a stable ancestor, one DeepSeek answer).
-- [ ] `npm run sanitize -- --check` passes and no name or email remains (checked by hand).
-- [ ] Files under 3 MB each (strip large inline `<style>`/`<svg>` blobs if needed).
+- [ ] Missing samples listed in `tests/fixtures/sites/README.md` (ChatGPT/Claude send button and Doubao user message done 2026-10-30; one DeepSeek answer left).
+- [x] `npm run sanitize -- --check` passes and no name or email remains (checked by hand).
+- [x] Files under 3 MB each (strip large inline `<style>`/`<svg>` blobs if needed).
 - [ ] `npm run check` passes. Expected outputs may show conversion problems; that is fine, they are the point.
 
 ## Do not

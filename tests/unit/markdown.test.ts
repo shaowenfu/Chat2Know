@@ -58,4 +58,35 @@ describe('htmlToMarkdown', () => {
       '-   one\n-   [two](https://x.dev)',
     );
   });
+
+  // Markup below is copied from real pages saved on 2026-10-30.
+  it('reads LaTeX from a data-math wrapper whose KaTeX annotation is empty (Gemini)', () => {
+    const html =
+      '<td><span class="math-inline" data-math="(0, 1)"><span class="katex"><span class="katex-mathml"></span><span class="katex-html" aria-hidden="true"><span class="mopen">(</span><span class="mord">0</span></span></span></span> 之间的概率值</td>';
+    expect(htmlToMarkdown(`<p>${html}</p>`)).toBe('$(0, 1)$ 之间的概率值');
+  });
+
+  it('reads LaTeX from copy-text, stripping \\( \\), even when the formula is an SVG (Doubao)', () => {
+    expect(htmlToMarkdown('<p>容易溢出（<span class="container-FpXcrl math-inline" copy-text="\\(e^{大数字}\\)"><svg></svg></span> 爆炸）</p>')).toBe(
+      '容易溢出（$e^{大数字}$ 爆炸）',
+    );
+  });
+
+  it('reads display LaTeX from data-math-source (ChatGPT)', () => {
+    const html = `<span class="Display-XTzqIm" data-math-display="true" data-math-source="e^{1000}\\rightarrow\\text{数值溢出}"><span class="katex-display">${katexInline('ignored')}</span></span>`;
+    expect(htmlToMarkdown(html)).toBe('$$\ne^{1000}\\rightarrow\\text{数值溢出}\n$$');
+  });
+
+  it('converts a code block that is not a <pre>, keeping line breaks and the header language (ChatGPT)', () => {
+    const block = (label: string) =>
+      `<div data-code-block="true" data-markdown-copy="code-block"><div data-markdown-copy="exclude" contenteditable="false"><svg></svg><div class="min-w-0 flex-1 truncate">${label}</div><div><button>Copy</button></div></div><div><div><code class="whitespace-pre! block CodeContent-ybJ8Tl"><span>def f(x):\n    return x</span></code></div></div></div>`;
+    expect(htmlToMarkdown(block('Python'))).toBe('```python\ndef f(x):\n    return x\n```');
+    expect(htmlToMarkdown(block('Plain text'))).toBe('```\ndef f(x):\n    return x\n```');
+  });
+
+  it('takes the language from a header above the <pre> (DeepSeek, Gemini)', () => {
+    const html =
+      '<div class="md-code-block"><div class="md-code-block-banner"><span class="d813de27">python</span><div role="button"><span class="code-info-button-text">Copy</span></div><div role="button"><span class="code-info-button-text">Download</span></div></div><pre><span>import numpy as np</span>\n<span>x = 1</span></pre></div>';
+    expect(htmlToMarkdown(html)).toBe('```python\nimport numpy as np\nx = 1\n```');
+  });
 });

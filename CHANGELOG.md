@@ -25,6 +25,10 @@ All notable changes to this project are documented here. Format follows [Keep a 
 
 ### Fixed
 
+- Capture on real chat sites (checked against ChatGPT, Claude, Gemini, DeepSeek and Doubao pages saved 2026-10):
+  - Formulas keep their LaTeX when the site stores it in an attribute (`data-math-source`, `data-math`, `copy-text`), including formulas drawn as SVG.
+  - ChatGPT code blocks keep their line breaks and language.
+  - Code block languages shown in a header bar are kept on the fence, and the header's "Copy" / "Download" / "Run" labels no longer leak into the text.
 - The selection toolbar now really hides (it stayed on screen with stale content), and a status message no longer hides the next toolbar.
 
 - Ask later (M1, no AI, no network):

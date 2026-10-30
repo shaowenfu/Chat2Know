@@ -1,4 +1,4 @@
-import { htmlToMarkdown } from './markdown';
+import { TEX_SOURCE, headerLanguage, htmlToMarkdown } from './markdown';
 import { buildTextIndex, quoteFromRange, type TextQuote } from './text-quote';
 
 export interface CapturedSelection {
@@ -9,7 +9,7 @@ export interface CapturedSelection {
 }
 
 // Elements that must be captured whole: a partial clone loses the LaTeX source or the code language.
-const ATOMIC = '.katex-display, .katex, mjx-container, math, pre';
+const ATOMIC = `.katex-display, .katex, mjx-container, math, pre, [data-code-block], ${TEX_SOURCE}`;
 
 function closestEl(node: Node, selector: string): Element | null {
   const el = node.nodeType === Node.ELEMENT_NODE ? (node as Element) : node.parentElement;
@@ -38,6 +38,12 @@ export function captureRange(range: Range, doc: Document, url: string): Captured
   if (!quote) return null;
   const container = doc.createElement('div');
   container.appendChild(expanded.cloneContents());
+  // A cloned <pre> loses the header above it that names its language; carry the name over.
+  const pres = Array.from(doc.querySelectorAll('pre')).filter((p) => expanded.intersectsNode(p));
+  container.querySelectorAll('pre').forEach((clone, i) => {
+    const lang = pres[i] && headerLanguage(pres[i]);
+    if (lang && !clone.hasAttribute('data-language')) clone.setAttribute('data-language', lang);
+  });
   const markdown = htmlToMarkdown(container) || quote.exact;
   return { markdown, quote, url, pageTitle: doc.title };
 }

@@ -2,42 +2,6 @@
 
 [](https://www.zhihu.com)
 
-[
-
-关注
-
-](https://www.zhihu.com/signin?next=%2Ffollow)[
-
-推荐
-
-](https://www.zhihu.com/signin?next=%2F)[
-
-热榜
-
-](https://www.zhihu.com/signin?next=%2Fhot)[
-
-专栏
-
-](https://www.zhihu.com/signin?next=%2Fcolumn-square)[
-
-圈子
-
-](https://www.zhihu.com/signin?next=%2Fring-feeds)
-
-[
-
-AI Works
-
-Beta
-
-
-
-](https://www.zhihu.com/project-square)[
-
-故事
-
-](https://www.zhihu.com/fiore/h5/vip-web)
-
 [直答](https://zhida.zhihu.com/)
 
 切换模式

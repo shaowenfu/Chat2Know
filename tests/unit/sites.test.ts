@@ -13,7 +13,7 @@ const EXPECTED: Record<string, { input: string; message: string }> = {
   gemini: { input: '我知道了', message: '用公式、Python 代码和对比表格解释 softmax' },
   deepseek: { input: '为什么不可对角化', message: '为什么不可对角化，怎么理解' },
   kimi: { input: '我知道了', message: '用公式、Python 代码和对比表格解释 softmax' },
-  doubao: { input: '帮我解释一下 softmax', message: '' },
+  doubao: { input: '帮我解释一下 softmax', message: '用公式、Python 代码和对比表格解释 softmax' },
 };
 
 function load(id: string): Document {

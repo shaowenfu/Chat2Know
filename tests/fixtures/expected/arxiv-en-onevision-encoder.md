@@ -2,8 +2,6 @@
 
 [](https://arxiv.org/IgnoreMe) [![archive](https://static.arxiv.org/static/design-system/latest/logos/arxiv-logo.svg)](https://arxiv.org/)[Search](https://arxiv.org/search)
 
-[Submit](https://arxiv.org/submit) [Donate](https://info.arxiv.org/about/donate.html) [Log in](https://arxiv.org/login)
-
 Search arXiv   
 
 Press Enter to search · [Advanced search](https://arxiv.org/search/advanced)
@@ -179,8 +177,6 @@ Have an idea for a project that will add value for arXiv's community? [**Learn m
 [Which authors of this paper are endorsers?](/auth/show-endorsers/2602.08683) | [Disable MathJax](javascript:setMathjaxCookie\(\)) ([What is MathJax?](https://info.arxiv.org/help/mathjax.html))
 
 We gratefully acknowledge support from our **major funders**, [**member institutions**](https://info.arxiv.org/about/ourmembers.html), , and all contributors.
-
-[About](https://info.arxiv.org/about) · [Help](https://info.arxiv.org/help) · [Contact](https://info.arxiv.org/help/contact.html) · [Subscribe](https://info.arxiv.org/help/subscribe.html) · [Copyright](https://info.arxiv.org/help/license/index.html) · [Privacy](https://info.arxiv.org/help/policies/privacy_policy.html) · [Accessibility](https://info.arxiv.org/help/web_accessibility.html) · [Operational Status (opens in new tab)](https://status.arxiv.org/)
 
 Major funding support from
 

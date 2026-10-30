@@ -12,6 +12,8 @@
  * - drops every <script> element except MathJax `type="math/tex..."` (inline app state is
  *   where session tokens and API keys live; page structure does not need it)
  * - drops <meta> tags that carry tokens (csrf, nonce, verification)
+ * - drops sidebars (<nav>, <aside>) and links to other conversations (site paths with long ids),
+ *   which carry the user's chat titles and project names
  * - redacts Google API keys, JWTs, OpenAI-style keys, bearer tokens, account/user ids,
  *   profile photo URLs and email addresses
  */
@@ -20,13 +22,17 @@ import { readFileSync, writeFileSync } from 'node:fs';
 const RULES = [
   [/<script\b(?![^>]*type=["']?math\/tex)[^>]*>[\s\S]*?<\/script>/gi, ''],
   [/<meta\b[^>]*(?:csrf|token|nonce|verification)[^>]*>/gi, ''],
+  // Sidebars hold the user's other conversation titles and project names.
+  [/<(nav|aside)\b[\s\S]*?<\/\1>/gi, ''],
+  [/<a\b[^>]*href="\/(?!\/)[^"]*[0-9a-f-]{16,}[^"]*"[^>]*>[\s\S]*?<\/a>/gi, ''],
   [/AIza[0-9A-Za-z_-]{35}/g, 'REDACTED_GOOGLE_API_KEY'],
   [/eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/g, 'REDACTED_JWT'],
   [/\bsk-(?:proj-|ant-)?[A-Za-z0-9]{20,}/g, 'REDACTED_SECRET_KEY'],
   [/\b[Bb]earer\s+[A-Za-z0-9._~+/-]{16,}=*/g, 'Bearer REDACTED'],
   [/\b((?:data-)?(?:account|user|org|organization|workspace)[-_]?id=["'])[^"']+/gi, '$1REDACTED'],
   [/\buser-[A-Za-z0-9]{20,}/g, 'user-REDACTED'],
-  [/https?:\/\/lh3\.googleusercontent\.com\/a[^"' )]*/g, 'https://example.com/avatar.png'],
+  [/https?:\/\/lh3\.google(?:usercontent)?\.com\/(?:a|u)\/[^"' )]*/g, 'https://example.com/avatar.png'],
+  [/https?:\/\/[^"' )]*avatar[^"' )]*/gi, 'https://example.com/avatar.png'],
   [/[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}/g, 'redacted@example.com'],
 ];
 

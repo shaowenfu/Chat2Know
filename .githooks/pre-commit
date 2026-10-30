@@ -1,0 +1,4 @@
+#!/bin/sh
+# Blocks committing saved pages that still hold secrets or personal data.
+# Fix with: npm run sanitize -- <file>   (enabled by `npm install`, see "prepare" in package.json)
+git diff --cached --name-only --diff-filter=ACMR -z -- ':(glob)tests/**/*.html' | xargs -0 -r node scripts/sanitize-pages.mjs --check

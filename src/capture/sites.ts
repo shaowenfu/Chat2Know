@@ -30,18 +30,19 @@ export const SITES: SiteConfig[] = [
     name: 'ChatGPT',
     hosts: ['chatgpt.com', 'chat.openai.com'],
     input: '#prompt-textarea, div.ProseMirror[contenteditable="true"]',
-    send: '#composer-submit-button, button[data-testid="send-button"]',
+    // The composer's only submit button; bg-composer-primary is a design token, not a hash.
+    send: 'button[type="submit"].bg-composer-primary',
     userMessage: '[data-user-message-bubble="true"]',
-    unverified: ['send'],
+    unverified: [],
   },
   {
     id: 'claude',
     name: 'Claude',
     hosts: ['claude.ai'],
     input: '[data-testid="chat-input"]',
-    send: 'button[aria-label="Send message"], button[aria-label="Send Message"]',
+    send: 'button[data-testid="chat-input-send"]',
     userMessage: '[data-testid="user-message"]',
-    unverified: ['send'],
+    unverified: [],
   },
   {
     id: 'gemini',
@@ -80,9 +81,9 @@ export const SITES: SiteConfig[] = [
     hosts: ['www.doubao.com', 'doubao.com'],
     input: 'div.ProseMirror[contenteditable="true"]',
     send: '[data-testid="chat_input_send_button"]',
-    // The sample only had hashed class names; this hook is a guess until a larger sample arrives.
-    userMessage: '[data-testid="send_message"]',
-    unverified: ['userMessage'],
+    userMessage: '[data-testid="send_message"][data-message-role="user"]',
+    userMessageText: '[data-testid="message_text_content"]',
+    unverified: [],
   },
 ];
 
