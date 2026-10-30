@@ -4,7 +4,7 @@ import { monotonicFactory } from 'ulid';
 import type { CapturedSelection } from '@/src/capture/selection';
 import { Hlc } from './hlc';
 import type { Chat2KnowDB } from './schema';
-import type { Ask, AskTag, Concept, Edge, EdgeKind, Embedding, Entity, InboxItem, KNode, Mastery, NodeView, OpLogEntry, Preference, PrereqEdge, QuizItem, Review, ReviewMode, Source, Verdict } from './types';
+import type { Ask, AskTag, Concept, Diagnosis, Edge, EdgeKind, Embedding, Entity, InboxItem, KNode, Mastery, NodeView, OpLogEntry, Preference, PrereqEdge, QuizItem, Review, ReviewMode, Source, Verdict } from './types';
 import { DAY_MS, isDue, nextInterval, quizMode } from '@/src/review/schedule';
 import type { TextQuote } from '@/src/capture/text-quote';
 import { titleFromMarkdown } from './title';
@@ -283,6 +283,19 @@ export class Repository {
         await this.db.asks.update(askId, { taggedAt: at });
       }
     });
+  }
+
+  // ------------------------------------------------------------ diagnoses (local only, not logged)
+
+  async listDiagnoses(): Promise<Diagnosis[]> {
+    return this.db.diagnoses.orderBy('createdAt').reverse().toArray();
+  }
+
+  async addDiagnoses(list: Omit<Diagnosis, 'id' | 'createdAt' | 'status'>[]): Promise<Diagnosis[]> {
+    const at = this.now();
+    const rows: Diagnosis[] = list.map((d) => ({ ...d, id: this.ulid(at), status: 'suspected', createdAt: at }));
+    await this.db.diagnoses.bulkAdd(rows);
+    return rows;
   }
 
   // ------------------------------------------------------------ prerequisite graph (local only, not logged)

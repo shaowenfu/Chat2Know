@@ -135,6 +135,8 @@ function chatReply(task: string, user: string): string {
       return tagReply(user);
     case 'prereq':
       return prereqReply(user);
+    case 'circling':
+      return JSON.stringify(/derivative|求导|dimension|维度/i.test(user) ? { domain: 'Matrix calculus', concept: 'Layout conventions' } : { domain: '', concept: '' });
     case 'organize': {
       // One card per substantial paragraph, quoting its first sentence verbatim.
       const cards = user

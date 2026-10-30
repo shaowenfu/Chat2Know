@@ -80,7 +80,7 @@ check `git log`, and continue from the first unchecked box.
 ## D3: signals and root cause
 
 - [x] D3.1 Signal detection (repeat, downshift, circling) as pure functions over asks, tags and the graph; ask vectors cached on the ask; unit tests.
-- [ ] D3.2 Root-cause ranking, circling model call, diagnosis creation with dedupe, cool-down and cap; synthetic sequences with known roots, top-3 rate recorded as a baseline test.
+- [x] D3.2 Root-cause ranking, circling model call, diagnosis creation with dedupe, cool-down and cap; synthetic sequences with known roots, top-3 rate recorded as a baseline test.
 
 ## D4: confirmation and presentation
 
@@ -106,3 +106,4 @@ Short notes on deviations and why, newest last.
 - D2.1: Dropped `askTags.confidence` and `prereqEdges.source` / `concepts.source` and `level` (nothing reads them; level is derived from the graph). Domains and concept names match case-insensitively. A tagging batch makes one tag call plus one graph call per domain with new concepts; the merged graph is checked for cycles before saving. Unit tests use the mock server in a node environment (happy-dom fetch has CORS).
 - D2.2: Shared vector helpers moved from placement into `src/services/vectors.ts` (`cosine`, `nodeVectors`, `embedAll`). Linking compares a concept name with a card's title + statement; the 0.85 threshold is a constant to tune with a real embedding model.
 - D3.1: Signals live in `src/graph/signals.ts` (pure) with `cosine` moved to `src/graph/cosine.ts`. Circling is reported as runs of questions (no concept needed); repeat and downshift as symptoms per concept. Question vectors are stored on the ask with their model and stripped from list views and the questions export.
+- D3.2: Synthetic baseline (`tests/unit/rootcause.test.ts`, 6 histories): known root ranked first in all (top-1 1.0, top-3 1.0). Found while testing: after a root was dismissed, its prerequisite explaining the same symptoms was diagnosed in its place; a candidate whose symptoms are all explained by a blocked root (open or cooling down) is now skipped. Evidence of a dismissed diagnosis is never reused. Open diagnoses are not extended with new evidence.

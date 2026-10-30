@@ -143,7 +143,7 @@ function runAnalysis(): Promise<void> {
   analysis ??= (async () => {
     try {
       const settings = await loadSettings();
-      await analyze(await repo(), new LlmClient(settings), settings.embeddingModel);
+      await analyze(await repo(), new LlmClient(settings), settings.embeddingModel, Date.now());
       await saveAnalysis({});
     } catch (err) {
       await saveAnalysis({ lastError: errorText(err) });

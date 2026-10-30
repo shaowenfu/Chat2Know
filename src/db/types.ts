@@ -126,6 +126,24 @@ export interface PrereqEdge {
   to: string;
 }
 
+export type DiagnosisStatus = 'suspected' | 'confirmed' | 'dismissed';
+
+/**
+ * A hypothesis about a gap in the learner's foundations, from their own questions.
+ * Suspected until the learner takes the quiz or decides; "remediated" is derived
+ * (confirmed, and the concept's card later passed a check).
+ */
+export interface Diagnosis {
+  id: string;
+  rootConceptId: string;
+  signals: { kind: 'repeat' | 'downshift' | 'circling'; count: number }[];
+  evidenceAskIds: string[];
+  status: DiagnosisStatus;
+  feedback?: 'accurate' | 'inaccurate';
+  createdAt: number;
+  decidedAt?: number; // when it was confirmed or dismissed
+}
+
 /** A recorded question is about this concept. */
 export interface AskTag {
   id: string;

@@ -290,6 +290,25 @@ export function parseGraphAddition(value: unknown, existing: string[], required:
   return { concepts, edges };
 }
 
+// ---------------------------------------------------------------- circling: the concept behind a run of questions
+
+export function circlingPrompt(input: { asks: string[]; known: { domain: string; names: string[] }[] }): ChatMessage[] {
+  const known = input.known.length ? input.known.map((d) => `${d.domain}: ${d.names.join('; ')}`).join('\n') : '(none yet)';
+  return [
+    system(
+      'circling',
+      `A learner asked these questions one after another in one conversation, rephrasing without getting unstuck. Answered one by one each looks fine; looked at together they may share one more fundamental concept which, once understood, resolves all of them (for example, layout conventions behind confusion about transposes and dimensions in matrix derivatives). Name that concept as a teachable unit, with its domain; reuse a known name exactly when it fits. If there is no single underlying concept, return an empty concept. Return JSON only: {"domain": "...", "concept": "..."}. Names in the language of the questions.\n\nKnown concepts by domain:\n${known}`,
+    ),
+    { role: 'user', content: input.asks.map((a, i) => `[${i + 1}] ${a}`).join('\n') },
+  ];
+}
+
+export function parseCircling(value: unknown): { domain: string; concept: string } | null {
+  const o = obj(value);
+  if (typeof o.concept === 'string' && !o.concept.trim()) return null;
+  return { domain: str(o, 'domain'), concept: str(o, 'concept') };
+}
+
 // ---------------------------------------------------------------- organize (whole page / paste)
 
 export interface CandidateCard {

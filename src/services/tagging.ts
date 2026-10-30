@@ -1,6 +1,7 @@
 import { LlmError, type LlmClient } from '@/src/llm/client';
 import { parseGraphAddition, parseTags, prereqPrompt, tagPrompt } from '@/src/llm/prompts';
 import type { Repository } from '@/src/db/repository';
+import type { Concept } from '@/src/db/types';
 import { conceptKey, hasCycle } from '@/src/graph/prereq';
 
 /** Questions per tagging call. */
@@ -14,13 +15,7 @@ export const TAG_BATCH = 30;
 export async function tagBatch(repo: Repository, client: LlmClient): Promise<number> {
   const asks = (await repo.untaggedAsks()).slice(0, TAG_BATCH);
   if (!asks.length) return 0;
-  const concepts = await repo.listConcepts();
-  const domains = new Map<string, { domain: string; names: string[] }>();
-  for (const c of concepts) {
-    const d = domains.get(conceptKey(c.domain)) ?? { domain: c.domain, names: [] };
-    d.names.push(c.name);
-    domains.set(conceptKey(c.domain), d);
-  }
+  const domains = knownConcepts(await repo.listConcepts());
   const tags = await client.json(tagPrompt({ asks: asks.map((a) => a.text), known: [...domains.values()] }), (v) => parseTags(v, asks.length));
 
   const missing = new Map<string, { domain: string; names: Map<string, string> }>();
@@ -41,8 +36,19 @@ export async function tagBatch(repo: Repository, client: LlmClient): Promise<num
   return asks.length;
 }
 
+/** Concept names grouped by domain, as prompts list them. */
+export function knownConcepts(concepts: Concept[]): Map<string, { domain: string; names: string[] }> {
+  const domains = new Map<string, { domain: string; names: string[] }>();
+  for (const c of concepts) {
+    const d = domains.get(conceptKey(c.domain)) ?? { domain: c.domain, names: [] };
+    d.names.push(c.name);
+    domains.set(conceptKey(c.domain), d);
+  }
+  return domains;
+}
+
 /** Generates a new domain's graph, or extends a known one, so that it contains `required`. */
-async function growGraph(repo: Repository, client: LlmClient, domain: string, required: string[]): Promise<void> {
+export async function growGraph(repo: Repository, client: LlmClient, domain: string, required: string[]): Promise<void> {
   const concepts = (await repo.listConcepts()).filter((c) => conceptKey(c.domain) === conceptKey(domain));
   const names = new Map(concepts.map((c) => [c.id, c.name]));
   const existingEdges = (await repo.listPrereqEdges()).filter((e) => names.has(e.to)).map((e) => ({ from: names.get(e.from)!, to: names.get(e.to)! }));
