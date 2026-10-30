@@ -79,7 +79,8 @@ Run `npx vitest run tests/unit/fixtures.test.ts -u`. This writes `tests/fixtures
 - [x] arXiv and a blog (Zhihu) page.
 - [ ] Conversation pages for all 6 chat sites, saved with `copy(document.documentElement.outerHTML)` so the conversation is included.
 - [ ] Each chat page contains at least one formula, one code block and one table.
-- [ ] `tests/fixtures/sites/` has a filled template for all 6 chat sites (the product owner keeps these notes in Notion; the main engineer turns them into these files).
+- [x] Element samples for all 6 chat sites (from Notion, turned into `tests/fixtures/sites/<site>-elements.html` and checked by `tests/unit/sites.test.ts`).
+- [ ] Missing samples listed in `tests/fixtures/sites/README.md` (ChatGPT/Claude send button, Doubao user message with a stable ancestor, one DeepSeek answer).
 - [ ] `npm run sanitize -- --check` passes and no name or email remains (checked by hand).
 - [ ] Files under 3 MB each (strip large inline `<style>`/`<svg>` blobs if needed).
 - [ ] `npm run check` passes. Expected outputs may show conversion problems; that is fine, they are the point.
