@@ -73,6 +73,9 @@ queue:
   dontKeep: 不记
   followUp: "关于这句话：\"$1\"\n我的疑问：$2"
 card:
+  gap_suspected: 疑似薄弱
+  gap_confirmed: 确认薄弱
+  gap_remediated: 已补强 ✓
   missed: 上次没讲清
   distilling: 正在提炼…
   needsModel: 配置模型后会自动提炼这张卡片。

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { i18n } from '#i18n';
 import { sendMessage } from '@/src/messaging';
 import type { Mastery, NodeView } from '@/src/db/types';
@@ -10,6 +10,7 @@ import MasteryPicker from './MasteryPicker.vue';
 import TitlePicker from './TitlePicker.vue';
 import { useRun } from '../notify';
 import { usePlace } from '../placement';
+import { useGaps } from '../gaps';
 
 const props = defineProps<{ node: NodeView; configured: boolean; suggested?: Mastery }>();
 const emit = defineEmits<{ openSource: [sourceId: string] }>();
@@ -40,6 +41,9 @@ async function remove() {
   await run(() => sendMessage('nodes/delete', { id: props.node.id }));
 }
 
+const gaps = useGaps();
+const gap = computed(() => gaps.value.get(props.node.id));
+
 const host = (url: string) => (URL.canParse(url) ? new URL(url).host : url);
 </script>
 
@@ -48,6 +52,7 @@ const host = (url: string) => (URL.canParse(url) ? new URL(url).host : url);
     <div class="card-head">
       <span v-if="node.type === 'idea'" class="badge" data-type="idea">{{ i18n.t('type.idea') }}</span>
       <span v-if="node.lastVerdict === 'fail' || node.lastVerdict === 'partial'" class="badge flag" data-testid="card-flag">{{ i18n.t('card.missed') }}</span>
+      <span v-if="gap" class="badge gap" :data-gap="gap" data-testid="card-gap">{{ i18n.t(`card.gap_${gap}`) }}</span>
       <button type="button" class="link danger" :aria-label="i18n.t('panel.delete')" @click="remove">{{ i18n.t('panel.delete') }}</button>
     </div>
     <div class="title" data-testid="card-title">{{ node.title }}</div>

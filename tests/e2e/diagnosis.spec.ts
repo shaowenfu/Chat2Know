@@ -56,6 +56,19 @@ test('questions sent on a site become a diagnosis; the quiz confirms it; the rev
   const topic = panel.locator('[data-testid="card"][data-title="Matrix operation rules"]');
   await expect(topic).toBeVisible();
   await expect(panel.locator('[data-testid="card"][data-title="What is Matrix basics?"] [data-testid="mastery-internalize"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(topic.getByTestId('card-gap')).toHaveText('Weak spot');
+  await panel.screenshot({ path: 'tests/e2e/screenshots/map-gap.png' });
+
+  // Passing both review cards in Quiz me strengthens the spot.
   await panel.getByTestId('tab-quiz').click();
-  await expect(panel.getByTestId('quiz-question')).toHaveText(/What is Matrix (basics|operation rules)\?/);
+  for (let i = 0; i < 2; i++) {
+    await expect(panel.getByTestId('quiz-question')).toHaveText(/What is Matrix (basics|operation rules)\?/);
+    await panel.getByTestId('quiz-reveal').click();
+    await panel.getByTestId('quiz-pass').click();
+  }
+  await expect(panel.getByTestId('quiz-empty')).toBeVisible();
+  await panel.getByTestId('tab-cards').click();
+  await expect(topic.getByTestId('card-gap')).toHaveText('Strengthened ✓');
+  await panel.getByTestId('tab-learn').click();
+  await expect(panel.getByTestId('diagnosis-state')).toHaveText('Strengthened ✓');
 });

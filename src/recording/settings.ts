@@ -35,6 +35,7 @@ const ANALYSIS_KEY = 'analysis';
 /** Outcome of the last background analysis, shown in the Learning tab. */
 export interface AnalysisState {
   lastError?: string;
+  lastDiagnosedAt?: number;
 }
 
 export async function loadAnalysis(): Promise<AnalysisState> {

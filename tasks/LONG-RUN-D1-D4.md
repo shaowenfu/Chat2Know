@@ -85,7 +85,7 @@ check `git log`, and continue from the first unchecked box.
 ## D4: confirmation and presentation
 
 - [x] D4.1 Diagnosis cards in the Learning tab: hypothesis with evidence (opens the conversation), accurate / inaccurate, accept / reject, 3–5 item quiz judged by the model; pass → withdrawn with cool-down; fail / accept → confirmed with node link, weak mark, "know by heart" suggestion and a systematic review kept as cards.
-- [ ] D4.2 Map states on cards (suspected light, confirmed marked, remediated derived); automatic pipeline cadence and cap; E2E end to end on the mock server.
+- [x] D4.2 Map states on cards (suspected light, confirmed marked, remediated derived); automatic pipeline cadence and cap; E2E end to end on the mock server.
 
 ## Final
 
@@ -108,3 +108,4 @@ Short notes on deviations and why, newest last.
 - D3.1: Signals live in `src/graph/signals.ts` (pure) with `cosine` moved to `src/graph/cosine.ts`. Circling is reported as runs of questions (no concept needed); repeat and downshift as symptoms per concept. Question vectors are stored on the ask with their model and stripped from list views and the questions export.
 - D3.2: Synthetic baseline (`tests/unit/rootcause.test.ts`, 6 histories): known root ranked first in all (top-1 1.0, top-3 1.0). Found while testing: after a root was dismissed, its prerequisite explaining the same symptoms was diagnosed in its place; a candidate whose symptoms are all explained by a blocked root (open or cooling down) is now skipped. Evidence of a dismissed diagnosis is never reused. Open diagnoses are not extended with new evidence.
 - D4.1: The doc's "accurate / inaccurate" buttons double as accept / reject (accurate confirms, not accurate dismisses), so a diagnosis has one pair of decision buttons besides the quiz. Quiz items are not stored until answered. A confirmed concept gets its linked card or a new topic card (`conceptNode`); review cards are kept with `addCards` under it, "know by heart" pre-ticked. Remediated = confirmed and every know-by-heart card under the concept's card passed a check since the confirmation. Deleted questions drop out of the evidence at read time.
+- D4.2: Automatic runs: a full batch (10 untagged) or a day since the last diagnosis with anything waiting starts one; it diagnoses at most once a day (`autoAnalysis`). The first recorded question therefore starts a run at once. Map marks come from the open diagnoses whose concept has a card (provided by App, shown by CardItem); a suspected concept with no card yet has no mark.

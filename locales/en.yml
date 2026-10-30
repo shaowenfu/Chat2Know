@@ -73,6 +73,9 @@ queue:
   dontKeep: Don't keep
   followUp: "About this sentence: \"$1\"\nMy question: $2"
 card:
+  gap_suspected: Possible gap
+  gap_confirmed: Weak spot
+  gap_remediated: Strengthened ✓
   missed: Missed last check
   distilling: Distilling…
   needsModel: Set up a model to distill this card.

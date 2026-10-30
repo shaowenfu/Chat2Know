@@ -133,7 +133,8 @@ test('ten waiting questions start an analysis on their own', async ({ context, e
   await panel.goto(`chrome-extension://${extensionId}/sidepanel.html`);
   await configureModel(panel, mockLlm.url);
   await send(panel, 'recording/setOrigins', { origins: [fixtureServer] });
-  for (let i = 1; i <= 10; i++) {
+  // The first question starts the daily run at once; the next ten fill a batch.
+  for (let i = 1; i <= 11; i++) {
     await page.locator('#prompt').fill(`question ${i}: why does the transpose reverse a product?`);
     await page.locator('#prompt').press('Enter');
     await page.locator('#prompt').fill('');
@@ -141,6 +142,6 @@ test('ten waiting questions start an analysis on their own', async ({ context, e
   }
   await expect.poll(async () => (await send<{ pending: number }>(panel, 'analysis/get', {})).data.pending).toBe(0);
   const asks = (await send<{ concepts: string[] }[]>(panel, 'asks/list', {})).data;
-  expect(asks).toHaveLength(10);
+  expect(asks).toHaveLength(11);
   expect(asks.every((a) => a.concepts.includes('Transpose properties'))).toBe(true);
 });

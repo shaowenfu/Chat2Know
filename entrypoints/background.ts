@@ -19,7 +19,7 @@ import { suggestPlacement } from '@/src/services/placement';
 import { organize } from '@/src/services/organize';
 import { checkExplanation, oneMinuteScript } from '@/src/services/explain';
 import { isRecording, loadAnalysis, loadRecording, saveAnalysis, saveRecording, shouldRecord, type RecordingSettings } from '@/src/recording/settings';
-import { AUTO_ANALYZE_AT, analyze } from '@/src/services/analysis';
+import { analyze, autoAnalysis } from '@/src/services/analysis';
 import { checkDiagnosisQuiz, decide, diagnosisQuiz, keepReview, listDiagnosisViews, systematicReview } from '@/src/services/confirm';
 import { siteFor } from '@/src/capture/sites';
 
@@ -139,15 +139,20 @@ async function openSource(sourceId: string): Promise<{ tabId: number; highlighte
 
 let analysis: Promise<void> | undefined;
 
-/** One analysis at a time. Its outcome is kept for the Learning tab; a manual run also gets the error. */
-function runAnalysis(): Promise<void> {
+/**
+ * One analysis at a time. Its outcome is kept for the Learning tab; a manual run
+ * also gets the error. `withDiagnosis` false: tag and link only.
+ */
+function runAnalysis(withDiagnosis = true): Promise<void> {
   analysis ??= (async () => {
+    const state = await loadAnalysis();
     try {
       const settings = await loadSettings();
-      await analyze(await repo(), new LlmClient(settings), settings.embeddingModel, Date.now());
-      await saveAnalysis({});
+      const now = Date.now();
+      await analyze(await repo(), new LlmClient(settings), settings.embeddingModel, now, withDiagnosis);
+      await saveAnalysis({ lastDiagnosedAt: withDiagnosis ? now : state.lastDiagnosedAt });
     } catch (err) {
-      await saveAnalysis({ lastError: errorText(err) });
+      await saveAnalysis({ ...state, lastError: errorText(err) });
       throw err;
     } finally {
       analysis = undefined;
@@ -401,8 +406,9 @@ export default defineBackground(() => {
       const r = await repo();
       await r.recordAsk({ site: siteFor(host)?.id ?? host, conversationUrl: url, text });
       notifyChanged();
-      // Recording never waits on a model; a batch is analyzed in the background, its failure kept for the tab.
-      if (isConfigured(await loadSettings()) && (await r.untaggedAsks()).length >= AUTO_ANALYZE_AT) runAnalysis().catch(() => {});
+      // Recording never waits on a model; analysis runs in the background, its failure kept for the tab.
+      const auto = autoAnalysis((await r.untaggedAsks()).length, (await loadAnalysis()).lastDiagnosedAt, Date.now());
+      if (auto.run && isConfigured(await loadSettings())) runAnalysis(auto.diagnose).catch(() => {});
       return { recorded: true };
     },
     'asks/list': async () => (await repo()).listAskViews(),

@@ -17,6 +17,7 @@ import QuizView from './components/QuizView.vue';
 import SettingsView from './components/SettingsView.vue';
 import { NOTIFY, errorText } from './notify';
 import { PLACE } from './placement';
+import { GAPS, type GapState } from './gaps';
 import type { Placement } from '@/src/services/placement';
 
 type View = 'queue' | 'cards' | 'quiz' | 'learn' | 'settings' | 'organize-page' | 'organize-paste';
@@ -32,6 +33,17 @@ const recording = ref<RecordingSettings>({ origins: [], paused: false, excluded:
 const analysis = ref<{ pending: number; lastError?: string }>({ pending: 0 });
 const diagnoses = ref<DiagnosisView[]>([]);
 const suspected = computed(() => diagnoses.value.filter((d) => d.status === 'suspected').length);
+/** Diagnoses mark their concept's card on the map: possible gap, weak spot, or strengthened. */
+provide(
+  GAPS,
+  computed(() => {
+    const marks = new Map<string, GapState>();
+    for (const d of diagnoses.value) {
+      if (d.concept.nodeId) marks.set(d.concept.nodeId, d.remediated ? 'remediated' : d.status === 'confirmed' ? 'confirmed' : 'suspected');
+    }
+    return marks;
+  }),
+);
 const toolbarUnavailable = ref(false);
 const notice = ref<{ text: string; error: boolean } | null>(null);
 const fileInput = ref<HTMLInputElement | null>(null);

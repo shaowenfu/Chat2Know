@@ -665,3 +665,15 @@ button.danger:hover {
   align-items: flex-start;
   margin: 4px 0;
 }
+
+.badge.gap[data-gap='suspected'] {
+  color: var(--muted);
+}
+
+.badge.gap[data-gap='confirmed'] {
+  color: var(--bad);
+}
+
+.badge.gap[data-gap='remediated'] {
+  color: var(--ok);
+}
