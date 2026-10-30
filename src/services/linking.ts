@@ -13,8 +13,10 @@ export const LINK_THRESHOLD = 0.85;
  * similar card above the threshold. Concepts stay unlinked when nothing matches.
  */
 export async function linkConcepts(repo: Repository, client: LlmClient, embeddingModel: string): Promise<void> {
-  const unlinked = (await repo.listConcepts()).filter((c) => !c.nodeId);
-  const cards = (await repo.listNodes()).filter((n) => (n.type === 'knowledge' || n.type === 'topic') && n.status !== 'draft');
+  const nodes = await repo.listNodes(); // live cards only, so a concept whose card was deleted is linked again
+  const live = new Set(nodes.map((n) => n.id));
+  const cards = nodes.filter((n) => (n.type === 'knowledge' || n.type === 'topic') && n.status !== 'draft');
+  const unlinked = (await repo.listConcepts()).filter((c) => !c.nodeId || !live.has(c.nodeId));
   if (!unlinked.length || !cards.length) return;
   const links: { conceptId: string; nodeId: string }[] = [];
   const rest = unlinked.filter((c) => {

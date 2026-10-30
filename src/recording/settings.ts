@@ -36,6 +36,8 @@ const ANALYSIS_KEY = 'analysis';
 export interface AnalysisState {
   lastError?: string;
   lastDiagnosedAt?: number;
+  /** When the last run failed; automatic runs wait a day after a failure. */
+  failedAt?: number;
 }
 
 export async function loadAnalysis(): Promise<AnalysisState> {

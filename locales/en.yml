@@ -210,6 +210,7 @@ learn:
   exclude: Don't record this conversation
   excluded: This conversation is no longer recorded; its questions were deleted.
 explain:
+  nothingKept: Nothing kept here yet. Keep a card in this branch first.
   start: Explain it to me
   placeholder: Explain this, and what is under it, as if teaching someone
   check: Check my explanation

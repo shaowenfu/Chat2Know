@@ -4,8 +4,8 @@
  * else falls back to the generic rule: an editable element plus Enter or a nearby button.
  *
  * Selectors use stable hooks (data-testid, contenteditable, semantic class names),
- * never hashed class names or localized aria-labels. A selector marked unverified
- * has no sample in tests/fixtures/sites yet and may be wrong.
+ * never hashed class names or localized aria-labels. Every selector is checked
+ * against real samples in tests/fixtures/sites and the saved pages.
  */
 export interface SiteConfig {
   id: string;
@@ -16,12 +16,10 @@ export interface SiteConfig {
   input: string;
   /** The send button. */
   send: string;
-  /** One sent user message, used to confirm a send happened and to read its text. */
+  /** One sent user message. Checked against the saved pages in tests; kept for a health check of the config (not built yet). */
   userMessage: string;
   /** Inside userMessage, the element holding only the question text (when the bubble has extra labels). */
   userMessageText?: string;
-  /** Fields not yet checked against a real sample. */
-  unverified: ('input' | 'send' | 'userMessage')[];
 }
 
 export const SITES: SiteConfig[] = [
@@ -33,7 +31,6 @@ export const SITES: SiteConfig[] = [
     // The composer's only submit button; bg-composer-primary is a design token, not a hash.
     send: 'button[type="submit"].bg-composer-primary',
     userMessage: '[data-user-message-bubble="true"]',
-    unverified: [],
   },
   {
     id: 'claude',
@@ -42,7 +39,6 @@ export const SITES: SiteConfig[] = [
     input: '[data-testid="chat-input"]',
     send: 'button[data-testid="chat-input-send"]',
     userMessage: '[data-testid="user-message"]',
-    unverified: [],
   },
   {
     id: 'gemini',
@@ -53,7 +49,6 @@ export const SITES: SiteConfig[] = [
     userMessage: '.user-query-bubble-with-background',
     // The bubble also holds a visually hidden "You said" label for screen readers.
     userMessageText: '.query-text-line',
-    unverified: [],
   },
   {
     id: 'deepseek',
@@ -63,7 +58,6 @@ export const SITES: SiteConfig[] = [
     send: 'div[role="button"].ds-button--primary',
     // Answers are .ds-message too, but render their body in .ds-markdown.
     userMessage: '.ds-message:not(:has(.ds-markdown))',
-    unverified: [],
   },
   {
     id: 'kimi',
@@ -73,7 +67,6 @@ export const SITES: SiteConfig[] = [
     send: '.send-button-container',
     userMessage: '.user-content',
     userMessageText: '.user-content__text',
-    unverified: [],
   },
   {
     id: 'doubao',
@@ -83,7 +76,6 @@ export const SITES: SiteConfig[] = [
     send: '[data-testid="chat_input_send_button"]',
     userMessage: '[data-testid="send_message"][data-message-role="user"]',
     userMessageText: '[data-testid="message_text_content"]',
-    unverified: [],
   },
 ];
 

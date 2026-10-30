@@ -210,6 +210,7 @@ learn:
   exclude: 不记录这段对话
   excluded: 这段对话不再记录，已删除其中的提问。
 explain:
+  nothingKept: 这里还没有记下的卡片，请先在这一支里记下卡片。
   start: 讲给我听
   placeholder: 像教别人一样，讲清这张卡片和它下面的内容
   check: 检查我的讲解

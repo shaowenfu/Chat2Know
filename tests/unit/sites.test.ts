@@ -5,7 +5,7 @@ import { SITES, inputText, messageText, siteFor } from '@/src/capture/sites';
 
 /**
  * Checks every site config against the element samples the product owner copied from
- * the real sites (tests/fixtures/sites/<id>-elements.html). Unverified fields are skipped.
+ * the real sites (tests/fixtures/sites/<id>-elements.html).
  */
 const EXPECTED: Record<string, { input: string; message: string }> = {
   chatgpt: { input: '用公式、Python 代码和对比表格解释 softmax', message: '我怎么完全看不懂 PPT 上写的呢' },
@@ -52,23 +52,25 @@ describe.each(SITES)('$name site config', (site) => {
     expect(inputText(found[0]!)).toBe(EXPECTED[site.id]!.input);
   });
 
-  it.skipIf(site.unverified.includes('send'))('finds the send button', () => {
+  it('finds the send button', () => {
     expect(section(doc, 'send').querySelectorAll(site.send)).toHaveLength(1);
   });
 
-  it.skipIf(site.unverified.includes('userMessage'))('finds a sent message and reads only the question', () => {
+  it('finds a sent message and reads only the question', () => {
     const found = section(doc, 'user-message').querySelectorAll(site.userMessage);
     expect(found).toHaveLength(1);
     expect(messageText(site, found[0]!)).toBe(EXPECTED[site.id]!.message);
   });
 
-  it.skipIf(!section(doc, 'answer'))('does not take an answer for a user message', () => {
-    expect(section(doc, 'answer').querySelectorAll(site.userMessage)).toHaveLength(0);
-  });
+  if (section(doc, 'answer')) {
+    it('does not take an answer for a user message', () => {
+      expect(section(doc, 'answer').querySelectorAll(site.userMessage)).toHaveLength(0);
+    });
+  }
 
   it('no selector matches outside its own sample', () => {
     expect(section(doc, 'user-message').querySelectorAll(site.input)).toHaveLength(0);
-    if (!site.unverified.includes('userMessage')) expect(section(doc, 'input').querySelectorAll(site.userMessage)).toHaveLength(0);
+    expect(section(doc, 'input').querySelectorAll(site.userMessage)).toHaveLength(0);
   });
 });
 

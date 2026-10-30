@@ -20,17 +20,25 @@ const busy = ref(false);
 const current = computed(() => props.due[0]);
 
 const problem = ref<string | null>(null);
+const problemFailed = ref(false);
+
+async function loadProblem() {
+  const item = current.value;
+  if (item?.mode !== 'apply') return;
+  problemFailed.value = false;
+  const res = await run(() => sendMessage('quiz/problem', { nodeId: item.id }));
+  if (current.value?.id !== item.id) return;
+  if (res) problem.value = res.problem;
+  else problemFailed.value = true;
+}
 
 watch(
   () => current.value?.id,
-  async () => {
+  () => {
     answer.value = '';
     revealed.value = false;
     problem.value = null;
-    const item = current.value;
-    if (item?.mode !== 'apply') return;
-    const res = await run(() => sendMessage('quiz/problem', { nodeId: item.id }));
-    if (res && current.value?.id === item.id) problem.value = res.problem;
+    void loadProblem();
   },
   { immediate: true },
 );
@@ -46,7 +54,7 @@ async function askModel() {
   const payload = { nodeId: node.id, answer: answer.value, ...(problem.value ? { problem: problem.value } : {}) };
   result.value = (await run(() => sendMessage('quiz/judge', payload))) ?? null;
   busy.value = false;
-  revealed.value = true;
+  if (result.value) revealed.value = true; // a failed check leaves the answer in place to try again
 }
 
 const verdictLabel = (v: Verdict) => i18n.t(`quiz.verdict_${v}`);
@@ -79,6 +87,9 @@ const verdictLabel = (v: Verdict) => i18n.t(`quiz.verdict_${v}`);
     <template v-if="current.mode === 'apply'">
       <span class="muted small">{{ i18n.t('quiz.useIt', [current.title]) }}</span>
       <p v-if="problem" class="problem" data-testid="quiz-problem">{{ problem }}</p>
+      <p v-else-if="problemFailed" class="row-actions">
+        <button type="button" data-testid="quiz-problem-retry" @click="loadProblem">{{ i18n.t('card.retry') }}</button>
+      </p>
       <p v-else class="muted" data-testid="quiz-problem-loading">{{ i18n.t('quiz.writingProblem') }}</p>
       <textarea v-model="answer" rows="5" :placeholder="i18n.t('quiz.solvePlaceholder')" :aria-label="i18n.t('quiz.solvePlaceholder')" />
       <div v-if="!revealed" class="row-actions">

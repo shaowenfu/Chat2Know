@@ -24,7 +24,10 @@ export interface DiagnosisView extends Diagnosis {
   remediated: boolean;
 }
 
-/** Open diagnoses (suspected or confirmed), newest first, with their evidence. Deleted questions drop out of the evidence. */
+/**
+ * Open diagnoses (suspected or confirmed), newest first, with their evidence.
+ * Deleted questions drop out of the evidence; a suspicion left with none is not shown.
+ */
 export async function listDiagnosisViews(repo: Repository): Promise<DiagnosisView[]> {
   const concepts = new Map((await repo.listConcepts()).map((c) => [c.id, c]));
   const asks = new Map((await repo.listAskViews()).map((a) => [a.id, a]));
@@ -34,15 +37,19 @@ export async function listDiagnosisViews(repo: Repository): Promise<DiagnosisVie
   for (const d of open) {
     const c = concepts.get(d.rootConceptId)!;
     const evidence = d.evidenceAskIds.map((id) => asks.get(id)).filter((a): a is AskView => !!a);
+    // A suspicion whose questions were all deleted has nothing left to stand on.
+    if (d.status === 'suspected' && !evidence.length) continue;
+    // The concept's card may have been deleted or merged away since it was linked.
+    const nodeId = c.nodeId && (await repo.getNode(c.nodeId))?.deletedAt === undefined ? c.nodeId : undefined;
     let remediated = false;
-    if (d.status === 'confirmed' && c.nodeId) {
-      const mustKnow = (await repo.subtree(c.nodeId)).filter((n) => n.mastery === 'internalize' && n.type === 'knowledge');
+    if (d.status === 'confirmed' && nodeId) {
+      const mustKnow = (await repo.subtree(nodeId)).filter((n) => n.mastery === 'internalize' && n.type === 'knowledge');
       const passed = new Set(passes.filter((p) => p.at >= d.decidedAt!).map((p) => p.nodeId));
       remediated = mustKnow.length > 0 && mustKnow.every((n) => passed.has(n.id));
     }
     views.push({
       ...d,
-      concept: { name: c.name, domain: c.domain, ...(c.nodeId ? { nodeId: c.nodeId } : {}) },
+      concept: { name: c.name, domain: c.domain, ...(nodeId ? { nodeId } : {}) },
       about: [...new Set(evidence.flatMap((a) => a.concepts))],
       evidence: evidence.map(({ id, text, conversationUrl, sentAt, site }) => ({ id, text, conversationUrl, sentAt, site })),
       remediated,

@@ -17,7 +17,7 @@ export interface ExplainResult {
 async function branchPoints(repo: Repository, rootId: string) {
   const branch = await repo.subtree(rootId);
   const cards = branch.filter((n) => n.type === 'knowledge' && n.status !== 'draft');
-  if (!cards.length) throw new Error('Nothing kept here to explain');
+  if (!cards.length) throw new UserError('explain.nothingKept');
   if (cards.length > MAX_EXPLAIN_POINTS) throw new UserError('explain.tooBig', [String(cards.length), String(MAX_EXPLAIN_POINTS)]);
   return { topic: branch[0]!.title, cards, points: cards.map((n) => ({ title: n.title, statement: statementOf(n) })) };
 }

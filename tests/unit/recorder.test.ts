@@ -130,6 +130,14 @@ describe('recorder, generic rule', () => {
     expect(asks).toEqual([]);
   });
 
+  it('a box that is edited, not emptied, was not sent', () => {
+    type(el('q'), 'first line');
+    enter(el('q')); // a newline in a multi-line box
+    type(el('q'), 'first line\nsecond');
+    vi.advanceTimersByTime(3000);
+    expect(asks).toEqual([]);
+  });
+
   it('reports the same text once within a few seconds', () => {
     type(el('q'), 'same');
     enter(el('q'));

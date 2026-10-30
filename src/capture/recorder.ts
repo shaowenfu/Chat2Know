@@ -6,10 +6,10 @@ import { inputText, type SiteConfig } from './sites';
  * On a configured site, Enter in its input or a click on its send button; on any
  * other site, Enter in a textarea / contenteditable or a click on a button next
  * to one. The text is read at that moment, before the site clears the box, and
- * reported only once the box is cleared or changed: that is the sign the site
- * really sent it (Enter while an answer is still streaming, or a toolbar button,
- * leaves the text in place). `input` elements are never read, so password and
- * payment fields never are.
+ * reported only once the box is empty (or replaced): that is the sign the site
+ * really sent it. Enter while an answer is still streaming, a newline in a
+ * multi-line box, or a toolbar button all leave the text there. `input` elements
+ * are never read, so password and payment fields never are.
  */
 
 const EDITABLE = 'textarea, [contenteditable]:not([contenteditable="false"])';
@@ -41,7 +41,7 @@ export function startRecorder(doc: Document, site: SiteConfig | undefined, onAsk
     if (!text) return;
     const startedAt = Date.now();
     const check = () => {
-      if (!input.isConnected || inputText(input) !== text) {
+      if (!input.isConnected || !inputText(input)) {
         const now = Date.now();
         if (last && last.text === text && now - last.at < DEDUPE_MS) return;
         last = { text, at: now };

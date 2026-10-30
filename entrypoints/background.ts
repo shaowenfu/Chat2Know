@@ -137,29 +137,41 @@ async function openSource(sourceId: string): Promise<{ tabId: number; highlighte
   }
 }
 
-let analysis: Promise<void> | undefined;
+let analysis: { promise: Promise<void>; withDiagnosis: boolean } | undefined;
 
 /**
- * One analysis at a time. Its outcome is kept for the Learning tab; a manual run
- * also gets the error. `withDiagnosis` false: tag and link only.
+ * One analysis at a time. A request that a running one already covers joins it;
+ * a full run asked for during a tag-only one follows it. The outcome is kept for
+ * the Learning tab; a manual run also gets the error. `withDiagnosis` false: tag
+ * and link only.
  */
 function runAnalysis(withDiagnosis = true): Promise<void> {
-  analysis ??= (async () => {
-    const state = await loadAnalysis();
-    try {
-      const settings = await loadSettings();
-      const now = Date.now();
-      await analyze(await repo(), new LlmClient(settings), settings.embeddingModel, now, withDiagnosis);
-      await saveAnalysis({ lastDiagnosedAt: withDiagnosis ? now : state.lastDiagnosedAt });
-    } catch (err) {
-      await saveAnalysis({ ...state, lastError: errorText(err) });
-      throw err;
-    } finally {
-      analysis = undefined;
-      notifyChanged();
-    }
-  })();
-  return analysis;
+  if (analysis && (analysis.withDiagnosis || !withDiagnosis)) return analysis.promise;
+  const before = analysis?.promise.catch(() => {}) ?? Promise.resolve();
+  const promise = before.then(() => analyzeOnce(withDiagnosis));
+  const entry = { promise, withDiagnosis };
+  analysis = entry;
+  void promise
+    .catch(() => {}) // the caller gets the error; this only clears the slot
+    .finally(() => {
+      if (analysis === entry) analysis = undefined;
+    });
+  return promise;
+}
+
+async function analyzeOnce(withDiagnosis: boolean): Promise<void> {
+  const state = await loadAnalysis();
+  const now = Date.now();
+  try {
+    const settings = await loadSettings();
+    await analyze(await repo(), new LlmClient(settings), settings.embeddingModel, now, withDiagnosis);
+    await saveAnalysis({ lastDiagnosedAt: withDiagnosis ? now : state.lastDiagnosedAt });
+  } catch (err) {
+    await saveAnalysis({ ...state, lastError: errorText(err), failedAt: now });
+    throw err;
+  } finally {
+    notifyChanged();
+  }
 }
 
 const matchesOf = (origins: string[]) => origins.map((o) => `${o}/*`);
@@ -407,7 +419,7 @@ export default defineBackground(() => {
       await r.recordAsk({ site: siteFor(host)?.id ?? host, conversationUrl: url, text });
       notifyChanged();
       // Recording never waits on a model; analysis runs in the background, its failure kept for the tab.
-      const auto = autoAnalysis((await r.untaggedAsks()).length, (await loadAnalysis()).lastDiagnosedAt, Date.now());
+      const auto = autoAnalysis((await r.untaggedAsks()).length, await loadAnalysis(), Date.now());
       if (auto.run && isConfigured(await loadSettings())) runAnalysis(auto.diagnose).catch(() => {});
       return { recorded: true };
     },
@@ -431,7 +443,10 @@ export default defineBackground(() => {
       notifyChanged();
       return next;
     },
-    'analysis/get': async () => ({ pending: (await (await repo()).untaggedAsks()).length, ...(await loadAnalysis()) }),
+    'analysis/get': async () => {
+      const { lastError } = await loadAnalysis();
+      return { pending: (await (await repo()).untaggedAsks()).length, ...(lastError ? { lastError } : {}) };
+    },
     'analysis/run': async () => {
       await runAnalysis();
       return null;

@@ -99,4 +99,29 @@ describe('confirming a diagnosis', () => {
     await repo.deleteAsk(d.evidence[0]!.id);
     expect((await only()).evidence).toHaveLength(d.evidence.length - 1);
   });
+
+  it('a deleted concept card is treated as unlinked and replaced when needed', async () => {
+    const d = await only();
+    await decide(repo, d.id, true);
+    const nodeId = (await only()).concept.nodeId!;
+    await repo.deleteNode(nodeId);
+    expect((await only()).concept.nodeId).toBeUndefined(); // the panel still loads
+    await keepReview(repo, d.id, [{ question: 'Q?', summary: 'S.' }], false);
+    const fresh = (await only()).concept.nodeId!;
+    expect(fresh).not.toBe(nodeId);
+    expect((await repo.listNodes()).find((n) => n.title === 'Q?')!.parent!.id).toBe(fresh);
+  });
+
+  it('a suspicion whose questions were all deleted is not shown', async () => {
+    await repo.clearAsks();
+    expect(await listDiagnosisViews(repo)).toEqual([]);
+  });
+
+  it('tags for a question deleted while it was being tagged are not saved', async () => {
+    const a = await repo.recordAsk({ site: 'chatgpt', conversationUrl: 'https://chatgpt.com/c/9', text: 'gone' });
+    await repo.deleteAsk(a.id);
+    const before = (await repo.listAskTags()).length;
+    await repo.saveTags([{ askId: a.id, conceptIds: [(await repo.listConcepts())[0]!.id] }]);
+    expect(await repo.listAskTags()).toHaveLength(before);
+  });
 });

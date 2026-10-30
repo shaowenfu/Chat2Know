@@ -19,8 +19,11 @@ async function write() {
 }
 
 async function copy() {
-  await run(() => navigator.clipboard.writeText(script.value!));
-  notify(i18n.t('oneMinute.copied'));
+  const copied = await run(async () => {
+    await navigator.clipboard.writeText(script.value!);
+    return true;
+  });
+  if (copied) notify(i18n.t('oneMinute.copied'));
 }
 </script>
 

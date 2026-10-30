@@ -58,6 +58,11 @@ const stripHash = (url: string) => url.replace(/#.*$/, '');
 /** Kept knowledge the user must know by heart. Open questions marked "know by heart" wait until they are kept. */
 const isQuizzable = (n: KNode) => n.type === 'knowledge' && n.status !== 'draft' && n.mastery === 'internalize';
 
+interface ReviewSummary {
+  latest: Map<string, Review>;
+  quizzed: Map<string, number>;
+}
+
 export interface AskView extends Omit<Ask, 'vector' | 'vectorModel'> {
   concepts: string[];
 }
@@ -279,6 +284,7 @@ export class Repository {
     const at = this.now();
     await this.db.transaction('rw', this.db.asks, this.db.askTags, async () => {
       for (const { askId, conceptIds } of tags) {
+        if (!(await this.db.asks.get(askId))) continue; // deleted while it was being tagged
         await this.db.askTags.bulkAdd([...new Set(conceptIds)].map((conceptId) => ({ id: this.ulid(at), askId, conceptId })));
         await this.db.asks.update(askId, { taggedAt: at });
       }
@@ -649,16 +655,15 @@ export class Repository {
     }));
   }
 
-  /** Live nodes, newest first, each with its sources. */
-  /** Live nodes, newest first, each with its sources and tree parent. */
-  async listNodes(): Promise<NodeView[]> {
+  /** Live nodes, newest first, each with its sources, tree parent and latest review verdict. */
+  async listNodes(reviews?: ReviewSummary): Promise<NodeView[]> {
     const nodes = (await this.db.nodes.orderBy('createdAt').reverse().toArray()).filter((n) => n.deletedAt === undefined);
     const ids = nodes.map((n) => n.id);
     const sources = await this.db.sources.where('nodeId').anyOf(ids).toArray();
     const byNode = new Map<string, Source[]>();
     for (const s of sources) byNode.set(s.nodeId, [...(byNode.get(s.nodeId) ?? []), s]);
     const parents = new Map((await this.db.edges.where('to').anyOf(ids).toArray()).map((e) => [e.to, e]));
-    const latest = await this.latestReviews();
+    const { latest } = reviews ?? (await this.reviewSummary());
     return nodes.map((n) => {
       const e = parents.get(n.id);
       const verdict = latest.get(n.id)?.verdict;
@@ -677,22 +682,29 @@ export class Repository {
     await this.db.transaction('rw', this.db.nodes, this.db.oplog, () => this.patchNode(id, { mastery }));
   }
 
-  private async latestReviews(): Promise<Map<string, Review>> {
+  /** One pass over the reviews: the latest per card, and how many recall / apply checks each had. */
+  private async reviewSummary(): Promise<ReviewSummary> {
     const latest = new Map<string, Review>();
-    for (const r of await this.db.reviews.orderBy('createdAt').toArray()) latest.set(r.nodeId, r);
-    return latest;
+    const quizzed = new Map<string, number>();
+    for (const r of await this.db.reviews.orderBy('createdAt').toArray()) {
+      latest.set(r.nodeId, r);
+      if (r.mode !== 'explain') quizzed.set(r.nodeId, (quizzed.get(r.nodeId) ?? 0) + 1);
+    }
+    return { latest, quizzed };
+  }
+
+  private dueItems(nodes: NodeView[], { latest, quizzed }: ReviewSummary, modelConfigured: boolean): QuizItem[] {
+    const now = this.now();
+    return nodes
+      .filter((n) => isQuizzable(n) && isDue(latest.get(n.id), now))
+      .sort((a, b) => (latest.get(a.id)?.dueAt ?? 0) - (latest.get(b.id)?.dueAt ?? 0))
+      .map((n) => ({ ...n, mode: quizMode(quizzed.get(n.id) ?? 0, modelConfigured) }));
   }
 
   /** Cards the user must know by heart whose review is due, oldest due first, each with how it is checked this time. */
   async dueForQuiz(modelConfigured: boolean): Promise<QuizItem[]> {
-    const now = this.now();
-    const latest = await this.latestReviews();
-    const quizzed = new Map<string, number>();
-    for (const r of await this.db.reviews.toArray()) if (r.mode !== 'explain') quizzed.set(r.nodeId, (quizzed.get(r.nodeId) ?? 0) + 1);
-    return (await this.listNodes())
-      .filter((n) => isQuizzable(n) && isDue(latest.get(n.id), now))
-      .sort((a, b) => (latest.get(a.id)?.dueAt ?? 0) - (latest.get(b.id)?.dueAt ?? 0))
-      .map((n) => ({ ...n, mode: quizMode(quizzed.get(n.id) ?? 0, modelConfigured) }));
+    const reviews = await this.reviewSummary();
+    return this.dueItems(await this.listNodes(reviews), reviews, modelConfigured);
   }
 
   /** Records a review, schedules the next one and moves the card in or out of `mastered`. */
@@ -715,7 +727,8 @@ export class Repository {
    */
   async stats(): Promise<Stats> {
     const now = this.now();
-    const nodes = await this.listNodes();
+    const reviews = await this.reviewSummary();
+    const nodes = await this.listNodes(reviews);
     const mustKnow = new Set(nodes.filter(isQuizzable).map((n) => n.id));
     const weeks = [0, 1, 2, 3].map(() => new Set<string>());
     for (const r of await this.db.reviews.where('createdAt').aboveOrEqual(now - 28 * DAY_MS).toArray()) {
@@ -724,7 +737,7 @@ export class Repository {
     return {
       masteredThisWeek: weeks[0]!.size,
       earlierWeeks: weeks.slice(1).map((w) => w.size),
-      due: (await this.dueForQuiz(false)).length,
+      due: this.dueItems(nodes, reviews, false).length,
       mustKnow: mustKnow.size,
       openQuestions: nodes.filter((n) => n.type === 'question' && n.status === 'open').length,
     };
