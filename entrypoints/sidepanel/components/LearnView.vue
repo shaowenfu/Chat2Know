@@ -6,11 +6,12 @@ import { sendMessage } from '@/src/messaging';
 import { SITES } from '@/src/capture/sites';
 import { UserError } from '@/src/errors';
 import type { Ask } from '@/src/db/types';
+import type { AskView } from '@/src/db/repository';
 import type { RecordingSettings } from '@/src/recording/settings';
 import { NOTIFY, useRun } from '../notify';
 
 /** Learning diagnosis: which sites record the questions you send, and what was recorded. */
-const props = defineProps<{ asks: Ask[]; recording: RecordingSettings; analysis: { pending: number; lastError?: string }; configured: boolean }>();
+const props = defineProps<{ asks: AskView[]; recording: RecordingSettings; analysis: { pending: number; lastError?: string }; configured: boolean }>();
 const notify = inject(NOTIFY)!;
 const run = useRun();
 
@@ -119,6 +120,9 @@ async function exclude(ask: Ask) {
     <ul class="asks">
       <li v-for="ask in shown" :key="ask.id" class="ask" data-testid="ask">
         <span class="ask-text">{{ ask.text }}</span>
+        <span v-if="ask.concepts.length" class="chips" data-testid="ask-concepts">
+          <span v-for="c in ask.concepts" :key="c" class="chip">{{ c }}</span>
+        </span>
         <span class="muted small">
           <a :href="ask.conversationUrl" target="_blank" rel="noopener">{{ siteName(ask.site) }}</a> · {{ when(ask.sentAt) }}
         </span>

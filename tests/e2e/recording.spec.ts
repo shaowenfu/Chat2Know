@@ -123,4 +123,24 @@ test('Analyze now tags waiting questions; a failure is kept and shown', async ({
   await panel.getByTestId('analyze-now').click();
   await expect(panel.getByTestId('analysis-pending')).toHaveCount(0);
   await expect(panel.getByTestId('analysis-error')).toHaveCount(0);
+  await expect(panel.getByTestId('ask-concepts')).toHaveText(['Trace properties', 'Transpose properties']);
+});
+
+test('ten waiting questions start an analysis on their own', async ({ context, extensionId, fixtureServer, mockLlm }) => {
+  const page = await context.newPage();
+  await page.goto(`${fixtureServer}/${PAGE}`);
+  const panel = await context.newPage();
+  await panel.goto(`chrome-extension://${extensionId}/sidepanel.html`);
+  await configureModel(panel, mockLlm.url);
+  await send(panel, 'recording/setOrigins', { origins: [fixtureServer] });
+  for (let i = 1; i <= 10; i++) {
+    await page.locator('#prompt').fill(`question ${i}: why does the transpose reverse a product?`);
+    await page.locator('#prompt').press('Enter');
+    await page.locator('#prompt').fill('');
+    await page.waitForTimeout(80); // each send is its own message
+  }
+  await expect.poll(async () => (await send<{ pending: number }>(panel, 'analysis/get', {})).data.pending).toBe(0);
+  const asks = (await send<{ concepts: string[] }[]>(panel, 'asks/list', {})).data;
+  expect(asks).toHaveLength(10);
+  expect(asks.every((a) => a.concepts.includes('Transpose properties'))).toBe(true);
 });

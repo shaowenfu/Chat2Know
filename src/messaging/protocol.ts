@@ -6,8 +6,8 @@
 import type { CapturedSelection } from '@/src/capture/selection';
 import { UserError } from '@/src/errors';
 import type { TextQuote } from '@/src/capture/text-quote';
-import type { AskLaterResult, CaptureType, ImportResult, KeepDecision, PageQuestion, Stats } from '@/src/db/repository';
-import type { Ask, InboxItem, Mastery, QuizItem, Review, Verdict } from '@/src/db/types';
+import type { AskLaterResult, AskView, CaptureType, ImportResult, KeepDecision, PageQuestion, Stats } from '@/src/db/repository';
+import type { InboxItem, Mastery, QuizItem, Review, Verdict } from '@/src/db/types';
 import type { RecordingSettings } from '@/src/recording/settings';
 import type { CandidateCard, Suggestion } from '@/src/llm/prompts';
 import type { Placement } from '@/src/services/placement';
@@ -93,7 +93,7 @@ export interface MessageMap {
   'recording/setPaused': { req: { paused: boolean }; res: RecordingSettings };
   /** From the recorder: a question the user just sent on the sender's page. Stored only if the background's gate allows. */
   'asks/record': { req: { text: string }; res: { recorded: boolean } };
-  'asks/list': { req: Record<string, never>; res: Ask[] };
+  'asks/list': { req: Record<string, never>; res: AskView[] };
   'asks/delete': { req: { id: string }; res: null };
   'asks/clear': { req: Record<string, never>; res: null };
   /** Stop recording a conversation and delete what was recorded in it. */

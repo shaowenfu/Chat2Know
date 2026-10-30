@@ -630,3 +630,13 @@ button.danger:hover {
   border-radius: 8px;
   white-space: nowrap;
 }
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.chips .chip {
+  border: 1px solid var(--border);
+}

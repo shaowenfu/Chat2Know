@@ -142,7 +142,8 @@ let analysis: Promise<void> | undefined;
 function runAnalysis(): Promise<void> {
   analysis ??= (async () => {
     try {
-      await analyze(await repo(), await client());
+      const settings = await loadSettings();
+      await analyze(await repo(), new LlmClient(settings), settings.embeddingModel);
       await saveAnalysis({});
     } catch (err) {
       await saveAnalysis({ lastError: errorText(err) });
@@ -403,7 +404,7 @@ export default defineBackground(() => {
       if (isConfigured(await loadSettings()) && (await r.untaggedAsks()).length >= AUTO_ANALYZE_AT) runAnalysis().catch(() => {});
       return { recorded: true };
     },
-    'asks/list': async () => (await repo()).listAsks(),
+    'asks/list': async () => (await repo()).listAskViews(),
     'asks/delete': async ({ id }) => {
       await (await repo()).deleteAsk(id);
       notifyChanged();

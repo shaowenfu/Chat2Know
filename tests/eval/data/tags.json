@@ -1,0 +1,14 @@
+[
+  { "question": "为什么 (AB)^T = B^T A^T，转置之后顺序为什么要反过来？", "expected": ["转置", "transpose"] },
+  { "question": "矩阵乘法为什么不满足交换律？", "expected": ["乘法", "multiplication"] },
+  { "question": "tr(AB) = tr(BA) 怎么证明？", "expected": ["迹", "trace"] },
+  { "question": "How do I take the gradient of x^T A x with respect to x?", "expected": ["gradient", "derivative", "求导", "matrix calculus"] },
+  { "question": "为什么有的书矩阵求导结果是行向量，有的是列向量？", "expected": ["布局", "layout"] },
+  { "question": "softmax 计算时为什么要先减去最大值？", "expected": ["softmax", "数值稳定", "numerical", "溢出", "overflow"] },
+  { "question": "What does the learning rate actually control in gradient descent?", "expected": ["learning rate", "gradient descent", "学习率"] },
+  { "question": "特征值和特征向量的几何意义是什么？", "expected": ["特征值", "特征向量", "eigen"] },
+  { "question": "交叉熵损失和 KL 散度是什么关系？", "expected": ["交叉熵", "kl", "cross-entropy", "cross entropy"] },
+  { "question": "为什么矩阵可对角化需要 n 个线性无关的特征向量？", "expected": ["对角化", "diagonaliz"] },
+  { "question": "帮我把这段话润色得更正式一点", "expected": [] },
+  { "question": "Thanks, that makes sense!", "expected": [] }
+]

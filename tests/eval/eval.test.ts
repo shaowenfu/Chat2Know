@@ -11,7 +11,7 @@ import { Repository } from '@/src/db/repository';
 import type { NodeView } from '@/src/db/types';
 import { suggestMastery } from '@/src/graph/mastery';
 import { LlmClient, type ModelSettings } from '@/src/llm/client';
-import { parseSuggestion, suggestPrompt } from '@/src/llm/prompts';
+import { parseSuggestion, parseTags, suggestPrompt, tagPrompt } from '@/src/llm/prompts';
 import { organize } from '@/src/services/organize';
 import { suggestPlacement } from '@/src/services/placement';
 import { MOCK_KEY, startMockLlm, type MockLlm } from '../mock-llm/server';
@@ -96,6 +96,18 @@ describe('eval', () => {
       if (top.includes(q.expected)) hits++;
     }
     results.placementTop3 = hits / queries.length;
+  });
+
+  it('concept tagging: a tagged concept names the expected topic; chit-chat gets none', async () => {
+    const cases = data('tags.json') as { question: string; expected: string[] }[];
+    const tags = await client.json(tagPrompt({ asks: cases.map((c) => c.question), known: [] }), (v) => parseTags(v, cases.length));
+    const hit = cases.filter((c, i) => {
+      const names = tags[i]!.concepts.map((n) => n.toLowerCase());
+      return c.expected.length ? names.some((n) => c.expected.some((e) => n.includes(e.toLowerCase()))) : names.length === 0;
+    });
+    results.tagAccuracy = hit.length / cases.length;
+    results.tagSamples = cases.map((c, i) => ({ question: c.question, domain: tags[i]!.domain, concepts: tags[i]!.concepts }));
+    expect(tags).toHaveLength(cases.length);
   });
 
   it('mastery suggestion: agreement with labelled cases (rule, no model)', () => {

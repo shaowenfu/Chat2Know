@@ -58,6 +58,10 @@ const stripHash = (url: string) => url.replace(/#.*$/, '');
 /** Kept knowledge the user must know by heart. Open questions marked "know by heart" wait until they are kept. */
 const isQuizzable = (n: KNode) => n.type === 'knowledge' && n.status !== 'draft' && n.mastery === 'internalize';
 
+export interface AskView extends Ask {
+  concepts: string[];
+}
+
 export interface Stats {
   masteredThisWeek: number;
   /** The north star for the week before this one, then the one before that, and so on (3 weeks). */
@@ -227,6 +231,14 @@ export class Repository {
     return this.db.asks.orderBy('sentAt').reverse().toArray();
   }
 
+  /** Recorded questions, newest first, with the names of the concepts they were tagged with. */
+  async listAskViews(): Promise<AskView[]> {
+    const names = new Map((await this.db.concepts.toArray()).map((c) => [c.id, c.name]));
+    const byAsk = new Map<string, string[]>();
+    for (const t of await this.db.askTags.toArray()) byAsk.set(t.askId, [...(byAsk.get(t.askId) ?? []), names.get(t.conceptId)!]);
+    return (await this.listAsks()).map((a) => ({ ...a, concepts: byAsk.get(a.id) ?? [] }));
+  }
+
   /** Deleting a question also deletes what was inferred from it. */
   private async deleteAsks(ids: string[]): Promise<void> {
     await this.db.transaction('rw', this.db.asks, this.db.askTags, async () => {
@@ -271,6 +283,12 @@ export class Repository {
 
   async listConcepts(): Promise<Concept[]> {
     return this.db.concepts.toArray();
+  }
+
+  async linkConcepts(links: { conceptId: string; nodeId: string }[]): Promise<void> {
+    await this.db.transaction('rw', this.db.concepts, async () => {
+      for (const { conceptId, nodeId } of links) await this.db.concepts.update(conceptId, { nodeId });
+    });
   }
 
   async listPrereqEdges(): Promise<PrereqEdge[]> {

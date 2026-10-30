@@ -8,6 +8,7 @@ import { LlmClient } from '@/src/llm/client';
 import { parseGraphAddition, parseTags } from '@/src/llm/prompts';
 import { conceptKey, hasCycle, levels, prerequisiteClosure } from '@/src/graph/prereq';
 import { tagBatch } from '@/src/services/tagging';
+import { linkConcepts } from '@/src/services/linking';
 import { startMockLlm, type MockLlm } from '../mock-llm/server';
 
 let mock: MockLlm;
@@ -78,6 +79,44 @@ describe('concept tagging', () => {
     await tagBatch(repo, client);
     await repo.deleteAsk(a.id);
     expect(await repo.listAskTags()).toEqual([]);
+  });
+});
+
+describe('linking concepts to note cards', () => {
+  async function card(title: string, term?: string) {
+    const node = await repo.capture('knowledge', { markdown: title, quote: { exact: title, prefix: '', suffix: '' }, url: 'u', pageTitle: 'p' });
+    await repo.confirmTitle(node.id, title);
+    if (term) await db.nodes.update(node.id, { term });
+    return node.id;
+  }
+
+  it('links by name without an embedding model, and by similarity with one', async () => {
+    await ask('Why does the transpose reverse a product?');
+    await ask('How do I take the trace of a product?');
+    await tagBatch(repo, client);
+    const transpose = await card('transpose PROPERTIES');
+    const trace = await card('Trace properties.'); // not the same name, same words
+    const rules = await card('What are the rules?', 'Matrix operation rules');
+
+    mock.requests.length = 0;
+    await linkConcepts(repo, client, '');
+    expect(mock.requests).toEqual([]);
+    let byName = new Map((await repo.listConcepts()).map((c) => [c.name, c.nodeId]));
+    expect(byName.get('Transpose properties')).toBe(transpose);
+    expect(byName.get('Matrix operation rules')).toBe(rules);
+    expect(byName.get('Trace properties')).toBeUndefined();
+
+    const withEmbeddings = new LlmClient({ baseUrl: mock.url, model: 'm', apiKey: 'test-key', embeddingModel: 'mock-embed' });
+    await linkConcepts(repo, withEmbeddings, 'mock-embed');
+    byName = new Map((await repo.listConcepts()).map((c) => [c.name, c.nodeId]));
+    expect(byName.get('Trace properties')).toBe(trace);
+    expect(byName.get('Matrix basics')).toBeUndefined(); // nothing similar enough
+  });
+
+  it('lists questions with their concept names', async () => {
+    await ask('Why does the transpose reverse a product?');
+    await tagBatch(repo, client);
+    expect((await repo.listAskViews()).map((a) => a.concepts)).toEqual([['Transpose properties']]);
   });
 });
 
