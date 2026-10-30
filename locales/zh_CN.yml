@@ -203,3 +203,8 @@ explain:
   close: 关闭
   empty: 请先写下你的讲解。
   tooBig: "这一支有 $1 张卡片，一次最多讲 $2 张，请选一个更小的分支。"
+oneMinute:
+  start: 一分钟讲清楚
+  writing: 正在写…
+  copy: 复制
+  copied: 已复制，试着大声讲一遍。

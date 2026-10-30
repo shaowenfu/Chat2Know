@@ -15,7 +15,7 @@ import { Distiller } from '@/src/services/distill';
 import { judge, problemFor, selfGrade } from '@/src/services/quiz';
 import { suggestPlacement } from '@/src/services/placement';
 import { organize } from '@/src/services/organize';
-import { checkExplanation } from '@/src/services/explain';
+import { checkExplanation, oneMinuteScript } from '@/src/services/explain';
 import { isRecording, loadRecording, saveRecording, shouldRecord, type RecordingSettings } from '@/src/recording/settings';
 import { siteFor } from '@/src/capture/sites';
 
@@ -321,6 +321,7 @@ export default defineBackground(() => {
       notifyChanged();
       return result;
     },
+    'explain/oneMinute': async ({ nodeId }) => ({ script: await oneMinuteScript(await repo(), await client(), nodeId) }),
     'stats/get': async () => (await repo()).stats(),
     'settings/get': async () => toPublic(await loadSettings()),
     'settings/save': async ({ baseUrl, model, embeddingModel, apiKey }) => {

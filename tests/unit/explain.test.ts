@@ -5,7 +5,7 @@ import { Hlc } from '@/src/db/hlc';
 import { Repository } from '@/src/db/repository';
 import { LlmClient } from '@/src/llm/client';
 import { parseExplanationCheck } from '@/src/llm/prompts';
-import { checkExplanation } from '@/src/services/explain';
+import { checkExplanation, oneMinuteScript } from '@/src/services/explain';
 
 let seq = 0;
 let db: Chat2KnowDB;
@@ -72,5 +72,21 @@ describe('explain it to me', () => {
     const { bodies, client: c } = client({});
     await expect(checkExplanation(repo, c, root, '   ')).rejects.toMatchObject({ key: 'explain.empty' });
     expect(bodies).toEqual([]);
+  });
+
+  it('writes a one-minute script from the branch statements only', async () => {
+    const root = await kept('What does attention do?', 'Attention mixes values.');
+    const child = await kept('Why scale?', 'Scaling avoids saturation.');
+    await repo.moveNode(child, root);
+    const bodies: string[] = [];
+    const fetchFn = vi.fn(async (_u: string | URL | Request, init?: RequestInit) => {
+      bodies.push(init!.body as string);
+      return new Response(JSON.stringify({ choices: [{ message: { content: 'Attention mixes values, scaled to avoid saturation.' } }] }));
+    });
+    const c = new LlmClient({ baseUrl: 'https://m.dev', model: 'm', apiKey: 'k', embeddingModel: '' }, fetchFn);
+    expect(await oneMinuteScript(repo, c, root)).toBe('Attention mixes values, scaled to avoid saturation.');
+    expect(bodies[0]).toContain('[task:oneMinute]');
+    expect(bodies[0]).toContain('- Why scale? — Scaling avoids saturation.');
+    expect(await db.reviews.count()).toBe(0); // a script is not a check
   });
 });

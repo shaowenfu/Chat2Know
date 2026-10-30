@@ -203,3 +203,8 @@ explain:
   close: Close
   empty: Write your explanation first.
   tooBig: "This branch has $1 cards; explain at most $2 at once. Pick a smaller branch."
+oneMinute:
+  start: Explain it in one minute
+  writing: Writing…
+  copy: Copy
+  copied: Copied. Say it out loud.

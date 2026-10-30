@@ -5,6 +5,7 @@ import { sendMessage } from '@/src/messaging';
 import type { Mastery, NodeView } from '@/src/db/types';
 import ExplainIt from './ExplainIt.vue';
 import FollowUp from './FollowUp.vue';
+import OneMinute from './OneMinute.vue';
 import MasteryPicker from './MasteryPicker.vue';
 import TitlePicker from './TitlePicker.vue';
 import { useRun } from '../notify';
@@ -70,7 +71,10 @@ const host = (url: string) => (URL.canParse(url) ? new URL(url).host : url);
       <MasteryPicker :node="node" :suggested="suggested" />
       <FollowUp :parent-id="node.id" />
     </div>
-    <ExplainIt v-if="configured && (node.type === 'knowledge' || node.type === 'topic') && node.status !== 'draft'" :node-id="node.id" />
+    <div v-if="configured && (node.type === 'knowledge' || node.type === 'topic') && node.status !== 'draft'" class="teach">
+      <ExplainIt :node-id="node.id" />
+      <OneMinute :node-id="node.id" />
+    </div>
     <pre v-if="node.body" class="body">{{ node.body }}</pre>
     <button
       v-for="source in node.sources"

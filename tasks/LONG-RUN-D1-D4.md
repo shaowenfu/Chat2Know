@@ -69,7 +69,7 @@ check `git log`, and continue from the first unchecked box.
 
 - [x] M5.1 Apply mode for internalize cards (alternating with recall, model-written problem, model judge); north star counts passes of every mode.
 - [x] M5.2 Explain it to me: card + subtree explanation judged per node, reviews per node, failed nodes red in the tree.
-- [ ] M5.3 One-minute script for a card / subtree, copy button.
+- [x] M5.3 One-minute script for a card / subtree, copy button.
 - [ ] M5.4 Stats: last 4 weeks of the north star. Exports: tree-ordered Markdown, OPML, Anki CSV, one export menu.
 
 ## D2: concept tags and prerequisite graph

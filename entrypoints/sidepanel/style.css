@@ -586,3 +586,20 @@ button.danger:hover {
 .points .verdict-partial strong {
   color: var(--bad);
 }
+
+.teach {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  align-items: flex-start;
+}
+
+.teach > .explain,
+.teach > .script {
+  flex-basis: 100%;
+}
+
+.script p {
+  margin: 6px 0;
+  line-height: 1.5;
+}

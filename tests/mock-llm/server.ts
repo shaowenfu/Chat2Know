@@ -83,6 +83,8 @@ function chatReply(task: string, user: string): string {
       });
       return JSON.stringify({ feedback: 'Mock overall feedback.', points });
     }
+    case 'oneMinute':
+      return `In one minute: ${between(user, 'Topic:')} comes down to ${user.match(/^- /gm)?.length ?? 0} points.`;
     case 'organize': {
       // One card per substantial paragraph, quoting its first sentence verbatim.
       const cards = user

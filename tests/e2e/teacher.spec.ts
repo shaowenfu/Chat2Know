@@ -52,3 +52,13 @@ test('explain a branch: each card is checked, the missed one is marked on the ma
   await panel.setViewportSize({ width: 400, height: 700 });
   await panel.screenshot({ path: 'tests/e2e/screenshots/explain.png' });
 });
+
+test('one-minute script from a branch, ready to copy', async ({ context, extensionId, mockLlm }) => {
+  const panel = await context.newPage();
+  await panel.goto(`chrome-extension://${extensionId}/sidepanel.html`);
+  await configureModel(panel, mockLlm.url);
+  await importBranch(panel);
+  const root = panel.locator('[data-testid="card"][data-title="What does attention do?"]');
+  await root.getByTestId('one-minute').click();
+  await expect(root.getByTestId('one-minute-script')).toHaveText('In one minute: What does attention do? comes down to 2 points.');
+});

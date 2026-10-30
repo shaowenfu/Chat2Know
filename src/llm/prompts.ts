@@ -196,6 +196,18 @@ export function parseExplanationCheck(value: unknown, pointCount: number): Expla
   return { feedback: str(o, 'feedback'), points: Array.from({ length: pointCount }, (_, i) => byPoint.get(i + 1)!) };
 }
 
+// ---------------------------------------------------------------- one-minute script
+
+export function oneMinutePrompt(input: { topic: string; points: { title: string; statement: string }[] }): ChatMessage[] {
+  return [
+    system(
+      'oneMinute',
+      `Write a script the learner can say out loud in about one minute (about 150 English words, or about 250 Chinese characters) that explains the topic using the points below. Start with the core answer in one sentence, then the key points in a natural order, and end with one sentence on when it applies or its limits. Plain spoken sentences: no headings, no lists, no Markdown. Do not add facts beyond the points. ${SAME_LANGUAGE}`,
+    ),
+    { role: 'user', content: `Topic: ${input.topic}\n\nPoints:\n${input.points.map((p) => `- ${p.title} — ${p.statement}`).join('\n')}` },
+  ];
+}
+
 // ---------------------------------------------------------------- organize (whole page / paste)
 
 export interface CandidateCard {

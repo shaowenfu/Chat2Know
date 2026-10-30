@@ -69,6 +69,8 @@ export interface MessageMap {
   'quiz/judge': { req: { nodeId: string; answer: string; problem?: string }; res: Review };
   /** "Explain it to me": check an explanation of a card and its branch; every kept card in it gets a review. */
   'explain/check': { req: { nodeId: string; explanation: string }; res: ExplainResult };
+  /** A one-minute script to say out loud for a card and its branch. */
+  'explain/oneMinute': { req: { nodeId: string }; res: { script: string } };
   'stats/get': { req: Record<string, never>; res: { masteredThisWeek: number; due: number; mustKnow: number; openQuestions: number } };
   'settings/get': { req: Record<string, never>; res: PublicSettings };
   /** Omitting apiKey keeps the stored key. */
