@@ -3,6 +3,7 @@ import { ref, watch } from 'vue';
 import { i18n } from '#i18n';
 import { sendMessage } from '@/src/messaging';
 import type { Mastery, NodeView } from '@/src/db/types';
+import ExplainIt from './ExplainIt.vue';
 import FollowUp from './FollowUp.vue';
 import MasteryPicker from './MasteryPicker.vue';
 import TitlePicker from './TitlePicker.vue';
@@ -45,6 +46,7 @@ const host = (url: string) => (URL.canParse(url) ? new URL(url).host : url);
   <article class="card" data-testid="card" :data-title="node.title">
     <div class="card-head">
       <span v-if="node.type === 'idea'" class="badge" data-type="idea">{{ i18n.t('type.idea') }}</span>
+      <span v-if="node.lastVerdict === 'fail' || node.lastVerdict === 'partial'" class="badge flag" data-testid="card-flag">{{ i18n.t('card.missed') }}</span>
       <button type="button" class="link danger" :aria-label="i18n.t('panel.delete')" @click="remove">{{ i18n.t('panel.delete') }}</button>
     </div>
     <div class="title" data-testid="card-title">{{ node.title }}</div>
@@ -68,6 +70,7 @@ const host = (url: string) => (URL.canParse(url) ? new URL(url).host : url);
       <MasteryPicker :node="node" :suggested="suggested" />
       <FollowUp :parent-id="node.id" />
     </div>
+    <ExplainIt v-if="configured && (node.type === 'knowledge' || node.type === 'topic') && node.status !== 'draft'" :node-id="node.id" />
     <pre v-if="node.body" class="body">{{ node.body }}</pre>
     <button
       v-for="source in node.sources"

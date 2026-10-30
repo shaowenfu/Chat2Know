@@ -70,6 +70,7 @@ queue:
   dontKeep: 不记
   followUp: "关于这句话：\"$1\"\n我的疑问：$2"
 card:
+  missed: 上次没讲清
   distilling: 正在提炼…
   needsModel: 配置模型后会自动提炼这张卡片。
   distillFailed: "提炼失败：$1"
@@ -195,3 +196,10 @@ learn:
   noAsks: 在勾选的网站上发出的提问会出现在这里。
   exclude: 不记录这段对话
   excluded: 这段对话不再记录，已删除其中的提问。
+explain:
+  start: 讲给我听
+  placeholder: 像教别人一样，讲清这张卡片和它下面的内容
+  check: 检查我的讲解
+  close: 关闭
+  empty: 请先写下你的讲解。
+  tooBig: "这一支有 $1 张卡片，一次最多讲 $2 张，请选一个更小的分支。"

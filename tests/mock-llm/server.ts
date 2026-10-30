@@ -73,6 +73,16 @@ function chatReply(task: string, user: string): string {
       const hit = [...words(between(user, apply ? "Learner's solution:\n" : "Learner's answer:\n", '\u0000'))].some((w) => expected.has(w));
       return JSON.stringify(hit ? { verdict: 'pass', feedback: 'Covers the key point.' } : { verdict: 'fail', feedback: 'Misses the key point.' });
     }
+    case 'explain': {
+      // A point passes when the explanation shares a 4+ letter word with its statement.
+      const words = (s: string) => new Set(s.toLowerCase().match(/[a-z]{4,}/g) ?? []);
+      const said = words(between(user, 'Explanation:\n', '\u0000'));
+      const points = [...user.matchAll(/^\[(\d+)\] .*? — (.*)$/gm)].map(([, n, statement]) => {
+        const hit = [...words(statement!)].some((w) => said.has(w));
+        return { point: Number(n), verdict: hit ? 'pass' : 'fail', feedback: hit ? 'Explained.' : 'Missing.' };
+      });
+      return JSON.stringify({ feedback: 'Mock overall feedback.', points });
+    }
     case 'organize': {
       // One card per substantial paragraph, quoting its first sentence verbatim.
       const cards = user

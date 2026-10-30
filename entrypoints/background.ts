@@ -15,6 +15,7 @@ import { Distiller } from '@/src/services/distill';
 import { judge, problemFor, selfGrade } from '@/src/services/quiz';
 import { suggestPlacement } from '@/src/services/placement';
 import { organize } from '@/src/services/organize';
+import { checkExplanation } from '@/src/services/explain';
 import { isRecording, loadRecording, saveRecording, shouldRecord, type RecordingSettings } from '@/src/recording/settings';
 import { siteFor } from '@/src/capture/sites';
 
@@ -314,6 +315,11 @@ export default defineBackground(() => {
       const review = await judge(await repo(), await client(), nodeId, answer, problem);
       notifyChanged();
       return review;
+    },
+    'explain/check': async ({ nodeId, explanation }) => {
+      const result = await checkExplanation(await repo(), await client(), nodeId, explanation);
+      notifyChanged();
+      return result;
     },
     'stats/get': async () => (await repo()).stats(),
     'settings/get': async () => toPublic(await loadSettings()),

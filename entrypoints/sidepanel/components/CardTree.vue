@@ -65,7 +65,7 @@ async function drop(parentId: string, beforeId?: string) {
           />
         </div>
       </template>
-      <span v-else class="statement" data-testid="outline-item">{{ item.node.summary ?? item.node.title }}</span>
+      <span v-else class="statement" :class="{ flagged: item.node.lastVerdict === 'fail' || item.node.lastVerdict === 'partial' }" data-testid="outline-item">{{ item.node.summary ?? item.node.title }}</span>
       <CardTree
         v-if="item.children.length"
         :items="item.children"

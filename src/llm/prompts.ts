@@ -156,6 +156,46 @@ export function applyJudgePrompt(input: { problem: string; statement: string; an
   ];
 }
 
+// ---------------------------------------------------------------- explain it to me
+
+export interface PointCheck {
+  verdict: (typeof VERDICTS)[number];
+  feedback: string;
+}
+
+export interface ExplanationCheck {
+  feedback: string;
+  points: PointCheck[]; // one per point, in the order given
+}
+
+export function explainPrompt(input: { topic: string; points: { title: string; statement: string }[]; explanation: string }): ChatMessage[] {
+  return [
+    system(
+      'explain',
+      `A learner explains a topic in their own words, as if teaching it. Check the explanation against each numbered point. "pass": the point is explained correctly. "partial": touched on but incomplete or vague. "fail": missing or wrong. Judge meaning, not wording; do not require the points' exact phrasing. Return JSON only: {"feedback": "two or three sentences on the explanation as a whole", "points": [{"point": 1, "verdict": "pass" | "partial" | "fail", "feedback": "one sentence: what was missing or wrong, or what was good"}]} with every point exactly once. ${SAME_LANGUAGE}`,
+    ),
+    {
+      role: 'user',
+      content: `Topic: ${input.topic}\n\nPoints to cover:\n${input.points.map((p, i) => `[${i + 1}] ${p.title} — ${p.statement}`).join('\n')}\n\nExplanation:\n${input.explanation}`,
+    },
+  ];
+}
+
+export function parseExplanationCheck(value: unknown, pointCount: number): ExplanationCheck {
+  const o = obj(value);
+  const list = o.points;
+  if (!Array.isArray(list)) throw new LlmError('Expected "points" to be a list');
+  const byPoint = new Map<number, PointCheck>();
+  for (const item of list) {
+    const p = obj(item);
+    const n = p.point;
+    if (typeof n !== 'number' || n < 1 || n > pointCount || byPoint.has(n)) throw new LlmError(`Unexpected point ${String(n)}`);
+    byPoint.set(n, { verdict: oneOf(p, 'verdict', VERDICTS), feedback: str(p, 'feedback') });
+  }
+  if (byPoint.size !== pointCount) throw new LlmError(`Expected ${pointCount} points, got ${byPoint.size}`);
+  return { feedback: str(o, 'feedback'), points: Array.from({ length: pointCount }, (_, i) => byPoint.get(i + 1)!) };
+}
+
 // ---------------------------------------------------------------- organize (whole page / paste)
 
 export interface CandidateCard {

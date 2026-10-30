@@ -70,6 +70,7 @@ queue:
   dontKeep: Don't keep
   followUp: "About this sentence: \"$1\"\nMy question: $2"
 card:
+  missed: Missed last check
   distilling: Distilling…
   needsModel: Set up a model to distill this card.
   distillFailed: "Distilling failed: $1"
@@ -195,3 +196,10 @@ learn:
   noAsks: Questions you send on a ticked site appear here.
   exclude: Don't record this conversation
   excluded: This conversation is no longer recorded; its questions were deleted.
+explain:
+  start: Explain it to me
+  placeholder: Explain this, and what is under it, as if teaching someone
+  check: Check my explanation
+  close: Close
+  empty: Write your explanation first.
+  tooBig: "This branch has $1 cards; explain at most $2 at once. Pick a smaller branch."

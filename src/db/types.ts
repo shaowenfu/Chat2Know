@@ -125,6 +125,8 @@ export interface QuizItem extends NodeView {
 /** A node as the side panel shows it. */
 export interface NodeView extends KNode {
   sources: Source[];
+  /** Verdict of the latest review in any mode; a miss shows on the map until the next check. */
+  lastVerdict?: Verdict;
   /** Incoming tree edge, if the node has a parent. */
   parent?: { id: string; kind: EdgeKind; order: string };
 }

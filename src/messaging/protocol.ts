@@ -11,6 +11,7 @@ import type { Ask, InboxItem, Mastery, QuizItem, Review, Verdict } from '@/src/d
 import type { RecordingSettings } from '@/src/recording/settings';
 import type { CandidateCard, Suggestion } from '@/src/llm/prompts';
 import type { Placement } from '@/src/services/placement';
+import type { ExplainResult } from '@/src/services/explain';
 import type { PublicSettings } from '@/src/llm/settings';
 import type { NodeView } from '@/src/db/types';
 
@@ -66,6 +67,8 @@ export interface MessageMap {
   'quiz/problem': { req: { nodeId: string }; res: { problem: string } };
   /** Model judge; with `problem`, the answer is judged as a solution to it (apply mode). */
   'quiz/judge': { req: { nodeId: string; answer: string; problem?: string }; res: Review };
+  /** "Explain it to me": check an explanation of a card and its branch; every kept card in it gets a review. */
+  'explain/check': { req: { nodeId: string; explanation: string }; res: ExplainResult };
   'stats/get': { req: Record<string, never>; res: { masteredThisWeek: number; due: number; mustKnow: number; openQuestions: number } };
   'settings/get': { req: Record<string, never>; res: PublicSettings };
   /** Omitting apiKey keeps the stored key. */

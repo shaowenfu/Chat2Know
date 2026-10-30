@@ -239,6 +239,20 @@ export class Repository {
     await this.db.embeddings.bulkPut(rows);
   }
 
+  /** A card and every live card below it, parents before children, siblings in tree order. */
+  async subtree(rootId: string): Promise<KNode[]> {
+    const root = await this.db.nodes.get(rootId);
+    if (!root || root.deletedAt !== undefined) throw new Error('Card not found');
+    const out = [root];
+    for (let frontier = [rootId]; frontier.length; ) {
+      const edges = (await this.db.edges.where('from').anyOf(frontier).toArray()).sort((a, b) => (a.order < b.order ? -1 : 1));
+      const children = (await this.db.nodes.bulkGet(edges.map((e) => e.to))).filter((n): n is KNode => !!n && n.deletedAt === undefined);
+      out.push(...children);
+      frontier = children.map((n) => n.id);
+    }
+    return out;
+  }
+
   /** Ids of every node below `id` in the tree. */
   async descendantsOf(id: string): Promise<Set<string>> {
     const out = new Set<string>();
@@ -485,9 +499,16 @@ export class Repository {
     const byNode = new Map<string, Source[]>();
     for (const s of sources) byNode.set(s.nodeId, [...(byNode.get(s.nodeId) ?? []), s]);
     const parents = new Map((await this.db.edges.where('to').anyOf(ids).toArray()).map((e) => [e.to, e]));
+    const latest = await this.latestReviews();
     return nodes.map((n) => {
       const e = parents.get(n.id);
-      return { ...n, sources: byNode.get(n.id) ?? [], ...(e ? { parent: { id: e.from, kind: e.kind, order: e.order } } : {}) };
+      const verdict = latest.get(n.id)?.verdict;
+      return {
+        ...n,
+        sources: byNode.get(n.id) ?? [],
+        ...(e ? { parent: { id: e.from, kind: e.kind, order: e.order } } : {}),
+        ...(verdict ? { lastVerdict: verdict } : {}),
+      };
     });
   }
 

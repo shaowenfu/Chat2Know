@@ -566,3 +566,23 @@ button.danger:hover {
   margin: 6px 0;
   white-space: pre-wrap;
 }
+
+.badge.flag,
+.statement.flagged {
+  color: var(--bad);
+}
+
+.explain textarea {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.points {
+  padding-left: 18px;
+  margin: 6px 0;
+}
+
+.points .verdict-fail strong,
+.points .verdict-partial strong {
+  color: var(--bad);
+}
