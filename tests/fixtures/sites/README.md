@@ -15,11 +15,11 @@ The ChatGPT and Claude send buttons and the Doubao user message come from the fu
 | ChatGPT | yes | yes | ✓ ProseMirror `contenteditable` | ✓ `button[type="submit"].bg-composer-primary` | ✓ `[data-user-message-bubble]` |
 | Claude | yes | yes | ✓ `[data-testid="chat-input"]` | ✓ `[data-testid="chat-input-send"]` | ✓ `[data-testid="user-message"]` |
 | Gemini | yes | yes | ✓ `.ql-editor` | ✓ icon `arrow_upward` | ✓ `.user-query-bubble-with-background` (text from `.query-text-line`; the bubble also has a hidden "你说" label) |
-| DeepSeek | yes | yes | ✓ `textarea` | ✓ `.ds-button--primary` | ✓ `.ds-message` (only hashed classes around it; answers assumed to contain `.ds-markdown`, not yet checked) |
+| DeepSeek | yes | yes | ✓ `textarea` | ✓ `.ds-button--primary` | ✓ `.ds-message` without `.ds-markdown` (answers are `.ds-message` too; the `answer` sample checks they are skipped) |
 | Kimi | yes | yes | ✓ Lexical `.chat-input-editor` | ✓ `.send-button-container` | ✓ `.user-content` |
 | Doubao | yes | yes | ✓ ProseMirror `contenteditable` | ✓ `[data-testid="chat_input_send_button"]` | ✓ `[data-testid="send_message"][data-message-role="user"]` (text from `message_text_content`) |
 
-Still needed: one DeepSeek answer (assistant) message, to confirm answers are not matched as user messages.
+Besides these samples, `sites.test.ts` runs every config on the site's full conversation page (`../pages/*-zh-*.html`): the user-message selector must return exactly the questions sent there, in order, and no answers.
 
 ## Page shells (`<site>-shell.html`)
 

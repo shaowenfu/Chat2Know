@@ -1,4 +1,5 @@
 import TurndownService from 'turndown';
+import { katexHtmlTex } from './katex-html';
 
 /**
  * HTML to Markdown with rules for what AI chat pages render:
@@ -57,6 +58,8 @@ function texOf(node: HTMLElement): string | null {
   if (annotation?.textContent) return annotation.textContent.trim();
   const alt = node.getAttribute('alttext') ?? node.querySelector('math[alttext]')?.getAttribute('alttext');
   if (alt) return alt.trim();
+  const html = node.classList?.contains('katex-html') ? node : node.querySelector('.katex-html');
+  if (html) return katexHtmlTex(html) || null;
   return null;
 }
 
@@ -219,8 +222,30 @@ function cellMarkdown(cell: HTMLTableCellElement): string {
     .trim();
 }
 
+const ownRows = (table: Element) => Array.from(table.querySelectorAll('tr')).filter((tr) => tr.closest('table') === table);
+
+/**
+ * Sticky table headers are drawn as two tables, one holding only the <thead>, the other
+ * the body (Kimi, 2026-10). They are the only two tables in their nearest shared ancestor.
+ */
+function splitTable(table: Element): { head: Element; body: Element } | null {
+  let box: Element | null = table.parentElement;
+  for (let i = 0; i < 4 && box; i++, box = box.parentElement) {
+    const tables = box.querySelectorAll('table');
+    if (tables.length === 1) continue;
+    if (tables.length !== 2) return null;
+    const [head, body] = [tables[0]!, tables[1]!];
+    const headRows = ownRows(head);
+    const isHeadOnly = headRows.length > 0 && headRows.every((r) => r.parentElement?.tagName === 'THEAD');
+    return isHeadOnly && !body.querySelector('thead') ? { head, body } : null;
+  }
+  return null;
+}
+
 function tableMarkdown(table: HTMLTableElement): string {
-  const rows = Array.from(table.querySelectorAll('tr')).filter((tr) => tr.closest('table') === table);
+  const split = splitTable(table);
+  if (split?.head === table) return '';
+  const rows = [...(split ? ownRows(split.head) : []), ...ownRows(table)];
   if (rows.length === 0) return '';
   const cells = rows.map((tr) => Array.from(tr.children).filter((c): c is HTMLTableCellElement => /^T[DH]$/.test(c.tagName)).map(cellMarkdown));
   const width = Math.max(...cells.map((r) => r.length));

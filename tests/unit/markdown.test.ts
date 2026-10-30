@@ -89,4 +89,16 @@ describe('htmlToMarkdown', () => {
       '<div class="md-code-block"><div class="md-code-block-banner"><span class="d813de27">python</span><div role="button"><span class="code-info-button-text">Copy</span></div><div role="button"><span class="code-info-button-text">Download</span></div></div><pre><span>import numpy as np</span>\n<span>x = 1</span></pre></div>';
     expect(htmlToMarkdown(html)).toBe('```python\nimport numpy as np\nx = 1\n```');
   });
+
+  it('rebuilds LaTeX from KaTeX HTML when the page keeps no source (Kimi)', () => {
+    const html =
+      '<p>给定 <span class="katex-wrapper"><span class="katex"><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut"></span><span class="mord"><span class="mord mathnormal">z</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist"><span><span class="pstrut"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">\u200b</span></span><span class="vlist-r"><span class="vlist"><span></span></span></span></span></span></span></span></span></span></span> 为例</p>';
+    expect(htmlToMarkdown(html)).toBe('给定 $z_{i}$ 为例');
+  });
+
+  it('joins a sticky table header drawn as its own table with the body table (Kimi)', () => {
+    const html =
+      '<div class="table" role="table"><div class="table-header"><table role="presentation"><thead><tr><th>a</th><th>b</th></tr></thead></table></div><div class="table-container"><table role="presentation"><tbody><tr><td>1</td><td>2</td></tr></tbody></table></div></div>';
+    expect(htmlToMarkdown(html)).toBe('| a | b |\n| --- | --- |\n| 1 | 2 |');
+  });
 });

@@ -13,7 +13,8 @@ Every `.html` here is converted by the capture code and compared with `../expect
 | `deepseek-zh-matrix.html` | chat.deepseek.com conversation | zh | 2026-10-30 | KaTeX, code with a language header bar, tables |
 | `doubao-zh-softmax.html` | doubao.com conversation | zh | 2026-10-30 | formulas in `copy-text` (some drawn as SVG), code, tables |
 | `gemini-zh-logarithm.html` | gemini.google.com conversation | zh | 2026-10-30 | formulas in `data-math` (empty KaTeX annotation), code with a header bar, tables |
+| `kimi-zh-softmax.html` | kimi.com conversation | zh | 2026-10-30 | KaTeX HTML only (no TeX source), code, tables with a separate sticky header table |
 
 The chat pages were saved with `copy(document.documentElement.outerHTML)`, sanitized (`npm run sanitize`), and slimmed: inline `<style>` and SVG contents removed, the conversation and its surrounding page frame kept.
 
-Still missing: Kimi. Kimi renders KaTeX HTML only and keeps no TeX source in the page, so its formulas can only be captured as visible text.
+Kimi keeps no TeX source in the page; its formulas are rebuilt from KaTeX's HTML layout (`src/capture/katex-html.ts`, checked in `tests/unit/katex-html.test.ts` against the pages that do carry the source).

@@ -1,6 +1,6 @@
 ---
 id: T002
-status: doing
+status: done
 branch: task/T002-site-snapshots
 supersedes: T001
 ---
@@ -77,13 +77,13 @@ Run `npx vitest run tests/unit/fixtures.test.ts -u`. This writes `tests/fixtures
 
 ## Acceptance criteria
 - [x] arXiv and a blog (Zhihu) page.
-- [ ] Conversation pages for all 6 chat sites, saved with `copy(document.documentElement.outerHTML)` so the conversation is included. (5 of 6 done 2026-10-30; Kimi missing.)
+- [x] Conversation pages for all 6 chat sites, saved with `copy(document.documentElement.outerHTML)` so the conversation is included. (done 2026-10-30.)
 - [x] Each chat page contains at least one formula, one code block and one table.
 - [x] Element samples for all 6 chat sites (from Notion, turned into `tests/fixtures/sites/<site>-elements.html` and checked by `tests/unit/sites.test.ts`).
-- [ ] Missing samples listed in `tests/fixtures/sites/README.md` (ChatGPT/Claude send button and Doubao user message done 2026-10-30; one DeepSeek answer left).
+- [x] Missing samples listed in `tests/fixtures/sites/README.md` (ChatGPT/Claude send button, Doubao user message, one DeepSeek answer; done 2026-10-30).
 - [x] `npm run sanitize -- --check` passes and no name or email remains (checked by hand).
 - [x] Files under 3 MB each (strip large inline `<style>`/`<svg>` blobs if needed).
-- [ ] `npm run check` passes. Expected outputs may show conversion problems; that is fine, they are the point.
+- [x] `npm run check` passes. Expected outputs may show conversion problems; that is fine, they are the point.
 
 ## Do not
 - Do not change code or existing tests.
