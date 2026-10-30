@@ -1,5 +1,5 @@
 import Dexie, { type EntityTable, type Table } from 'dexie';
-import type { Ask, AskTag, Concept, Diagnosis, Edge, Embedding, InboxItem, KNode, OpLogEntry, PrereqEdge, Preference, Review, Source } from './types';
+import type { Ask, AskTag, Concept, Diagnosis, DiagnosisQuiz, Edge, Embedding, InboxItem, KNode, OpLogEntry, PrereqEdge, Preference, Review, Source } from './types';
 
 export class Chat2KnowDB extends Dexie {
   nodes!: EntityTable<KNode, 'id'>;
@@ -15,6 +15,7 @@ export class Chat2KnowDB extends Dexie {
   concepts!: EntityTable<Concept, 'id'>;
   prereqEdges!: EntityTable<PrereqEdge, 'id'>;
   diagnoses!: EntityTable<Diagnosis, 'id'>;
+  quizzes!: EntityTable<DiagnosisQuiz, 'id'>;
 
   constructor(name = 'chat2know') {
     super(name);
@@ -51,6 +52,7 @@ export class Chat2KnowDB extends Dexie {
       concepts: 'id, domain',
       prereqEdges: 'id, from, to',
       diagnoses: 'id, status, createdAt',
+      quizzes: 'id, diagnosisId',
     });
   }
 }

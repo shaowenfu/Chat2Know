@@ -4,7 +4,7 @@ import { monotonicFactory } from 'ulid';
 import type { CapturedSelection } from '@/src/capture/selection';
 import { Hlc } from './hlc';
 import type { Chat2KnowDB } from './schema';
-import type { Ask, AskTag, Concept, Diagnosis, Edge, EdgeKind, Embedding, Entity, InboxItem, KNode, Mastery, NodeView, OpLogEntry, Preference, PrereqEdge, QuizItem, Review, ReviewMode, Source, Verdict } from './types';
+import type { Ask, AskTag, Concept, Diagnosis, DiagnosisQuiz, Edge, EdgeKind, Embedding, Entity, InboxItem, KNode, Mastery, NodeView, OpLogEntry, Preference, PrereqEdge, QuizItem, Review, ReviewMode, Source, Verdict } from './types';
 import { DAY_MS, isDue, nextInterval, quizMode } from '@/src/review/schedule';
 import type { TextQuote } from '@/src/capture/text-quote';
 import { titleFromMarkdown } from './title';
@@ -298,6 +298,44 @@ export class Repository {
     return rows;
   }
 
+  async getDiagnosis(id: string): Promise<Diagnosis> {
+    const d = await this.db.diagnoses.get(id);
+    if (!d) throw new Error('Diagnosis not found');
+    return d;
+  }
+
+  /** Confirms or dismisses a diagnosis (with the learner's verdict on it, when they gave one). */
+  async decideDiagnosis(id: string, status: 'confirmed' | 'dismissed', feedback?: Diagnosis['feedback']): Promise<void> {
+    await this.db.diagnoses.update(id, { status, decidedAt: this.now(), ...(feedback ? { feedback } : {}) });
+  }
+
+  async addQuiz(quiz: Omit<DiagnosisQuiz, 'id' | 'takenAt'>): Promise<DiagnosisQuiz> {
+    const at = this.now();
+    const row: DiagnosisQuiz = { ...quiz, id: this.ulid(at), takenAt: at };
+    await this.db.quizzes.add(row);
+    return row;
+  }
+
+  /** The note card for a concept: the linked one, or a new topic card named after it (linked from now on). */
+  async conceptNode(conceptId: string): Promise<KNode> {
+    return this.db.transaction('rw', [this.db.concepts, this.db.nodes, this.db.oplog], async () => {
+      const concept = await this.db.concepts.get(conceptId);
+      if (!concept) throw new Error('Concept not found');
+      const linked = concept.nodeId ? await this.db.nodes.get(concept.nodeId) : undefined;
+      if (linked && linked.deletedAt === undefined) return linked;
+      const node = await this.findOrCreateTopic(concept.name);
+      await this.db.concepts.update(conceptId, { nodeId: node.id });
+      return node;
+    });
+  }
+
+  /** Passing reviews since a time: which card, when. */
+  async passesSince(at: number): Promise<{ nodeId: string; at: number }[]> {
+    return (await this.db.reviews.where('createdAt').aboveOrEqual(at).toArray())
+      .filter((r) => r.verdict === 'pass')
+      .map((r) => ({ nodeId: r.nodeId, at: r.createdAt }));
+  }
+
   // ------------------------------------------------------------ prerequisite graph (local only, not logged)
 
   async listConcepts(): Promise<Concept[]> {
@@ -400,10 +438,17 @@ export class Repository {
     });
   }
 
-  /** Adds cards the user kept from an organize pass, each with its quote as provenance. */
-  async addCards(cards: { title: string; summary: string; quote: string }[], page?: { url: string; pageTitle: string }): Promise<string[]> {
+  /**
+   * Adds cards the user kept from an organize pass (each with its quote as provenance)
+   * or from a systematic review (`under` a concept's card, with a mastery requirement).
+   */
+  async addCards(
+    cards: { title: string; summary: string; quote?: string }[],
+    page?: { url: string; pageTitle: string },
+    place?: { under: string; mastery?: Mastery },
+  ): Promise<string[]> {
     const ids: string[] = [];
-    await this.db.transaction('rw', this.db.nodes, this.db.sources, this.db.oplog, async () => {
+    await this.db.transaction('rw', [this.db.nodes, this.db.edges, this.db.sources, this.db.oplog], async () => {
       for (const c of cards) {
         const at = this.now();
         const node: KNode = {
@@ -411,7 +456,8 @@ export class Repository {
           type: 'knowledge',
           title: c.title.trim(),
           summary: c.summary.trim(),
-          body: c.quote,
+          ...(c.quote ? { body: c.quote } : {}),
+          ...(place?.mastery ? { mastery: place.mastery } : {}),
           status: 'confirmed',
           askCount: 0,
           createdAt: at,
@@ -420,7 +466,8 @@ export class Repository {
         if (!node.title || !node.summary) throw new UserError('error.titleSummaryRequired');
         await this.db.nodes.add(node);
         await this.db.oplog.add(this.log('nodes', node.id, 'put', node));
-        if (page) {
+        if (place) await this.replaceParent(node.id, place.under, 'child');
+        if (page && c.quote) {
           const source = this.newSource(node.id, { ...page, markdown: c.quote, quote: { exact: c.quote, prefix: '', suffix: '' } }, at);
           await this.db.sources.add(source);
           await this.db.oplog.add(this.log('sources', source.id, 'put', source));

@@ -218,3 +218,29 @@ oneMinute:
   writing: 正在写…
   copy: 复制
   copied: 已复制，试着大声讲一遍。
+diag:
+  title: 从你的提问看
+  suspected: 可能的薄弱点
+  confirmed: 确认薄弱
+  remediated: 已补强 ✓
+  hypothesis: "最近两周，你有 $1 次提问涉及$2。根据这些提问，$3 可能值得系统回顾一下。"
+  listSeparator: 、
+  signal_repeat: "反复问到：$1"
+  signal_downshift: "在更高层的任务里问基础：$1"
+  signal_circling: "绕圈：$1"
+  evidence:
+    1: 你的 1 条提问
+    n: 你的 $1 条提问
+  openConversation: 回到原对话
+  takeQuiz: 两分钟小测验确认
+  accurate: 准
+  inaccurate: 不准
+  checkAnswers: 检查我的答案
+  withdrawn: "掌握得不错：$1 不是薄弱点，诊断已撤销。"
+  review: "系统回顾：$1"
+  writingReview: 正在生成系统回顾…
+  knowByHeart: 设为要熟记（之后考我）
+  keepReview: 记下选中的卡片
+  kept:
+    1: 已记下 1 张卡片，挂在该概念下
+    n: 已记下 $1 张卡片，挂在该概念下

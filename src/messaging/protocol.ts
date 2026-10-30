@@ -12,6 +12,7 @@ import type { RecordingSettings } from '@/src/recording/settings';
 import type { CandidateCard, Suggestion } from '@/src/llm/prompts';
 import type { Placement } from '@/src/services/placement';
 import type { ExplainResult } from '@/src/services/explain';
+import type { DiagnosisView } from '@/src/services/confirm';
 import type { PublicSettings } from '@/src/llm/settings';
 import type { NodeView } from '@/src/db/types';
 
@@ -99,6 +100,20 @@ export interface MessageMap {
   /** Stop recording a conversation and delete what was recorded in it. */
   'asks/exclude': { req: { conversationUrl: string }; res: RecordingSettings };
   'asks/export': { req: Record<string, never>; res: string };
+  /** Open diagnoses (suspected or confirmed) with their evidence. */
+  'diagnosis/list': { req: Record<string, never>; res: DiagnosisView[] };
+  /** 3–5 questions on the diagnosed concept. Not stored until answered. */
+  'diagnosis/quiz': { req: { id: string }; res: { items: { question: string; expected: string }[] } };
+  /** Judge the answers: passing withdraws the diagnosis, failing confirms it. */
+  'diagnosis/checkQuiz': {
+    req: { id: string; items: { question: string; expected: string }[]; answers: string[] };
+    res: { results: { verdict: Verdict; feedback: string }[]; passed: boolean };
+  };
+  /** The learner's verdict without the quiz: accurate confirms, not accurate dismisses. */
+  'diagnosis/decide': { req: { id: string; accurate: boolean }; res: null };
+  /** Review cards from the foundations up, for the learner to pick. */
+  'diagnosis/review': { req: { id: string }; res: { cards: { question: string; summary: string }[] } };
+  'diagnosis/keepReview': { req: { id: string; cards: { question: string; summary: string }[]; internalize: boolean }; res: { kept: number } };
   /** Questions waiting for analysis and the last background failure. */
   'analysis/get': { req: Record<string, never>; res: { pending: number; lastError?: string } };
   /** Analyze now: tag every waiting question. Errors go to the caller. */

@@ -6,6 +6,7 @@ import { onMessages, sendMessage } from '@/src/messaging';
 import type { InboxItem, NodeView, QuizItem } from '@/src/db/types';
 import type { RecordingSettings } from '@/src/recording/settings';
 import type { AskView, Stats } from '@/src/db/repository';
+import type { DiagnosisView } from '@/src/services/confirm';
 import type { PublicSettings } from '@/src/llm/settings';
 import AskQueue from './components/AskQueue.vue';
 import CardList from './components/CardList.vue';
@@ -29,6 +30,8 @@ const stats = ref<Stats>({ masteredThisWeek: 0, earlierWeeks: [0, 0, 0], due: 0,
 const asks = ref<AskView[]>([]);
 const recording = ref<RecordingSettings>({ origins: [], paused: false, excluded: [] });
 const analysis = ref<{ pending: number; lastError?: string }>({ pending: 0 });
+const diagnoses = ref<DiagnosisView[]>([]);
+const suspected = computed(() => diagnoses.value.filter((d) => d.status === 'suspected').length);
 const toolbarUnavailable = ref(false);
 const notice = ref<{ text: string; error: boolean } | null>(null);
 const fileInput = ref<HTMLInputElement | null>(null);
@@ -73,7 +76,7 @@ const leftovers = computed(() => {
 });
 
 async function refresh() {
-  [nodes.value, inbox.value, settings.value, due.value, stats.value, asks.value, recording.value, analysis.value] = await Promise.all([
+  [nodes.value, inbox.value, settings.value, due.value, stats.value, asks.value, recording.value, analysis.value, diagnoses.value] = await Promise.all([
     sendMessage('nodes/list', {}),
     sendMessage('inbox/list', {}),
     sendMessage('settings/get', {}),
@@ -82,6 +85,7 @@ async function refresh() {
     sendMessage('asks/list', {}),
     sendMessage('recording/get', {}),
     sendMessage('analysis/get', {}),
+    sendMessage('diagnosis/list', {}),
   ]);
 }
 
@@ -213,11 +217,11 @@ onUnmounted(() => browser.tabs.onActivated.removeListener(onTabActivated));
           {{ i18n.t('quiz.tab') }}<span v-if="due.length" class="pill">{{ due.length }}</span>
         </button>
         <button type="button" role="tab" :aria-selected="view === 'learn'" data-testid="tab-learn" @click="view = 'learn'">
-          {{ i18n.t('learn.tab') }}
+          {{ i18n.t('learn.tab') }}<span v-if="suspected" class="pill" data-testid="learn-pill">{{ suspected }}</span>
         </button>
       </nav>
 
-      <LearnView v-if="view === 'learn'" :asks="asks" :recording="recording" :analysis="analysis" :configured="configured" />
+      <LearnView v-if="view === 'learn'" :asks="asks" :recording="recording" :analysis="analysis" :diagnoses="diagnoses" :configured="configured" />
 
       <QuizView v-else-if="view === 'quiz'" :due="due" :configured="configured" :stats="stats" />
 

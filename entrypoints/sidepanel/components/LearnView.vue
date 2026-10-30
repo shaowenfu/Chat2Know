@@ -9,9 +9,17 @@ import type { Ask } from '@/src/db/types';
 import type { AskView } from '@/src/db/repository';
 import type { RecordingSettings } from '@/src/recording/settings';
 import { NOTIFY, useRun } from '../notify';
+import DiagnosisCard from './DiagnosisCard.vue';
+import type { DiagnosisView } from '@/src/services/confirm';
 
 /** Learning diagnosis: which sites record the questions you send, and what was recorded. */
-const props = defineProps<{ asks: AskView[]; recording: RecordingSettings; analysis: { pending: number; lastError?: string }; configured: boolean }>();
+const props = defineProps<{
+  asks: AskView[];
+  recording: RecordingSettings;
+  analysis: { pending: number; lastError?: string };
+  diagnoses: DiagnosisView[];
+  configured: boolean;
+}>();
 const notify = inject(NOTIFY)!;
 const run = useRun();
 
@@ -83,6 +91,10 @@ async function exclude(ask: Ask) {
 
 <template>
   <section class="learn" data-testid="learn">
+    <template v-if="diagnoses.length">
+      <h2>{{ i18n.t('diag.title') }}</h2>
+      <DiagnosisCard v-for="d in diagnoses" :key="d.id" :diagnosis="d" :configured="configured" />
+    </template>
     <p class="muted small" data-testid="learn-privacy">{{ i18n.t('learn.privacy') }}</p>
     <fieldset class="sites">
       <legend>{{ i18n.t('learn.sites') }}</legend>

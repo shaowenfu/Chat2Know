@@ -20,6 +20,7 @@ import { organize } from '@/src/services/organize';
 import { checkExplanation, oneMinuteScript } from '@/src/services/explain';
 import { isRecording, loadAnalysis, loadRecording, saveAnalysis, saveRecording, shouldRecord, type RecordingSettings } from '@/src/recording/settings';
 import { AUTO_ANALYZE_AT, analyze } from '@/src/services/analysis';
+import { checkDiagnosisQuiz, decide, diagnosisQuiz, keepReview, listDiagnosisViews, systematicReview } from '@/src/services/confirm';
 import { siteFor } from '@/src/capture/sites';
 
 const CONTENT_SCRIPT = '/content-scripts/content.js';
@@ -428,6 +429,24 @@ export default defineBackground(() => {
     'analysis/run': async () => {
       await runAnalysis();
       return null;
+    },
+    'diagnosis/list': async () => listDiagnosisViews(await repo()),
+    'diagnosis/quiz': async ({ id }) => ({ items: await diagnosisQuiz(await repo(), await client(), id) }),
+    'diagnosis/checkQuiz': async ({ id, items, answers }) => {
+      const result = await checkDiagnosisQuiz(await repo(), await client(), id, items, answers);
+      notifyChanged();
+      return result;
+    },
+    'diagnosis/decide': async ({ id, accurate }) => {
+      await decide(await repo(), id, accurate);
+      notifyChanged();
+      return null;
+    },
+    'diagnosis/review': async ({ id }) => ({ cards: await systematicReview(await repo(), await client(), id) }),
+    'diagnosis/keepReview': async ({ id, cards, internalize }) => {
+      const kept = await keepReview(await repo(), id, cards, internalize);
+      notifyChanged();
+      return { kept };
     },
     'asks/export': async () =>
       JSON.stringify({ format: 'chat2know-asks', version: 1, exportedAt: Date.now(), asks: await (await repo()).listAskViews() }, null, 2),

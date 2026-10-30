@@ -640,3 +640,28 @@ button.danger:hover {
 .chips .chip {
   border: 1px solid var(--border);
 }
+
+.diagnosis[data-status='confirmed'] {
+  border-color: var(--bad);
+}
+
+.evidence ul {
+  padding-left: 18px;
+  margin: 4px 0;
+}
+
+.evidence li {
+  margin: 2px 0;
+}
+
+.diag-quiz textarea {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.review .candidate {
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+  margin: 4px 0;
+}

@@ -309,6 +309,92 @@ export function parseCircling(value: unknown): { domain: string; concept: string
   return { domain: str(o, 'domain'), concept: str(o, 'concept') };
 }
 
+// ---------------------------------------------------------------- diagnosis: confirm with a quiz, then a systematic review
+
+export interface DiagnosisContext {
+  domain: string;
+  concept: string;
+  prerequisites: string[]; // what the concept rests on, foundations first
+  evidence: string[]; // the learner's own questions
+}
+
+const contextText = (c: DiagnosisContext) =>
+  [
+    `Domain: ${c.domain}`,
+    `Concept: ${c.concept}`,
+    c.prerequisites.length ? `It rests on: ${c.prerequisites.join('; ')}` : '',
+    `The learner's own questions:\n${c.evidence.map((e) => `- ${e}`).join('\n')}`,
+  ]
+    .filter(Boolean)
+    .join('\n\n');
+
+export function diagnosisQuizPrompt(input: DiagnosisContext): ChatMessage[] {
+  return [
+    system(
+      'diagnosisQuiz',
+      `From a learner's questions we suspect a gap in one concept. Write 3 to 5 short questions that check that concept itself (not the learner's original problems): each answerable in a sentence or a small calculation, together about two minutes. Give the expected answer for each. Return JSON only: {"items": [{"question": "...", "expected": "..."}]}. Formulas in LaTeX. Same language as the learner's questions.`,
+    ),
+    { role: 'user', content: contextText(input) },
+  ];
+}
+
+export function parseDiagnosisQuiz(value: unknown): { question: string; expected: string }[] {
+  const items = obj(value).items;
+  if (!Array.isArray(items) || items.length < 3 || items.length > 5) throw new LlmError('Expected 3 to 5 quiz items');
+  return items.map((i) => {
+    const o = obj(i);
+    return { question: str(o, 'question'), expected: str(o, 'expected') };
+  });
+}
+
+export function diagnosisJudgePrompt(input: { concept: string; items: { question: string; expected: string }[]; answers: string[] }): ChatMessage[] {
+  return [
+    system(
+      'diagnosisJudge',
+      `Check a learner's answers to a short quiz on one concept. Judge each on meaning, not wording. "pass": correct. "partial": partly right. "fail": wrong or empty. Return JSON only: {"results": [{"item": 1, "verdict": "pass" | "partial" | "fail", "feedback": "one sentence"}]} with every item exactly once. Same language as the questions.`,
+    ),
+    {
+      role: 'user',
+      content: `Concept: ${input.concept}\n\n${input.items
+        .map((it, i) => `[${i + 1}] Question: ${it.question}\nExpected: ${it.expected}\nAnswer: ${input.answers[i] ?? ''}`)
+        .join('\n\n')}`,
+    },
+  ];
+}
+
+export function parseDiagnosisJudgement(value: unknown, count: number): PointCheck[] {
+  const list = obj(value).results;
+  if (!Array.isArray(list)) throw new LlmError('Expected "results" to be a list');
+  const byItem = new Map<number, PointCheck>();
+  for (const r of list) {
+    const o = obj(r);
+    const n = o.item;
+    if (typeof n !== 'number' || n < 1 || n > count || byItem.has(n)) throw new LlmError(`Unexpected item ${String(n)}`);
+    byItem.set(n, { verdict: oneOf(o, 'verdict', VERDICTS), feedback: str(o, 'feedback') });
+  }
+  if (byItem.size !== count) throw new LlmError(`Expected ${count} results, got ${byItem.size}`);
+  return Array.from({ length: count }, (_, i) => byItem.get(i + 1)!);
+}
+
+export function systematicReviewPrompt(input: DiagnosisContext): ChatMessage[] {
+  return [
+    system(
+      'review',
+      `A learner keeps asking scattered questions that all come from not having one concept straight. Instead of answering them one by one, lay out a systematic review of that concept as 3 to 8 cards, ordered from the most basic idea up to the concept itself, so that the learner's questions answer themselves along the way. Each card: a question worth reviewing and a 1–3 sentence statement answering it. Return JSON only: {"cards": [{"question": "...", "summary": "..."}]}. Formulas in LaTeX. Same language as the learner's questions.`,
+    ),
+    { role: 'user', content: contextText(input) },
+  ];
+}
+
+export function parseReviewCards(value: unknown): { question: string; summary: string }[] {
+  const cards = obj(value).cards;
+  if (!Array.isArray(cards) || cards.length < 1) throw new LlmError('Expected "cards" to be a non-empty list');
+  return cards.map((c) => {
+    const o = obj(c);
+    return { question: str(o, 'question'), summary: str(o, 'summary') };
+  });
+}
+
 // ---------------------------------------------------------------- organize (whole page / paste)
 
 export interface CandidateCard {

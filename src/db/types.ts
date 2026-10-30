@@ -144,6 +144,17 @@ export interface Diagnosis {
   decidedAt?: number; // when it was confirmed or dismissed
 }
 
+/** The short quiz that confirms or withdraws a diagnosis. */
+export interface DiagnosisQuiz {
+  id: string;
+  diagnosisId: string;
+  items: { question: string; expected: string }[];
+  answers: string[];
+  results: { verdict: Verdict; feedback: string }[];
+  passed: boolean;
+  takenAt: number;
+}
+
 /** A recorded question is about this concept. */
 export interface AskTag {
   id: string;

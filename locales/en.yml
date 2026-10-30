@@ -218,3 +218,29 @@ oneMinute:
   writing: Writing…
   copy: Copy
   copied: Copied. Say it out loud.
+diag:
+  title: What your questions suggest
+  suspected: Possible gap
+  confirmed: Confirmed gap
+  remediated: Strengthened ✓
+  hypothesis: "In the last two weeks, $1 of your questions were about $2. Going over $3 systematically may help."
+  listSeparator: ", "
+  signal_repeat: "asked again: $1"
+  signal_downshift: "asked below the topic at hand: $1"
+  signal_circling: "went in circles: $1"
+  evidence:
+    1: Your question
+    n: Your $1 questions
+  openConversation: Open the conversation
+  takeQuiz: Check with a 2-minute quiz
+  accurate: Accurate
+  inaccurate: Not accurate
+  checkAnswers: Check my answers
+  withdrawn: "Looks solid: $1 is not a gap. Diagnosis withdrawn."
+  review: "Systematic review of $1"
+  writingReview: Writing the review…
+  knowByHeart: Know these by heart (quiz me on them)
+  keepReview: Keep the selected cards
+  kept:
+    1: Kept 1 card under the concept
+    n: Kept $1 cards under the concept

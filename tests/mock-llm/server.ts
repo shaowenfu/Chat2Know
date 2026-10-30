@@ -135,6 +135,28 @@ function chatReply(task: string, user: string): string {
       return tagReply(user);
     case 'prereq':
       return prereqReply(user);
+    case 'diagnosisQuiz': {
+      const concept = between(user, 'Concept:');
+      return JSON.stringify({
+        items: [1, 2, 3].map((n) => ({ question: `Quiz ${n} on ${concept}?`, expected: `${concept} answer ${n}: order reverses` })),
+      });
+    }
+    case 'diagnosisJudge': {
+      // An answer passes when it shares a 4+ letter word with its expected answer.
+      const words = (s: string) => new Set(s.toLowerCase().match(/[a-z]{4,}/g) ?? []);
+      const results = [...user.matchAll(/^\[(\d+)\] Question: .*\nExpected: (.*)\nAnswer: (.*)$/gm)].map(([, n, expected, answer]) => {
+        const hit = [...words(answer!)].some((w) => words(expected!).has(w));
+        return { item: Number(n), verdict: hit ? 'pass' : 'fail', feedback: hit ? 'Right.' : 'Not quite.' };
+      });
+      return JSON.stringify({ results });
+    }
+    case 'review': {
+      const concept = between(user, 'Concept:');
+      const base = between(user, 'It rests on:').split('; ').filter(Boolean);
+      return JSON.stringify({
+        cards: [...base, concept].map((c) => ({ question: `What is ${c}?`, summary: `${c} explained from the ground up.` })),
+      });
+    }
     case 'circling':
       return JSON.stringify(/derivative|求导|dimension|维度/i.test(user) ? { domain: 'Matrix calculus', concept: 'Layout conventions' } : { domain: '', concept: '' });
     case 'organize': {
