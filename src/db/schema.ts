@@ -1,5 +1,5 @@
 import Dexie, { type EntityTable, type Table } from 'dexie';
-import type { Edge, Embedding, InboxItem, KNode, OpLogEntry, Preference, Review, Source } from './types';
+import type { Ask, Edge, Embedding, InboxItem, KNode, OpLogEntry, Preference, Review, Source } from './types';
 
 export class Chat2KnowDB extends Dexie {
   nodes!: EntityTable<KNode, 'id'>;
@@ -10,6 +10,7 @@ export class Chat2KnowDB extends Dexie {
   oplog!: EntityTable<OpLogEntry, 'id'>;
   inbox!: EntityTable<InboxItem, 'id'>;
   preferences!: EntityTable<Preference, 'id'>;
+  asks!: EntityTable<Ask, 'id'>;
 
   constructor(name = 'chat2know') {
     super(name);
@@ -38,5 +39,7 @@ export class Chat2KnowDB extends Dexie {
       );
     // v3: inbox items link back to their question node; reviews are read by time for stats.
     this.version(3).stores({ inbox: 'id, questionNodeId, createdAt, expiresAt', reviews: 'id, nodeId, dueAt, createdAt' });
+    // v4: learning diagnosis. Recorded questions (local only, not logged).
+    this.version(4).stores({ asks: 'id, sentAt, conversationUrl' });
   }
 }

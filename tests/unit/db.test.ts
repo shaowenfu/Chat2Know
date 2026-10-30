@@ -136,6 +136,36 @@ describe('askLater', () => {
   });
 });
 
+describe('recorded questions', () => {
+  let db: Chat2KnowDB;
+  let repo: Repository;
+  beforeEach(() => ({ db, repo } = setup('asks')));
+  afterEach(() => db.delete());
+
+  it('stores asks newest first, outside the oplog and the export', async () => {
+    await repo.recordAsk({ site: 'chatgpt', conversationUrl: 'https://chatgpt.com/c/1#x', text: 'why transpose?' });
+    await repo.recordAsk({ site: 'chatgpt', conversationUrl: 'https://chatgpt.com/c/2', text: 'what is a trace?' });
+    expect((await repo.listAsks()).map((a) => [a.text, a.conversationUrl])).toEqual([
+      ['what is a trace?', 'https://chatgpt.com/c/2'],
+      ['why transpose?', 'https://chatgpt.com/c/1'],
+    ]);
+    expect(await db.oplog.count()).toBe(0);
+    expect(Object.keys(await repo.exportData())).not.toContain('asks');
+  });
+
+  it('deletes one ask, a whole conversation, or everything', async () => {
+    const a = await repo.recordAsk({ site: 'kimi', conversationUrl: 'https://www.kimi.com/chat/1', text: 'a' });
+    await repo.recordAsk({ site: 'kimi', conversationUrl: 'https://www.kimi.com/chat/1', text: 'b' });
+    await repo.recordAsk({ site: 'kimi', conversationUrl: 'https://www.kimi.com/chat/2', text: 'c' });
+    await repo.deleteAsk(a.id);
+    expect((await repo.listAsks()).map((x) => x.text)).toEqual(['c', 'b']);
+    await repo.deleteConversationAsks('https://www.kimi.com/chat/1#top');
+    expect((await repo.listAsks()).map((x) => x.text)).toEqual(['c']);
+    await repo.clearAsks();
+    expect(await repo.listAsks()).toEqual([]);
+  });
+});
+
 describe('schema migration', () => {
   it('upgrades v1 databases, defaulting askCount to 0', async () => {
     const name = `migrate-${seq++}`;

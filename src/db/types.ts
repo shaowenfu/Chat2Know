@@ -92,6 +92,18 @@ export interface Embedding {
   vector: number[];
 }
 
+/**
+ * A question the user sent on an AI site, recorded for learning diagnosis.
+ * Local only: not in the oplog, not in the default export.
+ */
+export interface Ask {
+  id: string;
+  site: string; // site config id, or the hostname for sites handled by the generic rule
+  conversationUrl: string; // page URL without the hash; tells "same conversation" from "across conversations"
+  text: string;
+  sentAt: number;
+}
+
 export type Entity = 'nodes' | 'edges' | 'sources' | 'reviews' | 'preferences';
 
 export interface OpLogEntry {

@@ -61,7 +61,7 @@ check `git log`, and continue from the first unchecked box.
 
 ## D1: recording the user's questions
 
-- [ ] D1.1 Schema v4 `asks`; repository: record, list, delete, clear, exclude conversation. `src/capture/recorder.ts` (site config + generic rule, dedupe) with unit tests on all 6 site pages (Enter and send button), generic textarea / contenteditable, Shift+Enter, IME composition, password input never read.
+- [x] D1.1 Schema v4 `asks`; repository: record, list, delete, clear, exclude conversation. `src/capture/recorder.ts` (site config + generic rule, dedupe) with unit tests on all 6 site pages (Enter and send button), generic textarea / contenteditable, Shift+Enter, IME composition, password input never read.
 - [ ] D1.2 Recorder content script; background: recording settings, permission-scoped registration, injection into open tabs, gate, badge, `asks/*` messages, separate JSON export.
 - [ ] D1.3 Learning tab: privacy notice, site ticks, pause, list with search / delete / clear / exclude conversation / export. E2E: generic capture by Enter and by button; paused → zero; not-enabled origin → zero; password field never; screenshot.
 
@@ -96,3 +96,5 @@ check `git log`, and continue from the first unchecked box.
 ## Log
 
 Short notes on deviations and why, newest last.
+
+- D1.1: A send is confirmed only when the input is cleared or changed within 2 s (or the input is detached). This one check rejects Enter while the site refuses to send and clicks on non-send buttons near the box, so the generic rule can treat any button near an editable as a candidate. Generic button reach: in its form, else the nearest editable within 4 ancestors.

@@ -4,7 +4,7 @@ import { monotonicFactory } from 'ulid';
 import type { CapturedSelection } from '@/src/capture/selection';
 import { Hlc } from './hlc';
 import type { Chat2KnowDB } from './schema';
-import type { Edge, EdgeKind, Embedding, Entity, InboxItem, KNode, Mastery, NodeView, OpLogEntry, Preference, Review, Source, Verdict } from './types';
+import type { Ask, Edge, EdgeKind, Embedding, Entity, InboxItem, KNode, Mastery, NodeView, OpLogEntry, Preference, Review, Source, Verdict } from './types';
 import { DAY_MS, isDue, nextInterval } from '@/src/review/schedule';
 import type { TextQuote } from '@/src/capture/text-quote';
 import { titleFromMarkdown } from './title';
@@ -201,6 +201,32 @@ export class Repository {
       await this.replaceParent(node.id, parentId, 'arose_from');
       return node;
     });
+  }
+
+  // ------------------------------------------------------------ recorded questions (local only, not logged)
+
+  async recordAsk(input: Omit<Ask, 'id' | 'sentAt'>): Promise<Ask> {
+    const at = this.now();
+    const ask: Ask = { ...input, conversationUrl: stripHash(input.conversationUrl), id: this.ulid(at), sentAt: at };
+    await this.db.asks.add(ask);
+    return ask;
+  }
+
+  /** Recorded questions, newest first. */
+  async listAsks(): Promise<Ask[]> {
+    return this.db.asks.orderBy('sentAt').reverse().toArray();
+  }
+
+  async deleteAsk(id: string): Promise<void> {
+    await this.db.asks.delete(id);
+  }
+
+  async clearAsks(): Promise<void> {
+    await this.db.asks.clear();
+  }
+
+  async deleteConversationAsks(conversationUrl: string): Promise<void> {
+    await this.db.asks.where('conversationUrl').equals(stripHash(conversationUrl)).delete();
   }
 
   // ------------------------------------------------------------ embeddings (cache, not logged)
