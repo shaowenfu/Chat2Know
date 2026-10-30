@@ -79,7 +79,7 @@ check `git log`, and continue from the first unchecked box.
 
 ## D3: signals and root cause
 
-- [ ] D3.1 Signal detection (repeat, downshift, circling) as pure functions over asks, tags and the graph; ask vectors cached on the ask; unit tests.
+- [x] D3.1 Signal detection (repeat, downshift, circling) as pure functions over asks, tags and the graph; ask vectors cached on the ask; unit tests.
 - [ ] D3.2 Root-cause ranking, circling model call, diagnosis creation with dedupe, cool-down and cap; synthetic sequences with known roots, top-3 rate recorded as a baseline test.
 
 ## D4: confirmation and presentation
@@ -105,3 +105,4 @@ Short notes on deviations and why, newest last.
 - M5.4: Stats keep `masteredThisWeek` and add `earlierWeeks` (3 rolling 7-day windows before it). Anki rows are kept knowledge cards with a statement; tags `chat2know` and `mastery::<level>`. Asks are not in any of these exports (D1 has its own).
 - D2.1: Dropped `askTags.confidence` and `prereqEdges.source` / `concepts.source` and `level` (nothing reads them; level is derived from the graph). Domains and concept names match case-insensitively. A tagging batch makes one tag call plus one graph call per domain with new concepts; the merged graph is checked for cycles before saving. Unit tests use the mock server in a node environment (happy-dom fetch has CORS).
 - D2.2: Shared vector helpers moved from placement into `src/services/vectors.ts` (`cosine`, `nodeVectors`, `embedAll`). Linking compares a concept name with a card's title + statement; the 0.85 threshold is a constant to tune with a real embedding model.
+- D3.1: Signals live in `src/graph/signals.ts` (pure) with `cosine` moved to `src/graph/cosine.ts`. Circling is reported as runs of questions (no concept needed); repeat and downshift as symptoms per concept. Question vectors are stored on the ask with their model and stripped from list views and the questions export.

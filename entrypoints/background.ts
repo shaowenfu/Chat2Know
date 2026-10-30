@@ -430,6 +430,6 @@ export default defineBackground(() => {
       return null;
     },
     'asks/export': async () =>
-      JSON.stringify({ format: 'chat2know-asks', version: 1, exportedAt: Date.now(), asks: await (await repo()).listAsks() }, null, 2),
+      JSON.stringify({ format: 'chat2know-asks', version: 1, exportedAt: Date.now(), asks: await (await repo()).listAskViews() }, null, 2),
   });
 });

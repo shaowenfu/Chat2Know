@@ -1,6 +1,7 @@
 import type { LlmClient } from '@/src/llm/client';
 import type { Repository } from '@/src/db/repository';
-import { cosine, nodeVectors } from './vectors';
+import { cosine } from '@/src/graph/cosine';
+import { nodeVectors } from './vectors';
 
 /** Above this cosine similarity two cards are treated as the same concept and a merge is offered. */
 export const DUPLICATE_THRESHOLD = 0.9;

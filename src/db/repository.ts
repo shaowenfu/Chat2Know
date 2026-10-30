@@ -58,7 +58,7 @@ const stripHash = (url: string) => url.replace(/#.*$/, '');
 /** Kept knowledge the user must know by heart. Open questions marked "know by heart" wait until they are kept. */
 const isQuizzable = (n: KNode) => n.type === 'knowledge' && n.status !== 'draft' && n.mastery === 'internalize';
 
-export interface AskView extends Ask {
+export interface AskView extends Omit<Ask, 'vector' | 'vectorModel'> {
   concepts: string[];
 }
 
@@ -231,12 +231,12 @@ export class Repository {
     return this.db.asks.orderBy('sentAt').reverse().toArray();
   }
 
-  /** Recorded questions, newest first, with the names of the concepts they were tagged with. */
+  /** Recorded questions, newest first, with the names of the concepts they were tagged with. Vectors stay in the background. */
   async listAskViews(): Promise<AskView[]> {
     const names = new Map((await this.db.concepts.toArray()).map((c) => [c.id, c.name]));
     const byAsk = new Map<string, string[]>();
     for (const t of await this.db.askTags.toArray()) byAsk.set(t.askId, [...(byAsk.get(t.askId) ?? []), names.get(t.conceptId)!]);
-    return (await this.listAsks()).map((a) => ({ ...a, concepts: byAsk.get(a.id) ?? [] }));
+    return (await this.listAsks()).map(({ vector: _v, vectorModel: _m, ...a }) => ({ ...a, concepts: byAsk.get(a.id) ?? [] }));
   }
 
   /** Deleting a question also deletes what was inferred from it. */
@@ -262,6 +262,12 @@ export class Repository {
   /** Questions concept tagging has not looked at yet, oldest first. */
   async untaggedAsks(): Promise<Ask[]> {
     return (await this.db.asks.orderBy('sentAt').toArray()).filter((a) => a.taggedAt === undefined);
+  }
+
+  async setAskVectors(rows: { id: string; vector: number[]; vectorModel: string }[]): Promise<void> {
+    await this.db.transaction('rw', this.db.asks, async () => {
+      for (const { id, vector, vectorModel } of rows) await this.db.asks.update(id, { vector, vectorModel });
+    });
   }
 
   async listAskTags(): Promise<AskTag[]> {

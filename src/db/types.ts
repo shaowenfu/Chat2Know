@@ -106,6 +106,8 @@ export interface Ask {
   text: string;
   sentAt: number;
   taggedAt?: number; // set once concept tagging has looked at it, even when it found no concept
+  vector?: number[]; // embedding for circling detection, computed once per embedding model
+  vectorModel?: string;
 }
 
 /** A concept in a domain's prerequisite graph (learning diagnosis). Local only. */

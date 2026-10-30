@@ -1,7 +1,8 @@
 import type { LlmClient } from '@/src/llm/client';
 import type { Repository } from '@/src/db/repository';
 import { conceptKey } from '@/src/graph/prereq';
-import { cosine, embedAll, nodeVectors } from './vectors';
+import { cosine } from '@/src/graph/cosine';
+import { embedAll, nodeVectors } from './vectors';
 
 /** Above this cosine similarity a concept name and a card are taken to be the same thing. */
 export const LINK_THRESHOLD = 0.85;

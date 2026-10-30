@@ -9,6 +9,7 @@ import { parseGraphAddition, parseTags } from '@/src/llm/prompts';
 import { conceptKey, hasCycle, levels, prerequisiteClosure } from '@/src/graph/prereq';
 import { tagBatch } from '@/src/services/tagging';
 import { linkConcepts } from '@/src/services/linking';
+import { embedAsks } from '@/src/services/vectors';
 import { startMockLlm, type MockLlm } from '../mock-llm/server';
 
 let mock: MockLlm;
@@ -117,6 +118,19 @@ describe('linking concepts to note cards', () => {
     await ask('Why does the transpose reverse a product?');
     await tagBatch(repo, client);
     expect((await repo.listAskViews()).map((a) => a.concepts)).toEqual([['Transpose properties']]);
+  });
+});
+
+describe('question vectors', () => {
+  it('are computed once per embedding model and kept out of the list view', async () => {
+    await ask('why transpose?');
+    await ask('why reverse the order?');
+    const c = new LlmClient({ baseUrl: mock.url, model: 'm', apiKey: 'test-key', embeddingModel: 'mock-embed' });
+    await embedAsks(repo, c, 'mock-embed', await repo.listAsks());
+    await embedAsks(repo, c, 'mock-embed', await repo.listAsks());
+    expect(mock.requests.filter((r) => r.path === '/embeddings')).toHaveLength(1);
+    expect((await repo.listAsks()).every((a) => a.vector?.length === 64 && a.vectorModel === 'mock-embed')).toBe(true);
+    expect(Object.keys((await repo.listAskViews())[0]!)).not.toContain('vector');
   });
 });
 
