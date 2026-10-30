@@ -25,8 +25,8 @@ Core flow: **ask → keep or not → mastery requirement → verify**.
 
 - Content script only captures. Side panel only renders UI. All model calls and DB reads/writes go through the background.
 - API keys live only in `chrome.storage.local`, are used only in the background, never logged, never exported by default.
-- All DB writes go through the repository layer in `src/db/`, which also appends to `oplog`. Exception: the `inbox` table is disposable and not logged; promoting an inbox item to a node is logged.
-- No "read all sites" permission. Inject content scripts on demand via `activeTab` + `scripting`.
+- All DB writes go through the repository layer in `src/db/`, which also appends to `oplog`. Exceptions, not logged: the disposable `inbox` (promoting an item to a node is logged) and the local-only learning-diagnosis tables (`asks`, `askTags`, `concepts`, `prereqEdges`, `diagnoses`, `quizzes`), which are never in the default export.
+- No "read all sites" permission. Inject content scripts on demand via `activeTab` + `scripting`. The one exception is the small `recorder` script (learning diagnosis): registered with `scripting.registerContentScripts` only on sites the user ticked, with host access requested for exactly those sites. It only reports sent questions; the background decides what is stored.
 - All user-facing strings go through i18n (`en` default, `zh_CN`). No hard-coded UI strings. Errors the user can act on are thrown as `UserError(i18nKey, subs)` and translated where shown; internal invariant errors and provider errors stay verbatim.
 - One model configuration: an OpenAI-compatible base URL, model, key and optional embedding model (`src/llm/`). Model JSON is validated strictly; bad output is an error, never patched.
 - No defensive fallbacks. Let errors surface; catch only where there is a real recovery (e.g. storing a distill error on the card for retry).

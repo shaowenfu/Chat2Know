@@ -6,6 +6,17 @@ All notable changes to this project are documented here. Format follows [Keep a 
 
 ### Added
 
+- Learning diagnosis (D1–D4), off until you tick a site:
+  - Record the questions you send on ChatGPT, Claude, Gemini, DeepSeek, Kimi, Doubao or any other site you tick (a generic rule covers the rest). Access is asked for each ticked site only; a REC badge shows while recording; pause, exclude a conversation, search, delete and export in the new **Learning** tab. Password and other `input` fields are never read.
+  - Questions are tagged with concepts in batches; each domain gets a prerequisite graph once, extended as new concepts appear; concepts link to your cards.
+  - Gaps are inferred from three signals (asked again and again, basics asked during harder work, going in circles) and the concept that explains most of them. At most three open at once, at most one automatic pass a day, a rejected one rests for 30 days.
+  - Each suspected gap shows your own questions as evidence (linked back to the conversation). Confirm it with a short quiz or say whether it is accurate. A confirmed gap is marked on the map and gets a systematic review, kept as cards to know by heart; passing them marks it strengthened.
+- M5 teacher mode:
+  - Quiz me alternates recall with **use it**: a short problem the model writes, judged as a solution.
+  - **Explain it to me** on any kept card: the model checks your explanation of the card and its branch, card by card; missed cards are marked on the map.
+  - **Explain it in one minute**: a script to say out loud, from the branch's statements.
+  - Stats show the north star for the three weeks before this one.
+  - Exports in one menu: Markdown (now in tree order), OPML and Anki CSV.
 - M4 semantic help and organizing:
   - Placement suggestions after keeping a card (top 3 similar cards as parents) and a merge offer for near-duplicate concepts, using the provider's embedding model when one is set.
   - Default mastery suggestion (know by heart / understand / know where to find) by a simple rule, and a "know it by heart?" prompt for terms asked three times.
@@ -24,6 +35,8 @@ All notable changes to this project are documented here. Format follows [Keep a 
 - Data: schema v3 (inbox links to its question, review indexes); preferences included in JSON export.
 
 ### Fixed
+
+- The "missed last check" mark and the stats panel read the review history once per refresh instead of several times.
 
 - Capture on real chat sites (checked against ChatGPT, Claude, Gemini, DeepSeek, Doubao and Kimi pages saved 2026-10):
   - Formulas keep their LaTeX when the site stores it in an attribute (`data-math-source`, `data-math`, `copy-text`), including formulas drawn as SVG.

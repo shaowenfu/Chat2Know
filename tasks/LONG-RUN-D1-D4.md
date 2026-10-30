@@ -1,6 +1,6 @@
 ---
 id: LR2
-status: doing
+status: done
 branch: claude/wizardly-ramanujan-nw4ns1
 owner: main engineer (cloud)
 ---
@@ -90,8 +90,8 @@ check `git log`, and continue from the first unchecked box.
 ## Final
 
 - [x] F1 Self-review of the whole diff vs `main` (code-review skill + own pass): bugs, dead code, redundant fallbacks, over-design, naming; fix.
-- [ ] F2 Docs: CHANGELOG, README usage, plan and module progress notes, CLAUDE.md if rules changed (recorder is the one always-on script).
-- [ ] F3 `npm run check` green; fast-forward `main`; push `main` and this branch.
+- [x] F2 Docs: CHANGELOG, README usage, plan and module progress notes, CLAUDE.md if rules changed (recorder is the one always-on script).
+- [x] F3 `npm run check` green; fast-forward `main`; push `main` and this branch.
 
 ## Log
 
