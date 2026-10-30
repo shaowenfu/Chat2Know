@@ -1,6 +1,6 @@
 ---
 id: T002
-status: todo
+status: doing
 branch: task/T002-site-snapshots
 supersedes: T001
 ---
@@ -14,14 +14,15 @@ Replaces T001. Needs a logged-in browser, so the **product owner does steps 1–
 - Input and send samples let the main engineer write per-site configs for recording questions (learning diagnosis D1). Without them selectors would be guesses.
 
 ## Sites
-ChatGPT (chatgpt.com), Claude (claude.ai), Gemini (gemini.google.com), DeepSeek (chat.deepseek.com), Kimi (kimi.com). Plus, for step 1 only: one arXiv HTML paper page and one ordinary blog post.
+ChatGPT (chatgpt.com), Claude (claude.ai), Gemini (gemini.google.com), DeepSeek (chat.deepseek.com), Kimi (kimi.com), Doubao (doubao.com). Plus, for step 1 only: one arXiv HTML paper page and one ordinary blog post.
 
 ## Steps
 
 ### 1. Conversation page (each site)
 1. Open a conversation that contains **a rendered formula, a code block, a table and a bulleted list**. Ask for them if needed, e.g. "Explain softmax with its formula, a Python snippet, and a comparison table." Use one Chinese and one English conversation where possible.
-2. Wait for the answer to finish, then press Ctrl+S (Cmd+S on Mac) and choose **Webpage, HTML only**.
-3. Save as `tests/fixtures/pages/<site>-<lang>-<topic>.html`, e.g. `chatgpt-en-softmax.html`, `kimi-zh-softmax.html`.
+2. Wait for the answer to finish. **Do not use Ctrl+S**: these sites draw the conversation with JavaScript, and "Save page" stores the original server HTML without it (the first attempt on 2026-10-30 produced page shells with 10–90 characters of text).
+3. Instead, open DevTools (F12) → **Console**, run `copy(document.documentElement.outerHTML)`, and paste into a new file `tests/fixtures/pages/<site>-<lang>-<topic>.html`, e.g. `chatgpt-en-softmax.html`, `doubao-zh-softmax.html`. This is the page as you see it, conversation included.
+4. Check: open the file in a text editor and search for a word from the answer. If it is not there, the copy did not work.
 
 ### 2. Input and send sample (each of the 5 chat sites)
 In the same conversation, type a question in the input box but **do not send it**. Then open DevTools (F12) and copy three elements, each with right-click on the element in the Elements panel → **Copy → Copy outerHTML**:
@@ -56,8 +57,14 @@ Paste them into `tests/fixtures/sites/<site>.md` using this template:
 ```
 ````
 
-### 3. Remove personal data (required, do it yourself)
-In every file, search for and replace with `REDACTED`: your email, your name, avatar image URLs, account/organization IDs, and anything that looks like a token (`token`, `bearer`, `session`, `sk-`). Delete `<script>` blocks that contain inline config or tokens. Do not commit a file you have not checked.
+### 3. Remove secrets and personal data (required, before `git add`)
+Saved pages contain live session tokens and keys (the 2026-10-30 ChatGPT page carried an access token, Gemini pages carry API keys). Run:
+
+```bash
+CHAT2KNOW_REDACT='your name|your handle' npm run sanitize -- tests/fixtures/pages/*.html tests/fixtures/sites/*.html
+```
+
+It removes all `<script>` blocks (except formula scripts), token meta tags, API keys, JWTs, account/user ids, avatar URLs, emails, and the names you list. Then search the files yourself for your name and email once more. `npm run check` fails if anything is left (unit test `fixtures-clean`).
 
 ### 4. Generate expected output (can be a local agent)
 Run `npx vitest run tests/unit/fixtures.test.ts -u`. This writes `tests/fixtures/expected/<name>.md` for each new page. Commit them as generated; do **not** edit them by hand. The main engineer reviews them and fixes the converter where the output is wrong.
@@ -69,10 +76,11 @@ Run `npx vitest run tests/unit/fixtures.test.ts -u`. This writes `tests/fixtures
 - `tests/fixtures/expected/*.md` (generated only)
 
 ## Acceptance criteria
-- [ ] Conversation pages for all 5 chat sites plus arXiv and a blog (at least 7 files; Chinese and English where possible).
+- [x] arXiv and a blog (Zhihu) page.
+- [ ] Conversation pages for all 6 chat sites, saved with `copy(document.documentElement.outerHTML)` so the conversation is included.
 - [ ] Each chat page contains at least one formula, one code block and one table.
-- [ ] `tests/fixtures/sites/` has a filled template for all 5 chat sites.
-- [ ] No email, real name or token in any file (checked by hand).
+- [ ] `tests/fixtures/sites/` has a filled template for all 6 chat sites (the product owner keeps these notes in Notion; the main engineer turns them into these files).
+- [ ] `npm run sanitize -- --check` passes and no name or email remains (checked by hand).
 - [ ] Files under 3 MB each (strip large inline `<style>`/`<svg>` blobs if needed).
 - [ ] `npm run check` passes. Expected outputs may show conversion problems; that is fine, they are the point.
 
