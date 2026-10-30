@@ -15,8 +15,12 @@ import { Distiller } from '@/src/services/distill';
 import { judge, selfGrade } from '@/src/services/quiz';
 import { suggestPlacement } from '@/src/services/placement';
 import { organize } from '@/src/services/organize';
+import { isRecording, loadRecording, saveRecording, shouldRecord, type RecordingSettings } from '@/src/recording/settings';
+import { siteFor } from '@/src/capture/sites';
 
 const CONTENT_SCRIPT = '/content-scripts/content.js';
+const RECORDER_SCRIPT = '/content-scripts/recorder.js';
+const RECORDER_ID = 'chat2know-recorder';
 
 async function deviceId(): Promise<string> {
   const { deviceId } = await browser.storage.local.get('deviceId');
@@ -128,6 +132,45 @@ async function openSource(sourceId: string): Promise<{ tabId: number; highlighte
   }
 }
 
+const matchesOf = (origins: string[]) => origins.map((o) => `${o}/*`);
+
+/** Runs the recorder on exactly the ticked origins; the "REC" badge shows while it records. */
+async function registerRecorder(s: RecordingSettings): Promise<void> {
+  if ((await browser.scripting.getRegisteredContentScripts({ ids: [RECORDER_ID] })).length) {
+    await browser.scripting.unregisterContentScripts({ ids: [RECORDER_ID] });
+  }
+  if (s.origins.length) {
+    await browser.scripting.registerContentScripts([
+      { id: RECORDER_ID, matches: matchesOf(s.origins), js: [RECORDER_SCRIPT], runAt: 'document_idle' },
+    ]);
+  }
+  await showRecordingBadge(s);
+}
+
+async function showRecordingBadge(s: RecordingSettings): Promise<void> {
+  await browser.action.setBadgeText({ text: isRecording(s) ? 'REC' : '' });
+  await browser.action.setBadgeBackgroundColor({ color: '#b3261e' });
+}
+
+async function setRecordingOrigins(origins: string[]): Promise<RecordingSettings> {
+  const previous = await loadRecording();
+  const next = { ...previous, origins: [...new Set(origins.map((o) => new URL(o).origin))] };
+  await saveRecording(next);
+  await registerRecorder(next);
+  // Open tabs get the recorder now; one that cannot be scripted (discarded, an error page) gets it on its next load.
+  const added = next.origins.filter((o) => !previous.origins.includes(o));
+  if (added.length) {
+    const tabs = await browser.tabs.query({ url: matchesOf(added) });
+    await Promise.allSettled(tabs.map((t) => browser.scripting.executeScript({ target: { tabId: t.id! }, files: [RECORDER_SCRIPT] })));
+  }
+  // Give back access to sites no longer ticked, but never the model endpoint's.
+  const { baseUrl } = await loadSettings();
+  const modelOrigin = baseUrl ? new URL(baseUrl).origin : undefined;
+  const removed = previous.origins.filter((o) => !next.origins.includes(o) && o !== modelOrigin);
+  if (removed.length) await browser.permissions.remove({ origins: matchesOf(removed) });
+  return next;
+}
+
 const MENU_KNOWLEDGE = 'chat2know-save-knowledge';
 const MENU_IDEA = 'chat2know-save-idea';
 const MENU_ASK = 'chat2know-ask-later';
@@ -137,7 +180,11 @@ export default defineBackground(() => {
   // Cards captured while the worker was asleep or the model was unreachable.
   void distiller().then((d) => d.drain());
 
+  // Registered scripts survive restarts; re-registering on install / update keeps them in step with the settings.
+  browser.runtime.onStartup.addListener(() => void loadRecording().then(showRecordingBadge));
+
   browser.runtime.onInstalled.addListener(() => {
+    void loadRecording().then(registerRecorder);
     void browser.contextMenus.removeAll().then(() => {
       browser.contextMenus.create({ id: MENU_KNOWLEDGE, title: i18n.t('menu.saveKnowledge'), contexts: ['selection'] });
       browser.contextMenus.create({ id: MENU_IDEA, title: i18n.t('menu.saveIdea'), contexts: ['selection'] });
@@ -304,5 +351,49 @@ export default defineBackground(() => {
       notifyChanged();
       return result;
     },
+    'recording/get': () => loadRecording(),
+    'recording/setOrigins': async ({ origins }) => {
+      const next = await setRecordingOrigins(origins);
+      notifyChanged();
+      return next;
+    },
+    'recording/setPaused': async ({ paused }) => {
+      const next = { ...(await loadRecording()), paused };
+      await saveRecording(next);
+      await showRecordingBadge(next);
+      notifyChanged();
+      return next;
+    },
+    'asks/record': async ({ text }, sender) => {
+      // The gate uses the page the message came from, never anything the page could claim.
+      const url = sender.url;
+      if (!url || sender.id !== browser.runtime.id || !shouldRecord(await loadRecording(), url)) return { recorded: false };
+      const host = new URL(url).hostname;
+      await (await repo()).recordAsk({ site: siteFor(host)?.id ?? host, conversationUrl: url, text });
+      notifyChanged();
+      return { recorded: true };
+    },
+    'asks/list': async () => (await repo()).listAsks(),
+    'asks/delete': async ({ id }) => {
+      await (await repo()).deleteAsk(id);
+      notifyChanged();
+      return null;
+    },
+    'asks/clear': async () => {
+      await (await repo()).clearAsks();
+      notifyChanged();
+      return null;
+    },
+    'asks/exclude': async ({ conversationUrl }) => {
+      const current = await loadRecording();
+      const url = conversationUrl.replace(/#.*$/, '');
+      const next = { ...current, excluded: [...new Set([...current.excluded, url])] };
+      await saveRecording(next);
+      await (await repo()).deleteConversationAsks(url);
+      notifyChanged();
+      return next;
+    },
+    'asks/export': async () =>
+      JSON.stringify({ format: 'chat2know-asks', version: 1, exportedAt: Date.now(), asks: await (await repo()).listAsks() }, null, 2),
   });
 });

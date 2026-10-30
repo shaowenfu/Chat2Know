@@ -7,7 +7,8 @@ import type { CapturedSelection } from '@/src/capture/selection';
 import { UserError } from '@/src/errors';
 import type { TextQuote } from '@/src/capture/text-quote';
 import type { AskLaterResult, CaptureType, ImportResult, KeepDecision, PageQuestion } from '@/src/db/repository';
-import type { InboxItem, Mastery, Review, Verdict } from '@/src/db/types';
+import type { Ask, InboxItem, Mastery, Review, Verdict } from '@/src/db/types';
+import type { RecordingSettings } from '@/src/recording/settings';
 import type { CandidateCard, Suggestion } from '@/src/llm/prompts';
 import type { Placement } from '@/src/services/placement';
 import type { PublicSettings } from '@/src/llm/settings';
@@ -74,6 +75,20 @@ export interface MessageMap {
   'data/exportJson': { req: Record<string, never>; res: string };
   'data/exportMarkdown': { req: Record<string, never>; res: string };
   'data/importJson': { req: { json: string }; res: ImportResult };
+
+  // Recording the user's sent questions (learning diagnosis)
+  'recording/get': { req: Record<string, never>; res: RecordingSettings };
+  /** Sets the sites to record on. The side panel requests their host permission first. */
+  'recording/setOrigins': { req: { origins: string[] }; res: RecordingSettings };
+  'recording/setPaused': { req: { paused: boolean }; res: RecordingSettings };
+  /** From the recorder: a question the user just sent on the sender's page. Stored only if the background's gate allows. */
+  'asks/record': { req: { text: string }; res: { recorded: boolean } };
+  'asks/list': { req: Record<string, never>; res: Ask[] };
+  'asks/delete': { req: { id: string }; res: null };
+  'asks/clear': { req: Record<string, never>; res: null };
+  /** Stop recording a conversation and delete what was recorded in it. */
+  'asks/exclude': { req: { conversationUrl: string }; res: RecordingSettings };
+  'asks/export': { req: Record<string, never>; res: string };
 
   // Background -> content script
   'content/capture': { req: Record<string, never>; res: CapturedSelection | null };
