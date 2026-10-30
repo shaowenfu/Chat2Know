@@ -1,7 +1,8 @@
 ---
 id: T001
-status: todo
+status: superseded
 branch: task/T001-page-snapshots
+superseded_by: T002
 ---
 
 # T001: Collect AI chat page snapshots for capture tests

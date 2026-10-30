@@ -15,7 +15,7 @@ Core flow: **ask → keep or not → mastery requirement → verify**.
 3. Never interrupt reading. "Ask later" is the default; capturing never calls AI or pops up answers.
 4. Asking is not recording. Answers go to a temporary inbox; only what is worth reusing enters the graph.
 5. Questions are the entry point, statements are the content. Node titles are questions; distilled cards are statements.
-6. No per-site adapters. Capture text; let the model recover structure.
+6. No per-site adapters for capturing page content; capture text and let the model recover structure. The one exception is recording the user's own questions (learning diagnosis): a small per-site config with a generic fallback.
 7. Local-first. No login, bring your own API key, full export at any time.
 8. Two layers: distilled cards for reading, original text for provenance.
 9. Verification over collection; verification strength follows the mastery requirement (internalize / understand / index).
