@@ -163,11 +163,6 @@ async function setRecordingOrigins(origins: string[]): Promise<RecordingSettings
     const tabs = await browser.tabs.query({ url: matchesOf(added) });
     await Promise.allSettled(tabs.map((t) => browser.scripting.executeScript({ target: { tabId: t.id! }, files: [RECORDER_SCRIPT] })));
   }
-  // Give back access to sites no longer ticked, but never the model endpoint's.
-  const { baseUrl } = await loadSettings();
-  const modelOrigin = baseUrl ? new URL(baseUrl).origin : undefined;
-  const removed = previous.origins.filter((o) => !next.origins.includes(o) && o !== modelOrigin);
-  if (removed.length) await browser.permissions.remove({ origins: matchesOf(removed) });
   return next;
 }
 

@@ -3,10 +3,12 @@ import { computed, onMounted, onUnmounted, provide, ref } from 'vue';
 import { browser } from 'wxt/browser';
 import { i18n } from '#i18n';
 import { onMessages, sendMessage } from '@/src/messaging';
-import type { InboxItem, NodeView } from '@/src/db/types';
+import type { Ask, InboxItem, NodeView } from '@/src/db/types';
+import type { RecordingSettings } from '@/src/recording/settings';
 import type { PublicSettings } from '@/src/llm/settings';
 import AskQueue from './components/AskQueue.vue';
 import CardList from './components/CardList.vue';
+import LearnView from './components/LearnView.vue';
 import OrganizeView from './components/OrganizeView.vue';
 import PlacementPrompt from './components/PlacementPrompt.vue';
 import QuizView from './components/QuizView.vue';
@@ -15,7 +17,7 @@ import { NOTIFY, errorText } from './notify';
 import { PLACE } from './placement';
 import type { Placement } from '@/src/services/placement';
 
-type View = 'queue' | 'cards' | 'quiz' | 'settings' | 'organize-page' | 'organize-paste';
+type View = 'queue' | 'cards' | 'quiz' | 'learn' | 'settings' | 'organize-page' | 'organize-paste';
 const view = ref<View>('cards');
 
 const nodes = ref<NodeView[]>([]);
@@ -23,6 +25,8 @@ const inbox = ref<InboxItem[]>([]);
 const settings = ref<PublicSettings | null>(null);
 const due = ref<NodeView[]>([]);
 const stats = ref({ masteredThisWeek: 0, due: 0, mustKnow: 0, openQuestions: 0 });
+const asks = ref<Ask[]>([]);
+const recording = ref<RecordingSettings>({ origins: [], paused: false, excluded: [] });
 const toolbarUnavailable = ref(false);
 const notice = ref<{ text: string; error: boolean } | null>(null);
 const fileInput = ref<HTMLInputElement | null>(null);
@@ -67,12 +71,14 @@ const leftovers = computed(() => {
 });
 
 async function refresh() {
-  [nodes.value, inbox.value, settings.value, due.value, stats.value] = await Promise.all([
+  [nodes.value, inbox.value, settings.value, due.value, stats.value, asks.value, recording.value] = await Promise.all([
     sendMessage('nodes/list', {}),
     sendMessage('inbox/list', {}),
     sendMessage('settings/get', {}),
     sendMessage('quiz/due', {}),
     sendMessage('stats/get', {}),
+    sendMessage('asks/list', {}),
+    sendMessage('recording/get', {}),
   ]);
 }
 
@@ -195,9 +201,14 @@ onUnmounted(() => browser.tabs.onActivated.removeListener(onTabActivated));
         <button type="button" role="tab" :aria-selected="view === 'quiz'" data-testid="tab-quiz" @click="view = 'quiz'">
           {{ i18n.t('quiz.tab') }}<span v-if="due.length" class="pill">{{ due.length }}</span>
         </button>
+        <button type="button" role="tab" :aria-selected="view === 'learn'" data-testid="tab-learn" @click="view = 'learn'">
+          {{ i18n.t('learn.tab') }}
+        </button>
       </nav>
 
-      <QuizView v-if="view === 'quiz'" :due="due" :configured="configured" :stats="stats" />
+      <LearnView v-if="view === 'learn'" :asks="asks" :recording="recording" />
+
+      <QuizView v-else-if="view === 'quiz'" :due="due" :configured="configured" :stats="stats" />
 
       <AskQueue v-else-if="view === 'queue'" :items="queue" :answers="answers" :leftovers="leftovers" :titles="titles" @open-source="openSource" />
 

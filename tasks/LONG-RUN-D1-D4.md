@@ -63,7 +63,7 @@ check `git log`, and continue from the first unchecked box.
 
 - [x] D1.1 Schema v4 `asks`; repository: record, list, delete, clear, exclude conversation. `src/capture/recorder.ts` (site config + generic rule, dedupe) with unit tests on all 6 site pages (Enter and send button), generic textarea / contenteditable, Shift+Enter, IME composition, password input never read.
 - [x] D1.2 Recorder content script; background: recording settings, permission-scoped registration, injection into open tabs, gate, badge, `asks/*` messages, separate JSON export.
-- [ ] D1.3 Learning tab: privacy notice, site ticks, pause, list with search / delete / clear / exclude conversation / export. E2E: generic capture by Enter and by button; paused → zero; not-enabled origin → zero; password field never; screenshot.
+- [x] D1.3 Learning tab: privacy notice, site ticks, pause, list with search / delete / clear / exclude conversation / export. E2E: generic capture by Enter and by button; paused → zero; not-enabled origin → zero; password field never; screenshot.
 
 ## M5: teacher mode
 
@@ -98,4 +98,5 @@ check `git log`, and continue from the first unchecked box.
 Short notes on deviations and why, newest last.
 
 - D1.1: A send is confirmed only when the input is cleared or changed within 2 s (or the input is detached). This one check rejects Enter while the site refuses to send and clicks on non-send buttons near the box, so the generic rule can treat any button near an editable as a candidate. Generic button reach: in its form, else the nearest editable within 4 ancestors.
-- D1.2: Unticking a site gives its host permission back (except the model endpoint's origin). The recorder is re-registered on install/update; registered scripts persist across restarts, so a worker wake does no work.
+- D1.2: The recorder is re-registered on install/update; registered scripts persist across restarts, so a worker wake does no work.
+- D1.3: Unticking a site does not remove its host permission (Chrome refuses to remove a required one in the E2E build, and the recorder is already unregistered). Access is still requested only at the moment a site is ticked. The "this site" option is the active tab's origin when no site config covers it.

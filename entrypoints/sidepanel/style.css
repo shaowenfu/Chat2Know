@@ -522,3 +522,42 @@ button.danger:hover {
 .card.off {
   opacity: 0.5;
 }
+
+.learn h2 {
+  font-size: 14px;
+  margin: 14px 0 6px;
+}
+
+.sites {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+}
+
+.sites legend {
+  font-size: 12px;
+  padding: 0 4px;
+}
+
+.search {
+  width: 100%;
+  box-sizing: border-box;
+  margin-bottom: 6px;
+}
+
+.asks {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.ask {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+}

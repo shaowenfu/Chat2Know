@@ -172,3 +172,23 @@ error:
   notExport: Not a Chat2Know export file
   exportVersion: "Unsupported export version: $1"
   invalidExport: "Invalid \"$1\" in export file"
+learn:
+  tab: Learning
+  privacy: "Off until you tick a site. The questions you send there are kept only in this browser. To find what is worth reviewing, Chat2Know later sends them in batches to the model provider you set up. You can pause, exclude a conversation, or delete anything."
+  sites: Record the questions I send on
+  permissionDenied: "Access to $1 was not granted, so nothing is recorded there."
+  pause: Pause
+  resume: Resume
+  paused: Paused, nothing is recorded
+  recording: Recording
+  asksTitle:
+    0: My questions
+    1: My questions (1)
+    n: My questions ($1)
+  search: Search my questions
+  export: Export my questions
+  clear: Delete all
+  clearConfirm: Delete every recorded question?
+  noAsks: Questions you send on a ticked site appear here.
+  exclude: Don't record this conversation
+  excluded: This conversation is no longer recorded; its questions were deleted.
