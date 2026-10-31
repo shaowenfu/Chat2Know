@@ -1,10 +1,16 @@
 // @vitest-environment node
+import 'fake-indexeddb/auto';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { LlmClient, type ModelSettings } from '@/src/llm/client';
 import { parseTags, tagPrompt } from '@/src/llm/prompts';
 import { MOCK_KEY, startMockLlm, type MockLlm } from '../mock-llm/server';
+import { Chat2KnowDB } from '@/src/db/schema';
+import { Hlc } from '@/src/db/hlc';
+import { Repository } from '@/src/db/repository';
+import { recordItem } from '@/src/services/record';
+import { placeItem } from '@/src/services/placement';
 
 /**
  * Quality evals against a real model. Run with `npm run eval` after setting
@@ -52,5 +58,45 @@ describe('eval', () => {
     results.tagAccuracy = hit.length / cases.length;
     results.tagSamples = cases.map((c, i) => ({ question: c.question, domain: tags[i]!.domain, concepts: tags[i]!.concepts }));
     expect(tags).toHaveLength(cases.length);
+  });
+
+  it('placement: subject and topic of each note on a seeded map; statements become one short sentence', async () => {
+    const { map, cases } = data('placement.json') as {
+      map: Record<string, Record<string, string[]>>;
+      cases: { itemType: 'formula' | 'statement'; text: string; subject: string; topic: string[] }[];
+    };
+    const db = new Chat2KnowDB(`eval-placement-${Date.now()}`);
+    const repo = new Repository(db, new Hlc('eval'));
+    for (const [subject, chapters] of Object.entries(map)) {
+      const { node: s } = await repo.addSubject(subject);
+      for (const [chapter, topics] of Object.entries(chapters)) {
+        const { node: c } = await repo.addSection(s.id, chapter);
+        for (const topic of topics) await repo.addSection(c.id, topic);
+      }
+    }
+    const labels = { unplaced: '待归位', newSubject: '未命名学科' };
+    const samples: { text: string; path: string[]; statement?: string }[] = [];
+    let subjects = 0;
+    let topics = 0;
+    const lengths: number[] = [];
+    for (const [i, c] of cases.entries()) {
+      // Each note comes from its own conversation and is undone afterwards, so every case sees the same map.
+      const source = { url: `https://chat.example/c/${i}`, pageTitle: '', quoteExact: c.text, quotePrefix: '', quoteSuffix: '', capturedAt: 0 };
+      const r = await recordItem(repo, { itemType: c.itemType, title: c.itemType === 'statement' ? c.text : '', ...(c.itemType === 'formula' ? { latex: c.text } : {}), source }, labels);
+      if (r.status !== 'recorded') throw new Error(`Duplicate case ${c.text}`);
+      const path = await placeItem(repo, client, settings.embeddingModel, { itemId: r.itemId, group: r.group, before: '', after: '', untitled: labels.newSubject, unplaced: labels.unplaced });
+      const item = await repo.node(r.itemId);
+      if (path?.[0] === c.subject) subjects++;
+      if (path?.[0] === c.subject && c.topic.some((t) => path.slice(1).join(' ').toLowerCase().includes(t.toLowerCase()))) topics++;
+      if (c.itemType === 'statement') lengths.push(item.title.length);
+      samples.push({ text: c.text, path: path ?? [], ...(c.itemType === 'statement' ? { statement: item.title } : {}) });
+      await repo.undo(r.group);
+    }
+    await db.delete();
+    results.placementSubjectAccuracy = subjects / cases.length;
+    results.placementTopicAccuracy = topics / cases.length;
+    results.statementMaxLength = Math.max(...lengths);
+    results.placementSamples = samples;
+    expect(samples).toHaveLength(cases.length);
   });
 });

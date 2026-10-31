@@ -1,0 +1,25 @@
+{
+  "map": {
+    "线性代数": { "矩阵": ["矩阵乘法", "转置", "逆矩阵", "迹", "秩"], "行列式": [], "线性方程组": [], "特征值与特征向量": ["特征值", "相似矩阵", "对角化"], "二次型": [] },
+    "微积分": { "极限": [], "导数": ["求导法则", "链式法则"], "积分": ["定积分", "换元积分"] },
+    "深度学习": { "注意力机制": [], "优化": ["梯度下降", "学习率"], "损失函数": [] }
+  },
+  "cases": [
+    { "itemType": "formula", "text": "(AB)^T = B^T A^T", "subject": "线性代数", "topic": ["转置"] },
+    { "itemType": "formula", "text": "(AB)^{-1} = B^{-1}A^{-1}", "subject": "线性代数", "topic": ["逆"] },
+    { "itemType": "formula", "text": "\\mathrm{tr}(AB) = \\mathrm{tr}(BA)", "subject": "线性代数", "topic": ["迹"] },
+    { "itemType": "formula", "text": "\\det(AB) = \\det A \\cdot \\det B", "subject": "线性代数", "topic": ["行列式"] },
+    { "itemType": "formula", "text": "A = P \\Lambda P^{-1}", "subject": "线性代数", "topic": ["对角化", "相似", "特征"] },
+    { "itemType": "statement", "text": "一个 n 阶方阵可逆，当且仅当它的行列式不等于零；这也等价于它的秩等于 n，以及齐次方程 Ax=0 只有零解。", "subject": "线性代数", "topic": ["逆", "行列式", "秩"] },
+    { "itemType": "statement", "text": "Similar matrices share the same eigenvalues, because they represent the same linear map in different bases.", "subject": "线性代数", "topic": ["相似", "特征"] },
+    { "itemType": "formula", "text": "\\frac{d}{dx} f(g(x)) = f'(g(x))\\, g'(x)", "subject": "微积分", "topic": ["链式"] },
+    { "itemType": "formula", "text": "\\int_a^b f'(x)\\,dx = f(b) - f(a)", "subject": "微积分", "topic": ["定积分", "积分"] },
+    { "itemType": "formula", "text": "\\lim_{x \\to 0} \\frac{\\sin x}{x} = 1", "subject": "微积分", "topic": ["极限"] },
+    { "itemType": "formula", "text": "\\mathrm{softmax}(z)_i = \\frac{e^{z_i}}{\\sum_j e^{z_j}}", "subject": "深度学习", "topic": ["注意力", "softmax", "激活", "损失"] },
+    { "itemType": "formula", "text": "\\mathrm{Attention}(Q,K,V) = \\mathrm{softmax}\\left(\\frac{QK^\\top}{\\sqrt{d_k}}\\right)V", "subject": "深度学习", "topic": ["注意力"] },
+    { "itemType": "formula", "text": "\\theta_{t+1} = \\theta_t - \\eta \\nabla_\\theta L(\\theta_t)", "subject": "深度学习", "topic": ["梯度下降"] },
+    { "itemType": "statement", "text": "学习率太大时损失会来回震荡甚至发散，太小时收敛很慢，所以常用预热加衰减的调度。", "subject": "深度学习", "topic": ["学习率"] },
+    { "itemType": "formula", "text": "L = -\\sum_i y_i \\log \\hat{y}_i", "subject": "深度学习", "topic": ["损失"] },
+    { "itemType": "formula", "text": "P(A \\mid B) = \\frac{P(B \\mid A) P(A)}{P(B)}", "subject": "概率", "topic": ["贝叶斯", "条件概率"] }
+  ]
+}

@@ -16,6 +16,8 @@ site:
   add: Add to map
   added: Added
 toast:
+  relocate: Move
+  moved: "Moved to $1"
   recorded: "Added to $1"
   duplicate: "Already in $1"
   undo: Undo
@@ -26,3 +28,14 @@ command:
   record: Add the selection to the map
 menu:
   record: Add to Chat2Know map
+picker:
+  title: Where should it go?
+  now: "Now in: $1"
+  search: Or search
+  searchPlaceholder: Type a topic name
+  noMatch: No topic with that name.
+  newTopic: ＋ New topic
+  newTopicPlaceholder: New topic name
+  newTopicUnder: "Goes under $1"
+  cancel: Cancel
+  move: Move

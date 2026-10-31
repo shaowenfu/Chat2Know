@@ -16,11 +16,11 @@ npm run eval
 
 | Metric | Data | What it measures |
 | --- | --- | --- |
-| `suggestionKindAccuracy` | `data/suggestion.json` | Recording suggestion classifies concept / instance / curiosity correctly |
-| `preferenceRespected` | built in | After two deleted "who released it, when" suggestions, the model stops suggesting them |
-| `placementTop3` | `data/placement.json` | The expected parent is among the top 3 placement suggestions |
-| `masteryAgreement` | `data/mastery.json` | The mastery rule agrees with hand-labelled cases (no model involved) |
-| `organize` | `tests/fixtures/pages/` | Cards per page and how many quotes are verbatim |
 | `tagAccuracy` | `data/tags.json` | A tagged concept names the expected topic (any listed keyword); non-knowledge questions get no concepts. `tagSamples` shows the domains and names for a manual look |
+| `placementSubjectAccuracy` | `data/placement.json` | Automatic placement picks the expected subject on a seeded map (a note of a subject not on the map should get a new one) |
+| `placementTopicAccuracy` | `data/placement.json` | The subject is right and the path names the expected topic (any listed keyword) |
+| `statementMaxLength` | `data/placement.json` | The longest one-sentence statement placement made of a long selection (target: about 40 Chinese characters) |
+
+`placementSamples` lists every case's path and statement for a manual look.
 
 Results go to `results/latest.json`. Commit it as the baseline when the owner runs the first real eval, and compare later runs against it before changing prompts, thresholds or rules.

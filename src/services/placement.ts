@@ -27,9 +27,15 @@ type Client = Pick<LlmClient, 'json' | 'embed'>;
 
 const itemText = (n: MapNode) => n.latex ?? n.title;
 
+export interface Section {
+  node: MapNode;
+  path: string[]; // titles from the subject down to this section
+  items: string[]; // the texts of the items right below it
+}
+
 /** Every section of every subject with its title path; the 待归位 groups are no place. */
-async function sections(repo: Repository): Promise<{ node: MapNode; path: string[]; items: string[] }[]> {
-  const out: { node: MapNode; path: string[]; items: string[] }[] = [];
+export async function sections(repo: Repository): Promise<Section[]> {
+  const out: Section[] = [];
   const walk = (t: MapTree, path: string[]) => {
     for (const c of t.children) {
       if (c.node.kind !== 'section' || c.node.role) continue;
@@ -53,9 +59,8 @@ function outline(trees: MapTree[]): string {
   return lines.join('\n');
 }
 
-/** The topics closest to the item by vectors; topic vectors are cached until their text changes. */
-async function candidates(repo: Repository, client: Client, model: string, item: MapNode): Promise<string[]> {
-  const all = await sections(repo);
+/** The topics closest to the item by vectors, closest first; topic vectors are cached until their text changes. */
+export async function closestSections(repo: Repository, client: Pick<LlmClient, 'embed'>, model: string, item: MapNode, all: Section[]): Promise<Section[]> {
   if (!all.length) return [];
   const texts = all.map((s) => [s.path.join(SEP), ...s.items.slice(0, ITEMS_PER_TOPIC)].join('\n'));
   const cached = await repo.embeddings(all.map((s) => s.node.id));
@@ -68,10 +73,9 @@ async function candidates(repo: Repository, client: Client, model: string, item:
   await repo.putEmbeddings(rows);
   for (const r of rows) cached.set(r.nodeId, r);
   return all
-    .map((s) => ({ path: s.path.join(SEP), score: cosine(itemVector!, cached.get(s.node.id)!.vector) }))
+    .map((s) => ({ s, score: cosine(itemVector!, cached.get(s.node.id)!.vector) }))
     .sort((a, b) => b.score - a.score)
-    .slice(0, CANDIDATES)
-    .map((c) => c.path);
+    .map((c) => c.s);
 }
 
 /**
@@ -91,7 +95,7 @@ export async function placeItem(repo: Repository, client: Client, embeddingModel
       before: req.before,
       after: req.after,
       now: now.slice(0, -1).map((n) => (n.role ? req.unplaced : n.title)).join(SEP),
-      candidates: embeddingModel ? await candidates(repo, client, embeddingModel, item) : [],
+      candidates: embeddingModel ? (await closestSections(repo, client, embeddingModel, item, await sections(repo))).slice(0, CANDIDATES).map((c) => c.path.join(SEP)) : [],
       subjects: outline(await Promise.all((await repo.listSubjects()).map((s) => repo.subjectTree(s.id)))),
       examples: await repo.placementExamples(EXAMPLES),
     }),

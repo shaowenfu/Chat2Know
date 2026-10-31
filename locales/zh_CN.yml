@@ -16,6 +16,8 @@ site:
   add: 记到导图
   added: 已记下
 toast:
+  relocate: 改位置
+  moved: "已移到 $1"
   recorded: "已记到 $1"
   duplicate: "已在 $1 中"
   undo: 撤销
@@ -26,3 +28,14 @@ command:
   record: 把选中的内容记到导图
 menu:
   record: 记到 Chat2Know 导图
+picker:
+  title: 放到哪里？
+  now: "现在在：$1"
+  search: 或者搜索
+  searchPlaceholder: 输入知识点名称
+  noMatch: 没有这个名字的知识点。
+  newTopic: ＋ 新建知识点
+  newTopicPlaceholder: 新知识点名称
+  newTopicUnder: "放在 $1 下"
+  cancel: 取消
+  move: 移过去

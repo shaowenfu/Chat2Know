@@ -97,3 +97,56 @@ test('with a model, the recorded formula moves to its topic and the toast follow
   await toast.getByRole('button', { name: 'Undo' }).click();
   await expect.poll(async () => (await send<string>(panel, 'map/export', { format: 'markdown' })).data).toBe('\n');
 });
+
+test('改位置: the picker offers places, searches, and moves the item; the toast says where', async ({ context, extensionId, fixtureServer, mockLlm }) => {
+  const panel = await context.newPage();
+  await panel.goto(`chrome-extension://${extensionId}/sidepanel.html`);
+  const node = (id: string, kind: string, parentId: string | undefined, subjectId: string, title: string) => ({
+    id,
+    subjectId,
+    kind,
+    ...(parentId ? { parentId } : {}),
+    order: `a${id}`,
+    title,
+    origin: 'user',
+    createdAt: 0,
+    updatedAt: '0',
+  });
+  const map = [
+    node('1', 'subject', undefined, '1', '线性代数'),
+    node('2', 'section', '1', '1', '矩阵'),
+    node('3', 'section', '2', '1', '转置'),
+    node('4', 'section', '2', '1', '迹'),
+    node('5', 'subject', undefined, '5', '深度学习'),
+    node('6', 'section', '5', '5', '注意力机制'),
+    node('7', 'section', '5', '5', '优化'),
+  ];
+  await send(panel, 'map/import', { json: JSON.stringify({ format: 'chat2know', version: 2, exportedAt: 0, nodes: map }) });
+  await send(panel, 'sites/setOrigins', { origins: [fixtureServer] });
+  await configureModel(panel, mockLlm.url);
+
+  const page = await context.newPage();
+  await page.setViewportSize({ width: 1100, height: 760 });
+  await page.goto(`${fixtureServer}/synthetic-chat-katex.html`);
+  const toast = page.locator('chat2know-ui .toast');
+  await page.locator('chat2know-ui button[data-state="add"]').click();
+  await expect(toast).toContainText('Added to 深度学习 › 注意力机制');
+  await toast.getByRole('button', { name: 'Move' }).click();
+
+  const picker = page.locator('chat2know-ui .picker');
+  await expect(picker).toContainText('Where should it go?');
+  await expect(picker).toContainText('Now in: 注意力机制');
+  await expect(picker.locator('.picker-option')).toHaveCount(3);
+  await page.screenshot({ path: 'tests/e2e/screenshots/page-relocate.png' });
+
+  await picker.getByPlaceholder('Type a topic name').fill('迹');
+  await expect(picker.locator('.picker-option')).toHaveText(['线性代数 › 矩阵 › 迹']);
+  await picker.getByRole('button', { name: 'Move' }).click();
+  await expect(picker).toHaveCount(0);
+  await expect(toast).toContainText('Moved to 线性代数 › 矩阵 › 迹');
+  expect((await send<string>(panel, 'map/export', { format: 'markdown' })).data).toContain('### 迹\n\n- $\\mathrm{Attention}');
+
+  // Undo puts it back where placement had filed it.
+  await toast.getByRole('button', { name: 'Undo' }).click();
+  await expect.poll(async () => (await send<string>(panel, 'map/export', { format: 'markdown' })).data).toContain('## 注意力机制\n\n- $\\mathrm{Attention}');
+});

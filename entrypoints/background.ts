@@ -10,6 +10,7 @@ import { loadSettings, saveSettings, toPublic } from '@/src/llm/settings';
 import { isRecording, loadSites, saveSites, shouldRecord, type SiteSettings } from '@/src/sites/settings';
 import { recordItem, type RecordResult } from '@/src/services/record';
 import { placeItem } from '@/src/services/placement';
+import { moveByUser, parentPath, placeOptions, searchPlaces } from '@/src/services/relocate';
 import { isConfigured } from '@/src/llm/settings';
 import { errorText } from '@/src/errors';
 import type { TextQuote } from '@/src/capture/text-quote';
@@ -179,6 +180,18 @@ export default defineBackground(() => {
       const result = await recordItem(await repo(), { itemType, title, ...(latex === undefined ? {} : { latex }), source, ...(force ? { force } : {}) }, labels());
       notifyChanged();
       if (result.status === 'recorded') void placeAfterRecord(result, quote, sender.tab.id!);
+      return result;
+    },
+    'map/placeOptions': async ({ itemId }) => {
+      const r = await repo();
+      const settings = await loadSettings();
+      const client = isConfigured(settings) ? new LlmClient(settings) : null;
+      return { now: await parentPath(r, itemId, labels().unplaced), places: await placeOptions(r, client, settings.embeddingModel, itemId) };
+    },
+    'map/searchPlaces': async ({ query }) => searchPlaces(await repo(), query),
+    'map/moveItem': async ({ itemId, placeId, newTopic }) => {
+      const result = await moveByUser(await repo(), itemId, { placeId, ...(newTopic ? { newTopic } : {}) }, labels().unplaced);
+      notifyChanged();
       return result;
     },
     'map/undo': async ({ group }) => {

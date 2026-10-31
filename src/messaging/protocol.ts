@@ -9,6 +9,7 @@ import type { SiteSettings } from '@/src/sites/settings';
 import type { TextQuote } from '@/src/capture/text-quote';
 import type { ItemType } from '@/src/db/types';
 import type { RecordResult } from '@/src/services/record';
+import type { Place } from '@/src/services/relocate';
 import type { PublicSettings } from '@/src/llm/settings';
 
 export type Context = 'content' | 'background' | 'sidepanel';
@@ -40,6 +41,11 @@ export interface MessageMap {
   // Recording onto the map
   /** From the site script: a formula or a selection the user just recorded on the sender's page. */
   'map/record': { req: { itemType: ItemType; title: string; latex?: string; quote: TextQuote; pageTitle: string; force?: boolean }; res: RecordResult };
+  /** The "改位置" picker: where the item is now and three other places. */
+  'map/placeOptions': { req: { itemId: string }; res: { now: string[]; places: Place[] } };
+  'map/searchPlaces': { req: { query: string }; res: Place[] };
+  /** The user moves an item to a place, or into a new topic there. */
+  'map/moveItem': { req: { itemId: string; placeId: string; newTopic?: string }; res: { group: string; path: string[] } };
   /** Undoes one write (a toast's "撤销"), or the latest one (Ctrl+Z). */
   'map/undo': { req: { group?: string }; res: { undone: boolean } };
   /** Background -> site script: record the page's selection (Alt+S, context menu). */

@@ -33,6 +33,25 @@ const CSS = `
 .toast { position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%); display: flex; align-items: center; gap: 14px; max-width: calc(100vw - 32px); box-sizing: border-box; padding: 10px 16px; border-radius: 10px; background: #1B1B19; color: #FFFFFF; font-size: 13px; line-height: 1.5; box-shadow: 0 8px 24px rgba(0,0,0,0.2); pointer-events: auto; }
 .toast button { border: 0; padding: 0; background: none; font: inherit; color: #A9C0FF; cursor: pointer; text-decoration: underline; white-space: nowrap; }
 .toast b { font-weight: 700; }
+.picker { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); width: 420px; max-width: calc(100vw - 32px); box-sizing: border-box; display: flex; flex-direction: column; gap: 12px; padding: 16px; border-radius: 12px; border: 1px solid #D6D3CA; background: #FFFFFF; color: #1B1B19; box-shadow: 0 12px 32px rgba(0,0,0,0.16); font-size: 13px; pointer-events: auto; }
+.picker-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.picker-title { font-size: 14px; font-weight: 700; }
+.picker-now, .picker-field, .picker-empty { font-size: 12px; color: #5F5E58; }
+.picker-options { display: flex; flex-direction: column; gap: 6px; }
+.picker-option { display: flex; gap: 10px; align-items: center; padding: 8px 10px; border-radius: 8px; border: 1px solid #E3E1DA; cursor: pointer; }
+.picker-option.selected { border: 1.5px solid #2B57D9; background: #EAF0FF; }
+.picker-option input { margin: 0; accent-color: #2B57D9; }
+.picker-empty { margin: 0; }
+.picker-field { display: flex; flex-direction: column; gap: 6px; }
+.picker-field input { height: 36px; box-sizing: border-box; padding: 0 10px; border: 1px solid #D6D3CA; border-radius: 8px; font: inherit; font-size: 13px; color: #1B1B19; background: #FFFFFF; }
+.picker-foot { display: flex; justify-content: space-between; align-items: center; }
+.picker-buttons { display: flex; gap: 8px; }
+.picker button { font: inherit; font-size: 13px; cursor: pointer; }
+.picker-link { border: 0; padding: 0; background: none; color: #2B57D9; }
+.picker-secondary, .picker-primary { height: 34px; padding: 0 14px; border-radius: 8px; }
+.picker-secondary { border: 1px solid #D6D3CA; background: #FFFFFF; color: #1B1B19; }
+.picker-primary { border: 0; background: #1B1B19; color: #FFFFFF; font-weight: 500; }
+.picker-primary:disabled { opacity: 0.4; cursor: default; }
 [hidden] { display: none !important; }
 `;
 
@@ -74,6 +93,7 @@ export class PageUi {
   private toastEl: HTMLElement | undefined;
   private toastKey: string | undefined;
   private toastText: HTMLElement | undefined;
+  private popoverEl: HTMLElement | undefined;
   private toastTimer: ReturnType<typeof setTimeout> | undefined;
 
   constructor(
@@ -174,6 +194,16 @@ export class PageUi {
     const b = this.doc.createElement('b');
     b.textContent = bold;
     span.replaceChildren(before!, ...(message.includes('\uE000') ? [b, after] : []));
+  }
+
+  /** Shows one popover (the picker) instead of the toast; null closes it. */
+  popover(el: HTMLElement | null): void {
+    this.popoverEl?.remove();
+    this.popoverEl = el ?? undefined;
+    if (!el) return;
+    this.hideToast();
+    this.layer.append(el);
+    el.querySelector<HTMLElement>('input:checked, input')?.focus();
   }
 
   hideToast(): void {

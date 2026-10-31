@@ -8,6 +8,7 @@ import { siteFor } from '@/src/capture/sites';
 import { captureSelection } from '@/src/capture/selection';
 import { buildTextIndex, quoteFromRange } from '@/src/capture/text-quote';
 import { PageUi } from '@/src/capture/page-ui';
+import { buildPicker } from '@/src/capture/picker';
 import type { FormulaBlock } from '@/src/capture/formulas';
 import { SITES_KEY, loadSites, shouldRecord } from '@/src/sites/settings';
 
@@ -47,6 +48,7 @@ export default defineContentScript({
         }
         onRecorded(true);
         ui.toast(i18n.t('toast.recorded', ['\uE000']), path, [
+          { label: i18n.t('toast.relocate'), run: () => relocate(result.itemId) },
           {
             label: i18n.t('toast.undo'),
             run: async () => {
@@ -58,6 +60,43 @@ export default defineContentScript({
       } catch (err) {
         ui.toast(errorText(err), '', []);
       }
+    }
+
+    /** The "改位置" picker for a just-recorded item; a move says where it went, with its own undo. */
+    async function relocate(itemId: string): Promise<void> {
+      const { now, places } = await sendMessage('map/placeOptions', { itemId });
+      const close = () => ui.popover(null);
+      ui.popover(
+        buildPicker(document, {
+          text: {
+            title: i18n.t('picker.title'),
+            now: i18n.t('picker.now', [now.slice(1).join(PATH_SEPARATOR) || now.join(PATH_SEPARATOR)]),
+            search: i18n.t('picker.search'),
+            searchPlaceholder: i18n.t('picker.searchPlaceholder'),
+            noMatch: i18n.t('picker.noMatch'),
+            newTopic: i18n.t('picker.newTopic'),
+            newTopicPlaceholder: i18n.t('picker.newTopicPlaceholder'),
+            newTopicUnder: (path) => i18n.t('picker.newTopicUnder', [path]),
+            cancel: i18n.t('picker.cancel'),
+            move: i18n.t('picker.move'),
+          },
+          places,
+          search: (query) => sendMessage('map/searchPlaces', { query }),
+          close,
+          move: async (to) => {
+            try {
+              const moved = await sendMessage('map/moveItem', { itemId, ...to });
+              close();
+              ui.toast(i18n.t('toast.moved', ['\uE000']), moved.path.join(PATH_SEPARATOR), [
+                { label: i18n.t('toast.undo'), run: async () => void (await sendMessage('map/undo', { group: moved.group })) },
+              ]);
+            } catch (err) {
+              close();
+              ui.toast(errorText(err), '', []);
+            }
+          },
+        }),
+      );
     }
 
     function recordFormula(block: FormulaBlock): Promise<void> {

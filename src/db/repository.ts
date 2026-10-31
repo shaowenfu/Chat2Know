@@ -133,6 +133,17 @@ export class Repository {
     });
   }
 
+  /** Moves a node into a new section titled `title` under `parentId`, as one write. */
+  async moveToNewSection(id: string, parentId: string, title: string): Promise<string> {
+    return this.group('moveToNewSection', async (w) => {
+      const node = await this.live(id);
+      const parent = await this.structure(parentId);
+      if ((await this.depthOf(parent)) + 1 > MAX_DEPTH) throw new UserError('error.mapTooDeep');
+      const section = await w.create({ subjectId: parent.subjectId, kind: 'section', parentId: parent.id, order: await this.orderAt(parent.id), title: title.trim(), origin: 'user' });
+      await this.placeUnder(w, node, section, generateKeyBetween(null, null));
+    });
+  }
+
   /** The user's own text; from now on the extension never rewrites it. */
   async edit(id: string, patch: { title?: string; latex?: string }): Promise<string> {
     return this.group('edit', async (w) => {
