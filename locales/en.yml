@@ -11,3 +11,17 @@ error:
 map:
   unplaced: Unplaced
   importedSubject: Imported notes
+  newSubject: Untitled subject
+site:
+  add: Add to map
+  added: Added
+toast:
+  recorded: "Added to $1"
+  duplicate: "Already in $1"
+  undo: Undo
+  addAnyway: Add anyway
+  noSelection: Select some text first.
+command:
+  record: Add the selection to the map
+menu:
+  record: Add to Chat2Know map

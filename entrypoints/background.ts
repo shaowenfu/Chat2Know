@@ -7,15 +7,18 @@ import { Repository } from '@/src/db/repository';
 import { LlmClient } from '@/src/llm/client';
 import { UserError } from '@/src/errors';
 import { loadSettings, saveSettings, toPublic } from '@/src/llm/settings';
-import { isRecording, loadRecording, saveRecording, shouldRecord, type RecordingSettings } from '@/src/recording/settings';
+import { isRecording, loadSites, saveSites, shouldRecord, type SiteSettings } from '@/src/sites/settings';
+import { recordItem } from '@/src/services/record';
+import { sendTabMessage } from '@/src/messaging';
 import { siteFor } from '@/src/capture/sites';
 import { i18n } from '#i18n';
 import { EXPORT_FORMAT, EXPORT_VERSION, parseImport, type ExportFile } from '@/src/export/json';
 import { mapToMarkdown } from '@/src/export/markdown';
 import { mapToOpml } from '@/src/export/opml';
 
-const RECORDER_SCRIPT = '/content-scripts/recorder.js';
-const RECORDER_ID = 'chat2know-recorder';
+const SITE_SCRIPT = '/content-scripts/site.js';
+const SITE_SCRIPT_ID = 'chat2know-site';
+const MENU_ID = 'chat2know-record';
 
 async function deviceId(): Promise<string> {
   const { deviceId } = await browser.storage.local.get('deviceId');
@@ -44,44 +47,65 @@ function notifyChanged(): void {
 
 const matchesOf = (origins: string[]) => origins.map((o) => `${o}/*`);
 
-/** Runs the recorder on exactly the ticked origins; the "REC" badge shows while it records. */
-async function registerRecorder(s: RecordingSettings): Promise<void> {
-  if ((await browser.scripting.getRegisteredContentScripts({ ids: [RECORDER_ID] })).length) {
-    await browser.scripting.unregisterContentScripts({ ids: [RECORDER_ID] });
+/** Runs the site script on exactly the ticked origins; the "REC" badge shows while it records questions. */
+async function registerSiteScript(s: SiteSettings): Promise<void> {
+  if ((await browser.scripting.getRegisteredContentScripts({ ids: [SITE_SCRIPT_ID] })).length) {
+    await browser.scripting.unregisterContentScripts({ ids: [SITE_SCRIPT_ID] });
   }
   if (s.origins.length) {
     await browser.scripting.registerContentScripts([
-      { id: RECORDER_ID, matches: matchesOf(s.origins), js: [RECORDER_SCRIPT], runAt: 'document_idle' },
+      { id: SITE_SCRIPT_ID, matches: matchesOf(s.origins), js: [SITE_SCRIPT], runAt: 'document_idle' },
     ]);
   }
   await showRecordingBadge(s);
 }
 
-async function showRecordingBadge(s: RecordingSettings): Promise<void> {
+async function showRecordingBadge(s: SiteSettings): Promise<void> {
   await browser.action.setBadgeText({ text: isRecording(s) ? 'REC' : '' });
   await browser.action.setBadgeBackgroundColor({ color: '#b3261e' });
 }
 
-async function setRecordingOrigins(origins: string[]): Promise<RecordingSettings> {
-  const previous = await loadRecording();
+async function inject(tabId: number): Promise<void> {
+  await browser.scripting.executeScript({ target: { tabId }, files: [SITE_SCRIPT] });
+}
+
+async function setSiteOrigins(origins: string[]): Promise<SiteSettings> {
+  const previous = await loadSites();
   const next = { ...previous, origins: [...new Set(origins.map((o) => new URL(o).origin))] };
-  await saveRecording(next);
-  await registerRecorder(next);
-  // Open tabs get the recorder now; one that cannot be scripted (discarded, an error page) gets it on its next load.
+  await saveSites(next);
+  await registerSiteScript(next);
+  // Open tabs get the script now; one that cannot be scripted (discarded, an error page) gets it on its next load.
   const added = next.origins.filter((o) => !previous.origins.includes(o));
   if (added.length) {
     const tabs = await browser.tabs.query({ url: matchesOf(added) });
-    await Promise.allSettled(tabs.map((t) => browser.scripting.executeScript({ target: { tabId: t.id! }, files: [RECORDER_SCRIPT] })));
+    await Promise.allSettled(tabs.map((t) => inject(t.id!)));
   }
   return next;
 }
+
+/** Alt+S or the context menu: the tab was granted by the gesture; the site script records its selection. */
+async function recordSelection(tabId: number): Promise<void> {
+  await inject(tabId); // a no-op where it already runs
+  await sendTabMessage(tabId, 'site/recordSelection', {});
+}
+
+const labels = (): { unplaced: string; newSubject: string } => ({ unplaced: i18n.t('map.unplaced'), newSubject: i18n.t('map.newSubject') });
 
 export default defineBackground(() => {
   void browser.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
 
   // Registered scripts survive restarts; re-registering on install / update keeps them in step with the settings.
-  browser.runtime.onStartup.addListener(() => void loadRecording().then(showRecordingBadge));
-  browser.runtime.onInstalled.addListener(() => void loadRecording().then(registerRecorder));
+  browser.runtime.onStartup.addListener(() => void loadSites().then(showRecordingBadge));
+  browser.runtime.onInstalled.addListener(() => {
+    void loadSites().then(registerSiteScript);
+    browser.contextMenus.create({ id: MENU_ID, title: i18n.t('menu.record'), contexts: ['selection'] });
+  });
+  browser.commands.onCommand.addListener((command, tab) => {
+    if (command === 'record-selection' && tab?.id !== undefined) void recordSelection(tab.id);
+  });
+  browser.contextMenus.onClicked.addListener((info, tab) => {
+    if (info.menuItemId === MENU_ID && tab?.id !== undefined) void recordSelection(tab.id);
+  });
 
   onMessages({
     ping: ({ from }) => ({ from: 'background', echo: from, at: Date.now() }),
@@ -101,23 +125,37 @@ export default defineBackground(() => {
       return toPublic(next);
     },
     'settings/test': async () => ({ reply: await (await client()).chat([{ role: 'user', content: 'Reply with the single word OK.' }]) }),
-    'recording/get': () => loadRecording(),
-    'recording/setOrigins': async ({ origins }) => {
-      const next = await setRecordingOrigins(origins);
+    'sites/get': () => loadSites(),
+    'sites/setOrigins': async ({ origins }) => {
+      const next = await setSiteOrigins(origins);
       notifyChanged();
       return next;
     },
-    'recording/setPaused': async ({ paused }) => {
-      const next = { ...(await loadRecording()), paused };
-      await saveRecording(next);
+    'sites/setRecordAsks': async ({ on }) => {
+      const next = { ...(await loadSites()), recordAsks: on };
+      await saveSites(next);
       await showRecordingBadge(next);
       notifyChanged();
       return next;
     },
+    'map/record': async ({ itemType, title, latex, quote, pageTitle, force }, sender) => {
+      // The source is the page the message came from, never a URL the page could claim.
+      const url = sender.url;
+      if (!url || sender.id !== browser.runtime.id || sender.tab === undefined) throw new Error('map/record comes only from a page');
+      const source = { url, pageTitle, quoteExact: quote.exact, quotePrefix: quote.prefix, quoteSuffix: quote.suffix, capturedAt: Date.now() };
+      const result = await recordItem(await repo(), { itemType, title, ...(latex === undefined ? {} : { latex }), source, ...(force ? { force } : {}) }, labels());
+      notifyChanged();
+      return result;
+    },
+    'map/undo': async ({ group }) => {
+      const undone = (await (await repo()).undo(group)) !== null;
+      notifyChanged();
+      return { undone };
+    },
     'asks/record': async ({ text }, sender) => {
       // The gate uses the page the message came from, never anything the page could claim.
       const url = sender.url;
-      if (!url || sender.id !== browser.runtime.id || !shouldRecord(await loadRecording(), url)) return { recorded: false };
+      if (!url || sender.id !== browser.runtime.id || !shouldRecord(await loadSites(), url)) return { recorded: false };
       const host = new URL(url).hostname;
       await (await repo()).recordAsk({ site: siteFor(host)?.id ?? host, conversationUrl: url, text });
       notifyChanged();
@@ -153,10 +191,10 @@ export default defineBackground(() => {
       return null;
     },
     'asks/exclude': async ({ conversationUrl }) => {
-      const current = await loadRecording();
+      const current = await loadSites();
       const url = conversationUrl.replace(/#.*$/, '');
       const next = { ...current, excluded: [...new Set([...current.excluded, url])] };
-      await saveRecording(next);
+      await saveSites(next);
       await (await repo()).deleteConversationAsks(url);
       notifyChanged();
       return next;

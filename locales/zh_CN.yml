@@ -11,3 +11,17 @@ error:
 map:
   unplaced: 待归位
   importedSubject: 导入的笔记
+  newSubject: 未命名学科
+site:
+  add: 记到导图
+  added: 已记下
+toast:
+  recorded: "已记到 $1"
+  duplicate: "已在 $1 中"
+  undo: 撤销
+  addAnyway: 仍然添加
+  noSelection: 请先选中文字。
+command:
+  record: 把选中的内容记到导图
+menu:
+  record: 记到 Chat2Know 导图

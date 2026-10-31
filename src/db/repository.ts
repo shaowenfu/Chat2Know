@@ -19,8 +19,8 @@ export interface ItemInput {
   origin?: Origin;
 }
 
-/** Where a new item goes: under a structure node, or in a subject's "待归位" group (created when missing). */
-export type ItemPlace = { parentId: string } | { unplacedIn: string };
+/** Where a new item goes: under a structure node, or in the "待归位" group (created when missing) of a subject or of a new subject. */
+export type ItemPlace = { parentId: string } | { unplacedIn: string } | { newSubject: string };
 
 /** A map write: its oplog group (to undo exactly this) and the node it is about. */
 export interface Written {
@@ -62,6 +62,11 @@ export class Repository {
     return (await this.db.nodes.where('kind').equals('subject').toArray()).filter((n) => !n.deletedAt).sort(byOrder);
   }
 
+  /** Every live item, of every subject. */
+  async listItems(): Promise<MapNode[]> {
+    return (await this.db.nodes.where('kind').equals('item').toArray()).filter((n) => !n.deletedAt);
+  }
+
   async node(id: string): Promise<MapNode> {
     const n = await this.db.nodes.get(id);
     if (!n) throw new Error(`No node ${id}`);
@@ -100,7 +105,10 @@ export class Repository {
 
   async addItem(place: ItemPlace, input: ItemInput): Promise<Written> {
     return this.write('addItem', async (w) => {
-      const parent = 'parentId' in place ? await this.structure(place.parentId) : await this.unplacedGroup(w, place.unplacedIn);
+      const parent =
+        'parentId' in place
+          ? await this.structure(place.parentId)
+          : await this.unplacedGroup(w, 'unplacedIn' in place ? place.unplacedIn : (await this.createSubject(w, place.newSubject, 'user')).id);
       return w.create(this.newItem(parent, input, await this.orderAt(parent.id)));
     });
   }

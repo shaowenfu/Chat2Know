@@ -6,6 +6,15 @@ All notable changes to this project are documented here. Format follows [Keep a 
 
 v2 rebuild: Chat2Know becomes a knowledge map you record into with one click (see `docs/project-plan.md`).
 
+### Added
+
+- On the AI sites you tick, a ＋ beside every display formula records it to the map in one click; the formula shows "Added" and a toast says where it went, with Undo. The same formula is not added twice unless you choose "Add anyway".
+- Alt+S or the "Add to Chat2Know map" menu records the selection on any page (one formula selected becomes a formula item).
+- A recorded item goes where the previous item of the same conversation went, else into the subject's "Unplaced" group; it never waits for a model.
+- "Also record the questions I send on these sites" is a separate switch; ticking a site no longer records questions by itself.
+- New map database: every change can be undone; a deleted chapter's contents move up a level; deleted nodes can be restored.
+- Export the map as JSON (lossless), Markdown or OPML; import a v2 JSON export, or a v0.1 export whose knowledge cards become items to place.
+
 ### Removed
 
 - Ask later, ask now and follow-ups, the answer inbox and keep suggestions: asking happens in the chat page.

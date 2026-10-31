@@ -4,7 +4,7 @@ import { send, tabIdOf } from './helpers';
 
 const PAGE = 'synthetic-chat-input.html';
 
-test('records questions sent on a ticked site, and nothing when paused, elsewhere or in a password field', async ({ context, extensionId, fixtureServer }) => {
+test('records questions sent on a ticked site while asked to, and nothing when off, elsewhere or in a password field', async ({ context, extensionId, fixtureServer }) => {
   const page = await context.newPage();
   await page.goto(`${fixtureServer}/${PAGE}`);
   const panel = await context.newPage();
@@ -19,7 +19,12 @@ test('records questions sent on a ticked site, and nothing when paused, elsewher
 
   // Not ticked yet: nothing is recorded (the recorder is not even on the page).
   await sendWithEnter('before enabling');
-  expect((await send(panel, 'recording/setOrigins', { origins: [fixtureServer] })).ok).toBe(true);
+  expect((await send(panel, 'sites/setOrigins', { origins: [fixtureServer] })).ok).toBe(true);
+  // A ticked site alone does not record questions.
+  await sendWithEnter('ticked, not recording');
+  await page.waitForTimeout(300);
+  expect(await panel.evaluate(() => chrome.action.getBadgeText({}))).toBe('');
+  await send(panel, 'sites/setRecordAsks', { on: true });
   expect(await panel.evaluate(() => chrome.action.getBadgeText({}))).toBe('REC');
 
   // Already open tab gets the recorder at once.
@@ -33,11 +38,11 @@ test('records questions sent on a ticked site, and nothing when paused, elsewher
   await page.locator('#password').press('Enter');
   await page.locator('#password').fill('');
 
-  await send(panel, 'recording/setPaused', { paused: true });
+  await send(panel, 'sites/setRecordAsks', { on: false });
   expect(await panel.evaluate(() => chrome.action.getBadgeText({}))).toBe('');
-  await sendWithEnter('asked while paused');
+  await sendWithEnter('asked while off');
   await page.waitForTimeout(500); // the recorder reports once the box has cleared
-  await send(panel, 'recording/setPaused', { paused: false });
+  await send(panel, 'sites/setRecordAsks', { on: true });
 
   // Another origin (same server) is not ticked.
   const other = await context.newPage();
