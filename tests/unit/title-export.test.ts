@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { titleFromMarkdown } from '@/src/db/title';
 import { nodesToMarkdown } from '@/src/export/markdown';
 import { nodesToOpml } from '@/src/export/opml';
-import { nodesToAnki } from '@/src/export/anki';
 import type { NodeView } from '@/src/db/types';
 
 describe('titleFromMarkdown', () => {
@@ -74,13 +73,5 @@ describe('tree exports', () => {
     const opml = nodesToOpml(branch, new Date(0));
     expect(opml).toContain('<outline text="What does attention do?" _note="Mixes values by &quot;similarity&quot; &amp; weight.">\n      <outline text="Why scale?" _note="Avoids saturation."/>\n    </outline>');
     expect(opml).toContain('<outline text="Draft" _note="not kept yet"/>');
-  });
-
-  it('Anki CSV has kept cards with a statement, quoted, tagged with the mastery', () => {
-    expect(nodesToAnki(branch)).toBe(
-      '#separator:Comma\n#html:false\n#tags column:3\n' +
-        '"What does attention do?","Mixes values by ""similarity"" & weight.","chat2know mastery::internalize"\n' +
-        '"Why scale?","Avoids saturation.","chat2know"\n',
-    );
   });
 });

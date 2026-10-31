@@ -4,6 +4,16 @@ All notable changes to this project are documented here. Format follows [Keep a 
 
 ## [Unreleased]
 
+v2 rebuild: Chat2Know becomes a knowledge map you record into with one click (see `docs/project-plan.md`).
+
+### Removed
+
+- Ask later, ask now and follow-ups, the answer inbox and keep suggestions: asking happens in the chat page.
+- Question titles, title candidates, distilling cards, mastery requirements.
+- Quiz me, spaced repetition, "use it" problems, explain it to me, the one-minute script, weekly stats.
+- Organize page / pasted text, placement suggestions and concept merging (automatic placement replaces them).
+- The Ask later, Cards, Quiz me and Learning tabs, the selection toolbar and its shortcuts and menus; diagnosis cards, quizzes and systematic reviews; Anki export.
+
 ## [0.1.0] - 2026-10-31
 
 First public release, for Chrome and other Chromium browsers (Edge, Brave, Arc). Firefox is not supported yet.

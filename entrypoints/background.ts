@@ -1,29 +1,15 @@
 import { browser } from 'wxt/browser';
 import { defineBackground } from 'wxt/utils/define-background';
-import { i18n } from '#i18n';
-import { onMessages, sendTabMessage, type Envelope } from '@/src/messaging';
+import { onMessages, type Envelope } from '@/src/messaging';
 import { Chat2KnowDB } from '@/src/db/schema';
 import { Hlc } from '@/src/db/hlc';
-import { Repository, type CaptureType } from '@/src/db/repository';
-import { nodesToMarkdown } from '@/src/export/markdown';
-import { nodesToOpml } from '@/src/export/opml';
-import { nodesToAnki } from '@/src/export/anki';
-import { textFragmentUrl } from '@/src/capture/text-fragment';
+import { Repository } from '@/src/db/repository';
 import { LlmClient } from '@/src/llm/client';
-import { UserError, errorText } from '@/src/errors';
-import { isConfigured, loadSettings, saveSettings, toPublic } from '@/src/llm/settings';
-import { answerQuestion, confirmKeep, dismissQuestion, suggestKeep } from '@/src/services/ask';
-import { Distiller } from '@/src/services/distill';
-import { judge, problemFor, selfGrade } from '@/src/services/quiz';
-import { suggestPlacement } from '@/src/services/placement';
-import { organize } from '@/src/services/organize';
-import { checkExplanation, oneMinuteScript } from '@/src/services/explain';
-import { isRecording, loadAnalysis, loadRecording, saveAnalysis, saveRecording, shouldRecord, type RecordingSettings } from '@/src/recording/settings';
-import { analyze, autoAnalysis } from '@/src/services/analysis';
-import { checkDiagnosisQuiz, decide, diagnosisQuiz, keepReview, listDiagnosisViews, systematicReview } from '@/src/services/confirm';
+import { UserError } from '@/src/errors';
+import { loadSettings, saveSettings, toPublic } from '@/src/llm/settings';
+import { isRecording, loadRecording, saveRecording, shouldRecord, type RecordingSettings } from '@/src/recording/settings';
 import { siteFor } from '@/src/capture/sites';
 
-const CONTENT_SCRIPT = '/content-scripts/content.js';
 const RECORDER_SCRIPT = '/content-scripts/recorder.js';
 const RECORDER_ID = 'chat2know-recorder';
 
@@ -46,132 +32,10 @@ async function client(): Promise<LlmClient> {
   return new LlmClient(await loadSettings());
 }
 
-let distillerPromise: Promise<Distiller> | undefined;
-function distiller(): Promise<Distiller> {
-  distillerPromise ??= repo().then(
-    (r) =>
-      new Distiller(
-        r,
-        async () => {
-          const s = await loadSettings();
-          return isConfigured(s) ? new LlmClient(s) : null;
-        },
-        notifyChanged,
-      ),
-  );
-  return distillerPromise;
-}
-
-const defaultQuestion = (term: string) => i18n.t('ask.chipWhat', [term]);
-
-async function resolveTabId(tabId?: number): Promise<number> {
-  if (tabId !== undefined) return tabId;
-  const [tab] = await browser.tabs.query({ active: true, lastFocusedWindow: true });
-  if (tab?.id === undefined) throw new Error('No active tab');
-  return tab.id;
-}
-
-/** Injects the content script; it guards against running twice. */
-async function inject(tabId: number): Promise<void> {
-  await browser.scripting.executeScript({ target: { tabId }, files: [CONTENT_SCRIPT] });
-}
-
 function notifyChanged(): void {
   const event: Envelope<'event/dataChanged'> = { type: 'event/dataChanged', payload: {} };
-  // Rejects when no side panel is open; that is fine.
+  // Rejects when no extension page is open; that is fine.
   browser.runtime.sendMessage(event).catch(() => {});
-}
-
-async function save(type: CaptureType, capture: Parameters<Repository['capture']>[1]): Promise<{ nodeId: string }> {
-  const node = await (await repo()).capture(type, capture);
-  notifyChanged();
-  if (type === 'knowledge') void distiller().then((d) => d.distill(node.id));
-  return { nodeId: node.id };
-}
-
-async function captureFromTab(type: CaptureType, tabId?: number): Promise<{ nodeId: string }> {
-  const id = await resolveTabId(tabId);
-  await inject(id);
-  const capture = await sendTabMessage(id, 'content/capture', {});
-  if (!capture) throw new UserError('error.noSelection');
-  return save(type, capture);
-}
-
-async function askFromTab(tabId?: number): Promise<null> {
-  const id = await resolveTabId(tabId);
-  await inject(id);
-  return sendTabMessage(id, 'content/askLater', {});
-}
-
-function waitForComplete(tabId: number, timeoutMs = 15_000): Promise<void> {
-  return new Promise((resolve) => {
-    const done = () => {
-      clearTimeout(timer);
-      browser.tabs.onUpdated.removeListener(listener);
-      resolve();
-    };
-    const listener = (id: number, info: { status?: string }) => {
-      if (id === tabId && info.status === 'complete') done();
-    };
-    const timer = setTimeout(done, timeoutMs);
-    browser.tabs.onUpdated.addListener(listener);
-    void browser.tabs.get(tabId).then((t) => t.status === 'complete' && done(), done);
-  });
-}
-
-async function openSource(sourceId: string): Promise<{ tabId: number; highlighted: boolean }> {
-  const source = await (await repo()).getSource(sourceId);
-  if (!source) throw new Error('Source not found');
-  const quote = { exact: source.quoteExact, prefix: source.quotePrefix, suffix: source.quoteSuffix };
-  // The Text Fragment scrolls and highlights natively; our own highlight is a
-  // more precise best effort that only works where we may inject.
-  const tab = await browser.tabs.create({ url: textFragmentUrl(source.url, quote), active: true });
-  const tabId = tab.id!;
-  await waitForComplete(tabId);
-  try {
-    await inject(tabId);
-    const { found } = await sendTabMessage(tabId, 'content/highlight', { quote });
-    return { tabId, highlighted: found };
-  } catch {
-    return { tabId, highlighted: false };
-  }
-}
-
-let analysis: { promise: Promise<void>; withDiagnosis: boolean } | undefined;
-
-/**
- * One analysis at a time. A request that a running one already covers joins it;
- * a full run asked for during a tag-only one follows it. The outcome is kept for
- * the Learning tab; a manual run also gets the error. `withDiagnosis` false: tag
- * and link only.
- */
-function runAnalysis(withDiagnosis = true): Promise<void> {
-  if (analysis && (analysis.withDiagnosis || !withDiagnosis)) return analysis.promise;
-  const before = analysis?.promise.catch(() => {}) ?? Promise.resolve();
-  const promise = before.then(() => analyzeOnce(withDiagnosis));
-  const entry = { promise, withDiagnosis };
-  analysis = entry;
-  void promise
-    .catch(() => {}) // the caller gets the error; this only clears the slot
-    .finally(() => {
-      if (analysis === entry) analysis = undefined;
-    });
-  return promise;
-}
-
-async function analyzeOnce(withDiagnosis: boolean): Promise<void> {
-  const state = await loadAnalysis();
-  const now = Date.now();
-  try {
-    const settings = await loadSettings();
-    await analyze(await repo(), new LlmClient(settings), settings.embeddingModel, now, withDiagnosis);
-    await saveAnalysis({ lastDiagnosedAt: withDiagnosis ? now : state.lastDiagnosedAt });
-  } catch (err) {
-    await saveAnalysis({ ...state, lastError: errorText(err), failedAt: now });
-    throw err;
-  } finally {
-    notifyChanged();
-  }
 }
 
 const matchesOf = (origins: string[]) => origins.map((o) => `${o}/*`);
@@ -208,162 +72,15 @@ async function setRecordingOrigins(origins: string[]): Promise<RecordingSettings
   return next;
 }
 
-const MENU_KNOWLEDGE = 'chat2know-save-knowledge';
-const MENU_IDEA = 'chat2know-save-idea';
-const MENU_ASK = 'chat2know-ask-later';
-
 export default defineBackground(() => {
   void browser.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
-  // Cards captured while the worker was asleep or the model was unreachable.
-  void distiller().then((d) => d.drain());
 
   // Registered scripts survive restarts; re-registering on install / update keeps them in step with the settings.
   browser.runtime.onStartup.addListener(() => void loadRecording().then(showRecordingBadge));
-
-  browser.runtime.onInstalled.addListener(() => {
-    void loadRecording().then(registerRecorder);
-    void browser.contextMenus.removeAll().then(() => {
-      browser.contextMenus.create({ id: MENU_KNOWLEDGE, title: i18n.t('menu.saveKnowledge'), contexts: ['selection'] });
-      browser.contextMenus.create({ id: MENU_IDEA, title: i18n.t('menu.saveIdea'), contexts: ['selection'] });
-      browser.contextMenus.create({ id: MENU_ASK, title: i18n.t('menu.askLater'), contexts: ['selection'] });
-    });
-  });
-
-  browser.contextMenus.onClicked.addListener((info, tab) => {
-    if (info.menuItemId === MENU_ASK && tab?.id !== undefined) {
-      askFromTab(tab.id).catch(() => {});
-      return;
-    }
-    const type: CaptureType | undefined =
-      info.menuItemId === MENU_KNOWLEDGE ? 'knowledge' : info.menuItemId === MENU_IDEA ? 'idea' : undefined;
-    if (type && tab?.id !== undefined) captureFromTab(type, tab.id).catch(() => {});
-  });
-
-  browser.commands.onCommand.addListener((command, tab) => {
-    if (command === 'ask-later') {
-      askFromTab(tab?.id).catch(() => {});
-      return;
-    }
-    const type: CaptureType | undefined =
-      command === 'capture-knowledge' ? 'knowledge' : command === 'capture-idea' ? 'idea' : undefined;
-    if (type) captureFromTab(type, tab?.id).catch(() => {});
-  });
+  browser.runtime.onInstalled.addListener(() => void loadRecording().then(registerRecorder));
 
   onMessages({
     ping: ({ from }) => ({ from: 'background', echo: from, at: Date.now() }),
-    'page/activate': async ({ tabId }) => {
-      const id = await resolveTabId(tabId);
-      await inject(id);
-      return { tabId: id };
-    },
-    'capture/save': ({ type, capture }) => save(type, capture),
-    'capture/fromTab': ({ type, tabId }) => captureFromTab(type, tabId),
-    'ask/save': async (input) => {
-      const res = await (await repo()).askLater(input);
-      notifyChanged();
-      return res;
-    },
-    'ask/update': async ({ id, question }) => {
-      await (await repo()).updateQuestion(id, question);
-      notifyChanged();
-      return null;
-    },
-    'ask/fromTab': ({ tabId }) => askFromTab(tabId),
-    'ask/forUrl': async ({ url }) => (await repo()).questionsForUrl(url),
-    'ask/now': async (input) => {
-      const r = await repo();
-      // Asked now, the question is answered as asked, so it is never merged into an older one.
-      const { nodeId } = await r.askLater(input, { merge: false });
-      notifyChanged();
-      const item = await answerQuestion(r, await client(), nodeId, defaultQuestion);
-      notifyChanged();
-      return item;
-    },
-    'ask/followUp': async ({ parentId, question }) => {
-      const r = await repo();
-      const node = await r.askFollowUp(parentId, question);
-      notifyChanged();
-      const item = await answerQuestion(r, await client(), node.id, defaultQuestion);
-      notifyChanged();
-      return item;
-    },
-    'ask/answer': async ({ questionId }) => {
-      const item = await answerQuestion(await repo(), await client(), questionId, defaultQuestion);
-      notifyChanged();
-      return item;
-    },
-    'ask/dismiss': async ({ questionId, suggestion }) => {
-      await dismissQuestion(await repo(), questionId, suggestion);
-      notifyChanged();
-      return null;
-    },
-    'inbox/list': async () => (await repo()).listInbox(),
-    'keep/suggest': async ({ inboxId }) => suggestKeep(await repo(), await client(), inboxId),
-    'keep/confirm': async ({ inboxId, suggestion, decision }) => {
-      const node = await confirmKeep(await repo(), inboxId, suggestion, decision);
-      notifyChanged();
-      return { nodeId: node.id };
-    },
-    'nodes/confirmTitle': async ({ id, title }) => {
-      await (await repo()).confirmTitle(id, title);
-      notifyChanged();
-      return null;
-    },
-    'nodes/retryDistill': async ({ id }) => {
-      await (await distiller()).retry(id);
-      return null;
-    },
-    'nodes/move': async ({ id, parentId, beforeId }) => {
-      await (await repo()).moveNode(id, parentId, beforeId);
-      notifyChanged();
-      return null;
-    },
-    'place/suggest': async ({ nodeId }) => {
-      const settings = await loadSettings();
-      if (!settings.embeddingModel) return null; // placement help is off until an embedding model is set
-      return suggestPlacement(await repo(), new LlmClient(settings), settings.embeddingModel, nodeId);
-    },
-    'nodes/merge': async ({ duplicateId, targetId }) => {
-      await (await repo()).mergeInto(duplicateId, targetId);
-      notifyChanged();
-      return null;
-    },
-    'organize/page': async ({ tabId }) => {
-      const id = await resolveTabId(tabId);
-      await inject(id);
-      const page = await sendTabMessage(id, 'content/pageMarkdown', {});
-      return { cards: await organize(await client(), page.markdown), url: page.url, pageTitle: page.pageTitle };
-    },
-    'organize/text': async ({ text }) => ({ cards: await organize(await client(), text) }),
-    'organize/keep': async ({ cards, page }) => {
-      const ids = await (await repo()).addCards(cards, page);
-      notifyChanged();
-      return { kept: ids.length };
-    },
-    'nodes/setMastery': async ({ id, mastery }) => {
-      await (await repo()).setMastery(id, mastery ?? undefined);
-      notifyChanged();
-      return null;
-    },
-    'quiz/due': async () => (await repo()).dueForQuiz(isConfigured(await loadSettings())),
-    'quiz/problem': async ({ nodeId }) => ({ problem: await problemFor(await repo(), await client(), nodeId) }),
-    'quiz/grade': async ({ nodeId, answer, verdict }) => {
-      const review = await selfGrade(await repo(), nodeId, answer, verdict);
-      notifyChanged();
-      return review;
-    },
-    'quiz/judge': async ({ nodeId, answer, problem }) => {
-      const review = await judge(await repo(), await client(), nodeId, answer, problem);
-      notifyChanged();
-      return review;
-    },
-    'explain/check': async ({ nodeId, explanation }) => {
-      const result = await checkExplanation(await repo(), await client(), nodeId, explanation);
-      notifyChanged();
-      return result;
-    },
-    'explain/oneMinute': async ({ nodeId }) => ({ script: await oneMinuteScript(await repo(), await client(), nodeId) }),
-    'stats/get': async () => (await repo()).stats(),
     'settings/get': async () => toPublic(await loadSettings()),
     'settings/save': async ({ baseUrl, model, embeddingModel, apiKey }) => {
       const current = await loadSettings();
@@ -377,26 +94,9 @@ export default defineBackground(() => {
       };
       await saveSettings(next);
       notifyChanged();
-      void distiller().then((d) => d.drain());
       return toPublic(next);
     },
     'settings/test': async () => ({ reply: await (await client()).chat([{ role: 'user', content: 'Reply with the single word OK.' }]) }),
-    'nodes/list': async () => (await repo()).listNodes(),
-    'nodes/delete': async ({ id }) => {
-      await (await repo()).deleteNode(id);
-      notifyChanged();
-      return null;
-    },
-    'source/open': ({ sourceId }) => openSource(sourceId),
-    'data/exportJson': async () => JSON.stringify(await (await repo()).exportData(), null, 2),
-    'data/exportMarkdown': async () => nodesToMarkdown(await (await repo()).listNodes(), new Date()),
-    'data/exportOpml': async () => nodesToOpml(await (await repo()).listNodes(), new Date()),
-    'data/exportAnki': async () => nodesToAnki(await (await repo()).listNodes()),
-    'data/importJson': async ({ json }) => {
-      const result = await (await repo()).importData(json);
-      notifyChanged();
-      return result;
-    },
     'recording/get': () => loadRecording(),
     'recording/setOrigins': async ({ origins }) => {
       const next = await setRecordingOrigins(origins);
@@ -415,15 +115,11 @@ export default defineBackground(() => {
       const url = sender.url;
       if (!url || sender.id !== browser.runtime.id || !shouldRecord(await loadRecording(), url)) return { recorded: false };
       const host = new URL(url).hostname;
-      const r = await repo();
-      await r.recordAsk({ site: siteFor(host)?.id ?? host, conversationUrl: url, text });
+      await (await repo()).recordAsk({ site: siteFor(host)?.id ?? host, conversationUrl: url, text });
       notifyChanged();
-      // Recording never waits on a model; analysis runs in the background, its failure kept for the tab.
-      const auto = autoAnalysis((await r.untaggedAsks()).length, await loadAnalysis(), Date.now());
-      if (auto.run && isConfigured(await loadSettings())) runAnalysis(auto.diagnose).catch(() => {});
       return { recorded: true };
     },
-    'asks/list': async () => (await repo()).listAskViews(),
+    'asks/list': async () => (await repo()).listAsks(),
     'asks/delete': async ({ id }) => {
       await (await repo()).deleteAsk(id);
       notifyChanged();
@@ -443,33 +139,5 @@ export default defineBackground(() => {
       notifyChanged();
       return next;
     },
-    'analysis/get': async () => {
-      const { lastError } = await loadAnalysis();
-      return { pending: (await (await repo()).untaggedAsks()).length, ...(lastError ? { lastError } : {}) };
-    },
-    'analysis/run': async () => {
-      await runAnalysis();
-      return null;
-    },
-    'diagnosis/list': async () => listDiagnosisViews(await repo()),
-    'diagnosis/quiz': async ({ id }) => ({ items: await diagnosisQuiz(await repo(), await client(), id) }),
-    'diagnosis/checkQuiz': async ({ id, items, answers }) => {
-      const result = await checkDiagnosisQuiz(await repo(), await client(), id, items, answers);
-      notifyChanged();
-      return result;
-    },
-    'diagnosis/decide': async ({ id, accurate }) => {
-      await decide(await repo(), id, accurate);
-      notifyChanged();
-      return null;
-    },
-    'diagnosis/review': async ({ id }) => ({ cards: await systematicReview(await repo(), await client(), id) }),
-    'diagnosis/keepReview': async ({ id, cards, internalize }) => {
-      const kept = await keepReview(await repo(), id, cards, internalize);
-      notifyChanged();
-      return { kept };
-    },
-    'asks/export': async () =>
-      JSON.stringify({ format: 'chat2know-asks', version: 1, exportedAt: Date.now(), asks: await (await repo()).listAskViews() }, null, 2),
   });
 });

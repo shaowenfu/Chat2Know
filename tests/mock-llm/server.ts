@@ -85,93 +85,12 @@ function chatReply(task: string, user: string): string {
   switch (task) {
     case 'ping':
       return 'OK';
-    case 'answer':
-      return `Mock answer to: ${between(user, 'My question:')}`;
-    case 'suggest': {
-      const q = between(user, 'Question:');
-      if (/internvl/i.test(q))
-        return JSON.stringify({
-          kind: 'instance',
-          titles: ['Which concept is InternVL3.5 an example of?', 'What makes InternVL3.5 a VLM?', 'Where does InternVL3.5 fit?'],
-          summary: 'InternVL3.5 is an example of a VLM.',
-          concept: 'VLM',
-        });
-      if (/name|由来/i.test(q))
-        return JSON.stringify({ kind: 'curiosity', titles: ['Why this name?', 'Name origin?', 'Who named it?'], summary: 'A naming detail.' });
-      return JSON.stringify({
-        kind: 'concept',
-        titles: [`What parts make up ${q.replace(/\?$/, '')}?`, `Why does ${q.replace(/\?$/, '')} work?`, `When is ${q.replace(/\?$/, '')} used?`],
-        summary: `Mock statement about ${q}`,
-      });
-    }
-    case 'distill': {
-      const first = user.split(/(?<=[.。!?])\s/)[0]!.slice(0, 120);
-      return JSON.stringify({ titles: ['What is the key idea?', 'Why does it hold?', 'How is it applied?'], summary: `Distilled: ${first}` });
-    }
-    case 'problem':
-      return `Problem: use this to solve a case. ${between(user, 'Knowledge question:')}`;
-    case 'judgeApply':
-    case 'judge': {
-      // Pass when the learner's answer (or solution) shares a 4+ letter word with the expected answer.
-      const words = (s: string) => new Set(s.toLowerCase().match(/[a-z]{4,}/g) ?? []);
-      const apply = task === 'judgeApply';
-      const expected = words(between(user, apply ? 'Knowledge it needs:\n' : 'Expected answer:\n', '\n\n'));
-      const hit = [...words(between(user, apply ? "Learner's solution:\n" : "Learner's answer:\n", '\u0000'))].some((w) => expected.has(w));
-      return JSON.stringify(hit ? { verdict: 'pass', feedback: 'Covers the key point.' } : { verdict: 'fail', feedback: 'Misses the key point.' });
-    }
-    case 'explain': {
-      // A point passes when the explanation shares a 4+ letter word with its statement.
-      const words = (s: string) => new Set(s.toLowerCase().match(/[a-z]{4,}/g) ?? []);
-      const said = words(between(user, 'Explanation:\n', '\u0000'));
-      const points = [...user.matchAll(/^\[(\d+)\] .*? — (.*)$/gm)].map(([, n, statement]) => {
-        const hit = [...words(statement!)].some((w) => said.has(w));
-        return { point: Number(n), verdict: hit ? 'pass' : 'fail', feedback: hit ? 'Explained.' : 'Missing.' };
-      });
-      return JSON.stringify({ feedback: 'Mock overall feedback.', points });
-    }
-    case 'oneMinute':
-      return `In one minute: ${between(user, 'Topic:')} comes down to ${user.match(/^- /gm)?.length ?? 0} points.`;
     case 'tag':
       return tagReply(user);
     case 'prereq':
       return prereqReply(user);
-    case 'diagnosisQuiz': {
-      const concept = between(user, 'Concept:');
-      return JSON.stringify({
-        items: [1, 2, 3].map((n) => ({ question: `Quiz ${n} on ${concept}?`, expected: `${concept} answer ${n}: order reverses` })),
-      });
-    }
-    case 'diagnosisJudge': {
-      // An answer passes when it shares a 4+ letter word with its expected answer.
-      const words = (s: string) => new Set(s.toLowerCase().match(/[a-z]{4,}/g) ?? []);
-      const results = [...user.matchAll(/^\[(\d+)\] Question: .*\nExpected: (.*)\nAnswer: (.*)$/gm)].map(([, n, expected, answer]) => {
-        const hit = [...words(answer!)].some((w) => words(expected!).has(w));
-        return { item: Number(n), verdict: hit ? 'pass' : 'fail', feedback: hit ? 'Right.' : 'Not quite.' };
-      });
-      return JSON.stringify({ results });
-    }
-    case 'review': {
-      const concept = between(user, 'Concept:');
-      const base = between(user, 'It rests on:').split('; ').filter(Boolean);
-      return JSON.stringify({
-        cards: [...base, concept].map((c) => ({ question: `What is ${c}?`, summary: `${c} explained from the ground up.` })),
-      });
-    }
     case 'circling':
       return JSON.stringify(/derivative|求导|dimension|维度/i.test(user) ? { domain: 'Matrix calculus', concept: 'Layout conventions' } : { domain: '', concept: '' });
-    case 'organize': {
-      // One card per substantial paragraph, quoting its first sentence verbatim.
-      const cards = user
-        .split(/\n\s*\n/)
-        .map((p) => p.trim())
-        .filter((p) => p.length > 40 && !p.startsWith('```') && !p.startsWith('|'))
-        .slice(0, 5)
-        .map((p) => {
-          const first = p.split(/(?<=[.。!?！？])\s*/)[0]!;
-          return { question: `What does this say: ${first.split(/\s+/).slice(0, 4).join(' ')}?`, summary: first, quote: first };
-        });
-      return JSON.stringify({ cards });
-    }
     default:
       return `Unknown task ${task}`;
   }

@@ -16,26 +16,12 @@ export default defineConfig({
     description: '__MSG_extDescription__',
     homepage_url: 'https://github.com/shaowenfu/Chat2Know',
     default_locale: 'en',
-    permissions: ['sidePanel', 'storage', 'activeTab', 'scripting', 'contextMenus'],
+    permissions: ['sidePanel', 'storage', 'activeTab', 'scripting'],
     // The model endpoint is requested at runtime when the user saves settings.
     optional_host_permissions: ['https://*/*', 'http://*/*'],
     ...(isE2E ? { host_permissions: ['<all_urls>'] } : {}),
     action: {
       default_title: '__MSG_actionTitle__',
-    },
-    commands: {
-      'capture-knowledge': {
-        suggested_key: { default: 'Alt+Shift+K' },
-        description: '__MSG_command_captureKnowledge__',
-      },
-      'ask-later': {
-        suggested_key: { default: 'Alt+Q' },
-        description: '__MSG_command_askLater__',
-      },
-      'capture-idea': {
-        suggested_key: { default: 'Alt+Shift+I' },
-        description: '__MSG_command_captureIdea__',
-      },
     },
   },
 });

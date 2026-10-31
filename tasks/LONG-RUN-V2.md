@@ -38,7 +38,7 @@ canvas (https://claude.ai/artifact/YbcpyaNR6aWbC2EvmAAsjr, 8 artboards) is the r
 ## R0: clear the ground
 
 - [x] R0.1 `v2` branch; new `CLAUDE.md`; `docs/project-plan.md` replaced by the v2 plan; v0.1 plan, diagnosis module and task cards archived; CI on `v2`.
-- [ ] R0.2 Delete the dropped features: side panel views, services, prompts, messages, repository methods and their tests and strings. Side panel shows one empty view. `check` green; no references left.
+- [x] R0.2 Delete the dropped features: side panel views, services, prompts, messages, repository methods and their tests and strings. Side panel shows one empty view. `check` green; no references left.
 
 ## R1: data layer
 
@@ -74,3 +74,4 @@ canvas (https://claude.ai/artifact/YbcpyaNR6aWbC2EvmAAsjr, 8 artboards) is the r
 ## Log
 
 - R0.1: The v0.1 docs are archived in `docs/archive-v0.1/`; their release-era files (`PRIVACY.md`, `docs/install.md`, `docs/store-listing.md`) stay and are rewritten in R6.
+- R0.2: The old DB schema and types (`src/db/schema.ts`, `types.ts`) and the old-type users `src/export/*` and `src/graph/tree.ts` stay until R1 rebuilds the data layer on a new database; the repository is already cut down to recorded questions. Commands and the `contextMenus` permission are removed until R2 adds "记到导图". Locale files hold only the strings in use. The tag / prerequisite / circling prompts and `src/graph/` algorithms stay for R5; their service code went.
