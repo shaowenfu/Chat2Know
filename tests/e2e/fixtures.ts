@@ -15,7 +15,7 @@ const PREINSTALLED = '/opt/pw-browsers/chromium';
 const executablePath = process.env.CHROMIUM_PATH ?? (existsSync(PREINSTALLED) ? PREINSTALLED : undefined);
 
 export const test = base.extend<
-  { context: BrowserContext; serviceWorker: Worker; extensionId: string },
+  { uiLang: string; context: BrowserContext; serviceWorker: Worker; extensionId: string },
   { fixtureServer: string; mockLlm: MockLlm }
 >({
   mockLlm: [
@@ -43,11 +43,15 @@ export const test = base.extend<
     },
     { scope: 'worker' },
   ],
-  context: async ({}, use) => {
+  // The browser's UI language, which the extension's strings follow; `test.use({ uiLang: 'zh-CN' })` for Chinese.
+  uiLang: ['en-US', { option: true }],
+  context: async ({ uiLang }, use) => {
     const context = await chromium.launchPersistentContext('', {
       executablePath,
       channel: 'chromium', // new headless mode, which supports extensions
-      args: [`--disable-extensions-except=${EXTENSION_PATH}`, `--load-extension=${EXTENSION_PATH}`],
+      locale: uiLang,
+      args: [`--disable-extensions-except=${EXTENSION_PATH}`, `--load-extension=${EXTENSION_PATH}`, `--lang=${uiLang}`],
+      env: { ...process.env, LANGUAGE: uiLang.replace('-', '_') },
     });
     await use(context);
     await context.close();

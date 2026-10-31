@@ -39,3 +39,84 @@ picker:
   newTopicUnder: "放在 $1 下"
   cancel: 取消
   move: 移过去
+panel:
+  expand: 展开全页 ↗
+  settings: 设置
+  noModel: 还没配置模型。记录照常可用，但新内容会先放进「待归位」，需要你拖到合适的位置。
+  setUpModel: 去设置模型
+  itemCount: "$1 条"
+  notLearned: 还没学
+  justAdded: 刚记下
+  dropHere: 放到这里
+  openSource: 回到对话
+  moveTo: 移到…
+  edit: 编辑
+  remove: 删除
+  removed: "已删除「$1」"
+  hint: 在回答里点公式旁的 ＋，或选中文字按 Alt S，就会记到导图里合适的位置。
+  hintNoModel: 拖住条目右侧的 ⋮⋮ 放到任意知识点上。配置模型后，待归位的内容会自动归位。
+  pickSubject: 切换学科
+empty:
+  title: 你的知识导图会长在这里
+  body: 在 AI 对话里看到值得记的公式或结论，点一下就行。放到哪里由插件来定。
+  how: 公式旁边会出现 ＋。普通文字选中后按 Alt S，或者右键「记到 Chat2Know 导图」。
+  importOld: 导入旧版数据
+  imported: "已导入 $1 条"
+  local: 数据只存在这个浏览器里
+sites:
+  legend: 在这些网站上显示 ＋
+  note: 勾选时浏览器会请求该网站的访问权限。其他网页仍可用快捷键和右键。
+mapPage:
+  mapTab: 导图
+  settingsTab: 设置
+  newSubject: ＋ 新导图
+  newSubjectPlaceholder: 学科名称
+  showOutline: 显示大纲（灰色）
+  export: 导出
+  legendUser: 你记下的
+  legendPlugin: 插件补充（你同意过）
+  legendOutline: 大纲里还没学到
+  legendGap: 可能是短板
+  fromConversation: "来自对话 · $1"
+  noSource: 手动添加
+  hint: 拖动节点可以改位置；双击可以改文字。
+  pickTopic: 选一个知识点，看它下面记了什么。
+  addFormula: 公式
+  addStatement: 结论
+  addPlaceholderFormula: 输入 LaTeX，例如 (AB)^T = B^T A^T
+  addPlaceholderStatement: 一句话
+  add: 添加
+  newChild: 新建子节点
+  newChildTitle: 新知识点
+  empty: 还没有导图。在 AI 对话里记下第一条，或在这里新建一张。
+  dateLocale: zh-CN
+settings:
+  model: 模型
+  connected: ● 已连接
+  notConnected: 未连接
+  modelExplain: 用来自动归位、压缩长文字和发现短板。任何兼容 OpenAI 格式的服务都可以。
+  baseUrl: 服务地址
+  modelName: 模型
+  apiKey: API Key
+  apiKeySaved: 已保存（留空则不变）
+  embedding: 嵌入模型（可选，让归位更准）
+  embeddingPlaceholder: 例如 text-embedding-3-small
+  save: 保存
+  saved: 已保存。
+  test: 测试连接
+  testOk: "连接正常：$1"
+  keyNote: Key 只存在这个浏览器里。只有你记下的内容和你开启的提问记录会发给这个服务。
+  permissionDenied: "没有获得访问 $1 的权限。"
+  sites: 网站
+  sitesExplain: 在这些网站的公式旁显示 ＋
+  recordAsks: 也记录我在这些网站上发出的提问，用来发现短板
+  recordAsksNote: 只存本地；分析时分批发给上面的模型。
+  data: 数据
+  exportJson: 导出 JSON
+  exportMarkdown: 导出 Markdown
+  exportOpml: 导出 OPML
+  import: 导入
+  importNote: 导入支持本插件导出的 JSON，以及旧版 v0.1 的导出文件。
+  clear: 清空所有数据
+  clearConfirm: 再点一次确认清空
+  cleared: 已清空所有数据。

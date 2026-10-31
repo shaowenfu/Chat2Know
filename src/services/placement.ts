@@ -15,8 +15,8 @@ const SEP = ' › ';
 
 export interface PlaceRequest {
   itemId: string;
-  /** The record's undo group: placement joins it, so the toast's 撤销 takes both back. */
-  group: string;
+  /** The record's undo group: placement joins it, so the toast's 撤销 takes both back. None: a write of its own. */
+  group?: string;
   before: string;
   after: string;
   untitled: string;
@@ -76,6 +76,18 @@ export async function closestSections(repo: Repository, client: Pick<LlmClient, 
     .map((s) => ({ s, score: cosine(itemVector!, cached.get(s.node.id)!.vector) }))
     .sort((a, b) => b.score - a.score)
     .map((c) => c.s);
+}
+
+/** Places every item waiting in a 待归位 group, one model call each (after the model is set up, or an import). */
+export async function placeUnplaced(repo: Repository, client: Client, embeddingModel: string, labels: { untitled: string; unplaced: string }): Promise<number> {
+  let placed = 0;
+  for (const item of await repo.listItems()) {
+    const parent = await repo.node(item.parentId!);
+    if (parent.role !== 'unplaced') continue;
+    const path = await placeItem(repo, client, embeddingModel, { itemId: item.id, before: item.source?.quotePrefix ?? '', after: item.source?.quoteSuffix ?? '', ...labels });
+    if (path) placed++;
+  }
+  return placed;
 }
 
 /**

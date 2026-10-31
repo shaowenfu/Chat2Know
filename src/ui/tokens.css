@@ -1,0 +1,54 @@
+/* Colors and type from the design canvas "Chat2Know 界面设计". Light only, as drawn. */
+:root {
+  --bg: #fafaf8;
+  --bg-soft: #f4f3ef;
+  --surface: #ffffff;
+  --ink: #1b1b19;
+  --ink-2: #3a3935;
+  --muted: #5f5e58;
+  --grey: #8f8c82;
+  --line: #e3e1da;
+  --line-strong: #d6d3ca;
+  --branch: #c9c6bc;
+  --accent: #2b57d9;
+  --accent-ink: #1e3fa3;
+  --accent-soft: #eaf0ff;
+  --orange: #8a3409;
+  --orange-line: #e9b48f;
+  --orange-soft: #fcebdd;
+  --banner: #f1f0ec;
+  --font: 'Noto Sans SC', system-ui, -apple-system, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+  color-scheme: light;
+  font-family: var(--font);
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-size: 13px;
+}
+
+a {
+  color: var(--accent);
+}
+a:hover {
+  color: var(--accent-ink);
+}
+
+button {
+  font: inherit;
+  color: inherit;
+}
+
+.link-button {
+  border: 0;
+  padding: 0;
+  background: none;
+  color: var(--accent);
+  cursor: pointer;
+}
+.link-button:hover {
+  color: var(--accent-ink);
+}

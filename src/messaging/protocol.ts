@@ -10,6 +10,7 @@ import type { TextQuote } from '@/src/capture/text-quote';
 import type { ItemType } from '@/src/db/types';
 import type { RecordResult } from '@/src/services/record';
 import type { Place } from '@/src/services/relocate';
+import type { MapTree } from '@/src/graph/tree';
 import type { PublicSettings } from '@/src/llm/settings';
 
 export type Context = 'content' | 'background' | 'sidepanel';
@@ -41,6 +42,22 @@ export interface MessageMap {
   // Recording onto the map
   /** From the site script: a formula or a selection the user just recorded on the sender's page. */
   'map/record': { req: { itemType: ItemType; title: string; latex?: string; quote: TextQuote; pageTitle: string; force?: boolean }; res: RecordResult };
+  /** Subjects in map order, with how many items each holds and when the newest was recorded. */
+  'map/subjects': { req: Record<string, never>; res: SubjectSummary[] };
+  'map/tree': { req: { subjectId: string }; res: MapTree };
+  /** A drag in the map: a node into a structure node, before `beforeId` or last. */
+  'map/moveNode': { req: { id: string; parentId: string; beforeId?: string }; res: { group: string } };
+  'map/edit': { req: { id: string; title?: string; latex?: string }; res: { group: string } };
+  /** Soft delete; a section's contents move up a level. */
+  'map/remove': { req: { id: string }; res: { group: string } };
+  'map/addSubject': { req: { title: string }; res: { id: string } };
+  'map/addSection': { req: { parentId: string; title: string }; res: { id: string } };
+  /** An item the user types in on the full page (a formula's LaTeX, or a statement). */
+  'map/addItem': { req: { parentId: string; itemType: ItemType; text: string }; res: { id: string } };
+  /** "清空所有数据". */
+  'map/clear': { req: Record<string, never>; res: null };
+  /** Opens the item's conversation in a new tab, scrolled to the quote. */
+  'map/openSource': { req: { itemId: string }; res: null };
   /** The "改位置" picker: where the item is now and three other places. */
   'map/placeOptions': { req: { itemId: string }; res: { now: string[]; places: Place[] } };
   'map/searchPlaces': { req: { query: string }; res: Place[] };
@@ -62,6 +79,13 @@ export interface MessageMap {
   // Background -> extension pages (broadcast)
   /** Data or settings changed; open pages reload. */
   'event/dataChanged': { req: Record<string, never>; res: null };
+}
+
+export interface SubjectSummary {
+  id: string;
+  title: string;
+  items: number;
+  latest: number; // createdAt of its newest item, 0 when it has none
 }
 
 export type MessageType = keyof MessageMap;

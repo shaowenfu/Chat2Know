@@ -1,4 +1,4 @@
-import { isGrey, type MapTree } from '@/src/graph/tree';
+import { withoutGrey, type MapTree } from '@/src/graph/tree';
 import type { MapNode } from '@/src/db/types';
 
 export interface ExportOptions {
@@ -11,9 +11,7 @@ export interface ExportOptions {
 export const structureTitle = (n: MapNode, o: ExportOptions) => (n.role === 'unplaced' ? o.unplacedTitle : n.title);
 
 /** Keeps the trees' structure, without grey nodes unless asked for. */
-export function visible(trees: MapTree[], o: ExportOptions): MapTree[] {
-  return trees.filter((t) => o.includeGrey || !isGrey(t)).map((t) => ({ node: t.node, children: visible(t.children, o) }));
-}
+export const visible = (trees: MapTree[], o: ExportOptions): MapTree[] => (o.includeGrey ? trees : withoutGrey(trees));
 
 export const itemText = (n: MapNode) => [n.latex === undefined ? '' : `$${n.latex}$`, n.title].filter(Boolean).join(' — ');
 

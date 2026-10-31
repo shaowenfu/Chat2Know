@@ -39,3 +39,84 @@ picker:
   newTopicUnder: "Goes under $1"
   cancel: Cancel
   move: Move
+panel:
+  expand: Full map ↗
+  settings: Settings
+  noModel: No model set up yet. Recording still works, but new notes wait in "Unplaced" until you drag them into place.
+  setUpModel: Set up a model
+  itemCount: "$1 items"
+  notLearned: not yet
+  justAdded: just added
+  dropHere: drop here
+  openSource: Back to the conversation
+  moveTo: Move to…
+  edit: Edit
+  remove: Delete
+  removed: "Deleted \"$1\""
+  hint: Click ＋ beside a formula in an answer, or select text and press Alt S, and it goes to the right place on your map.
+  hintNoModel: Drag an item by ⋮⋮ onto any topic. Once a model is set up, unplaced notes find their places.
+  pickSubject: Switch subject
+empty:
+  title: Your knowledge map grows here
+  body: When an AI answer has a formula or conclusion worth keeping, one click records it. Chat2Know decides where it goes.
+  how: Formulas get a ＋ beside them. For other text, select it and press Alt S, or right-click "Add to Chat2Know map".
+  importOld: Import v0.1 data
+  imported: "Imported $1 items"
+  local: Your data stays in this browser
+sites:
+  legend: Show ＋ on these sites
+  note: Ticking a site asks the browser for access to that site only. On other pages, use the shortcut or the right-click menu.
+mapPage:
+  mapTab: Map
+  settingsTab: Settings
+  newSubject: ＋ New map
+  newSubjectPlaceholder: Subject name
+  showOutline: Show outline (grey)
+  export: Export
+  legendUser: Recorded by you
+  legendPlugin: Added by Chat2Know (you agreed)
+  legendOutline: In the outline, not learned yet
+  legendGap: Possible gap
+  fromConversation: "From the conversation · $1"
+  noSource: Added by hand
+  hint: Drag a node to move it; double-click to edit its text.
+  pickTopic: Pick a topic to see what is recorded under it.
+  addFormula: Formula
+  addStatement: Statement
+  addPlaceholderFormula: LaTeX, e.g. (AB)^T = B^T A^T
+  addPlaceholderStatement: One sentence
+  add: Add
+  newChild: New child
+  newChildTitle: New topic
+  empty: No maps yet. Record your first note in an AI chat, or start a map here.
+  dateLocale: en
+settings:
+  model: Model
+  connected: ● Connected
+  notConnected: Not connected
+  modelExplain: Places your notes, shortens long selections and finds gaps. Any OpenAI-compatible service works.
+  baseUrl: Base URL
+  modelName: Model
+  apiKey: API key
+  apiKeySaved: Saved (leave empty to keep it)
+  embedding: Embedding model (optional, places notes more accurately)
+  embeddingPlaceholder: e.g. text-embedding-3-small
+  save: Save
+  saved: Saved.
+  test: Test connection
+  testOk: "Connected: $1"
+  keyNote: The key stays in this browser. Only what you record, and the questions you choose to record, are sent to this service.
+  permissionDenied: "No access to $1 was granted."
+  sites: Sites
+  sitesExplain: Show ＋ beside formulas on these sites
+  recordAsks: Also record the questions I send on these sites, to find gaps
+  recordAsksNote: Kept in this browser; sent to the model above in batches for analysis.
+  data: Data
+  exportJson: Export JSON
+  exportMarkdown: Export Markdown
+  exportOpml: Export OPML
+  import: Import
+  importNote: Import takes a JSON export of this extension, or an export of the old v0.1.
+  clear: Delete all data
+  clearConfirm: Click again to delete everything
+  cleared: All data deleted.

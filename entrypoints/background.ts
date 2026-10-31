@@ -9,7 +9,8 @@ import { UserError } from '@/src/errors';
 import { loadSettings, saveSettings, toPublic } from '@/src/llm/settings';
 import { isRecording, loadSites, saveSites, shouldRecord, type SiteSettings } from '@/src/sites/settings';
 import { recordItem, type RecordResult } from '@/src/services/record';
-import { placeItem } from '@/src/services/placement';
+import { placeItem, placeUnplaced } from '@/src/services/placement';
+import { textFragmentUrl } from '@/src/capture/text-fragment';
 import { moveByUser, parentPath, placeOptions, searchPlaces } from '@/src/services/relocate';
 import { isConfigured } from '@/src/llm/settings';
 import { errorText } from '@/src/errors';
@@ -123,6 +124,19 @@ async function placeAfterRecord(result: Extract<RecordResult, { status: 'recorde
   await sendTabMessage(tabId, 'site/placed', reply).catch(() => {});
 }
 
+let placing: Promise<void> = Promise.resolve();
+
+/** With a model set up, the items waiting in 待归位 go to their places; one run at a time. */
+function placeWaiting(): Promise<void> {
+  placing = placing.then(async () => {
+    const settings = await loadSettings();
+    if (!isConfigured(settings)) return;
+    const { unplaced, newSubject } = labels();
+    if (await placeUnplaced(await repo(), new LlmClient(settings), settings.embeddingModel, { unplaced, untitled: newSubject })) notifyChanged();
+  });
+  return placing;
+}
+
 const labels = (): { unplaced: string; newSubject: string } => ({ unplaced: i18n.t('map.unplaced'), newSubject: i18n.t('map.newSubject') });
 
 export default defineBackground(() => {
@@ -156,6 +170,7 @@ export default defineBackground(() => {
       };
       await saveSettings(next);
       notifyChanged();
+      void placeWaiting();
       return toPublic(next);
     },
     'settings/test': async () => ({ reply: await (await client()).chat([{ role: 'user', content: 'Reply with the single word OK.' }]) }),
@@ -181,6 +196,60 @@ export default defineBackground(() => {
       notifyChanged();
       if (result.status === 'recorded') void placeAfterRecord(result, quote, sender.tab.id!);
       return result;
+    },
+    'map/subjects': async () => {
+      const r = await repo();
+      return Promise.all(
+        (await r.listSubjects()).map(async (s) => {
+          const items = (await r.subjectNodes(s.id)).filter((n) => n.kind === 'item');
+          return { id: s.id, title: s.title, items: items.length, latest: Math.max(0, ...items.map((n) => n.createdAt)) };
+        }),
+      );
+    },
+    'map/tree': async ({ subjectId }) => (await repo()).subjectTree(subjectId),
+    'map/moveNode': async ({ id, parentId, beforeId }) => {
+      const r = await repo();
+      const group = await r.move(id, parentId, beforeId);
+      if ((await r.node(id)).kind === 'item') await r.notePlacementChange(id, await parentPath(r, id, labels().unplaced));
+      notifyChanged();
+      return { group };
+    },
+    'map/edit': async ({ id, title, latex }) => {
+      const group = await (await repo()).edit(id, { ...(title === undefined ? {} : { title }), ...(latex === undefined ? {} : { latex }) });
+      notifyChanged();
+      return { group };
+    },
+    'map/remove': async ({ id }) => {
+      const group = await (await repo()).remove(id);
+      notifyChanged();
+      return { group };
+    },
+    'map/addSubject': async ({ title }) => {
+      const { node } = await (await repo()).addSubject(title);
+      notifyChanged();
+      return { id: node.id };
+    },
+    'map/addSection': async ({ parentId, title }) => {
+      const { node } = await (await repo()).addSection(parentId, title);
+      notifyChanged();
+      return { id: node.id };
+    },
+    'map/addItem': async ({ parentId, itemType, text }) => {
+      const input = itemType === 'formula' ? { itemType, title: '', latex: text.trim() } : { itemType, title: text };
+      const { node } = await (await repo()).addItem({ parentId }, input);
+      notifyChanged();
+      return { id: node.id };
+    },
+    'map/clear': async () => {
+      await (await repo()).clearAll();
+      notifyChanged();
+      return null;
+    },
+    'map/openSource': async ({ itemId }) => {
+      const { source } = await (await repo()).node(itemId);
+      if (!source) throw new Error(`Item ${itemId} has no source`);
+      await browser.tabs.create({ url: textFragmentUrl(source.url, { exact: source.quoteExact, prefix: source.quotePrefix, suffix: source.quoteSuffix }), active: true });
+      return null;
     },
     'map/placeOptions': async ({ itemId }) => {
       const r = await repo();
@@ -224,6 +293,7 @@ export default defineBackground(() => {
       if (file.version === 2) await r.importNodes(file.nodes);
       else await r.importItems(i18n.t('map.importedSubject'), file.items);
       notifyChanged();
+      void placeWaiting();
       return { nodes: file.version === 2 ? file.nodes.length : file.items.length };
     },
     'asks/list': async () => (await repo()).listAsks(),

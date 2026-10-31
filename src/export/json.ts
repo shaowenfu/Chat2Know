@@ -1,3 +1,4 @@
+import { generateKeyBetween } from 'fractional-indexing';
 import { UserError } from '@/src/errors';
 import { titleFromMarkdown } from '@/src/db/title';
 import type { ItemInput } from '@/src/db/repository';
@@ -31,11 +32,21 @@ function isSource(v: unknown): v is ItemSource {
   );
 }
 
+function isOrderKey(key: string): boolean {
+  try {
+    generateKeyBetween(key, null); // throws on a key that is not a fractional index
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function isMapNode(v: unknown): v is MapNode {
   if (!isObject(v)) return false;
   const item = v.kind === 'item';
   return (
     ['id', 'subjectId', 'order', 'title', 'updatedAt'].every((k) => isString(v[k])) &&
+    isOrderKey(v.order as string) &&
     KINDS.includes(v.kind as string) &&
     ORIGINS.includes(v.origin as string) &&
     typeof v.createdAt === 'number' &&

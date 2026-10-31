@@ -488,6 +488,11 @@ export class Repository {
     return w.create({ subjectId, kind: 'section', parentId: subjectId, order: await this.orderAt(subjectId), title: '', origin: 'user', role: 'unplaced' });
   }
 
+  /** "清空所有数据": every table, the map, its history and the local recordings. */
+  async clearAll(): Promise<void> {
+    await Promise.all(this.db.tables.map((t) => t.clear()));
+  }
+
   // ------------------------------------------------------------ recorded questions (local only, not logged)
 
   async recordAsk(input: Omit<Ask, 'id' | 'sentAt'>): Promise<Ask> {

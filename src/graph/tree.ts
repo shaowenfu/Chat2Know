@@ -25,3 +25,6 @@ export const itemCount = (t: MapTree): number =>
 
 /** A structure node is grey (not learned yet) while no item lies below it. */
 export const isGrey = (t: MapTree): boolean => t.node.kind !== 'item' && itemCount(t) === 0;
+
+/** The trees without grey nodes (outline nodes nothing has been learned under). */
+export const withoutGrey = (trees: MapTree[]): MapTree[] => trees.filter((t) => !isGrey(t)).map((t) => ({ node: t.node, children: withoutGrey(t.children) }));

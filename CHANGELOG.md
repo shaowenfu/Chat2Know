@@ -14,6 +14,9 @@ v2 rebuild: Chat2Know becomes a knowledge map you record into with one click (se
 - With a model set up, a recorded item then moves to its subject and topic (new topics and subjects are created as needed) and a long selection becomes one sentence; the toast follows, and Undo takes back both. Your later corrections teach where notes go.
 - "Move" in the toast opens a small picker on the page: three likely places, search, or a new topic; Undo works there too.
 - "Also record the questions I send on these sites" is a separate switch; ticking a site no longer records questions by itself.
+- The side panel is the map: switch subjects, fold chapters, drag items onto topics, right-click to move, edit or delete (with undo, also Ctrl+Z); formulas are typeset; a just-recorded item is marked. With no map yet it explains the ＋ and lets you tick sites or import v0.1 data; without a model it says new notes wait in "Unplaced".
+- A full-page map (outline with a detail pane showing each topic's notes and where they came from, add a formula or statement by hand, new maps, show or hide the outline, export) and a settings page (model, sites and question recording, export / import, delete all data).
+- Saving a model, or importing, files the notes waiting in "Unplaced".
 - New map database: every change can be undone; a deleted chapter's contents move up a level; deleted nodes can be restored.
 - Export the map as JSON (lossless), Markdown or OPML; import a v2 JSON export, or a v0.1 export whose knowledge cards become items to place.
 

@@ -88,6 +88,7 @@ describe('JSON export and import', () => {
     expect(() => parseImport('{"format":"other"}')).toThrow('error.notExport');
     expect(() => parseImport(file([], 3))).toThrow('error.exportVersion');
     expect(() => parseImport(file([{ ...node, kind: 'card' }]))).toThrow('error.invalidExport');
+    expect(() => parseImport(file([{ ...node, order: 'a00' }]))).toThrow('error.invalidExport');
     expect(() => parseImport(file([node, { ...node, id: 'i', kind: 'item', parentId: 'missing', itemType: 'formula' }]))).toThrow('error.invalidExport');
     expect(() => parseImport(file([node, { ...node, id: 'i', kind: 'section', parentId: 's', itemType: 'formula' }]))).toThrow('error.invalidExport');
     expect(parseImport(file([node]))).toEqual({ version: 2, nodes: [node] });
