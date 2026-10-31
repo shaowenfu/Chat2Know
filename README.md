@@ -1,5 +1,7 @@
 # Chat2Know
 
+> 下一版正在 [`v2`](https://github.com/shaowenfu/Chat2Know/tree/v2) 分支重构。The next version is being rebuilt on the [`v2`](https://github.com/shaowenfu/Chat2Know/tree/v2) branch.
+
 **Everything you chatted about, you can explain.** · 聊过的，都能讲出来。
 
 Chat2Know is a browser extension that sits on top of any AI chat client as a knowledge layer: it captures, distills, organizes and **verifies** what you learn from AI conversations, so you can still explain it after you close the tab.
