@@ -21,6 +21,8 @@ npm run build
 
 Open `chrome://extensions`, enable **Developer mode**, click **Load unpacked** and pick `.output/chrome-mv3`. After pulling updates, run `npm install && npm run build` again and click the reload button on the extension card.
 
+Step-by-step guide with screenshots (中文 / English): [docs/install.md](docs/install.md).
+
 ### Using it
 
 1. Click the Chat2Know toolbar icon to open the side panel. Open **⚙ Model settings** and enter any OpenAI-compatible endpoint: base URL, model and API key (an embedding model is optional and enables placement suggestions). Capturing works without a model.
@@ -37,6 +39,7 @@ Your data stays in your browser. The only thing that leaves it is the text you a
 
 ## Docs
 
+- [Install guide with screenshots (中文 / English)](docs/install.md)
 - [Project plan (中文)](docs/project-plan.md)
 - [Learning diagnosis module (中文)](docs/module-learning-diagnosis.md)
 - [Contributing](CONTRIBUTING.md)
