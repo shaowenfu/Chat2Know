@@ -20,6 +20,7 @@ toast:
   duplicate: "已在 $1 中"
   undo: 撤销
   addAnyway: 仍然添加
+  notPlaced: "先放在待归位：$1"
   noSelection: 请先选中文字。
 command:
   record: 把选中的内容记到导图

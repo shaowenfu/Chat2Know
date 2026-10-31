@@ -4,7 +4,7 @@ import { UserError } from '@/src/errors';
 import { buildTree, byOrder, type MapTree } from '@/src/graph/tree';
 import type { Hlc } from './hlc';
 import type { Chat2KnowDB } from './schema';
-import type { Ask, ItemSource, ItemType, MapNode, Origin } from './types';
+import type { Ask, Embedding, ItemSource, ItemType, MapNode, Origin } from './types';
 
 const stripHash = (url: string) => url.replace(/#.*$/, '');
 
@@ -67,6 +67,11 @@ export class Repository {
     return (await this.db.nodes.where('kind').equals('item').toArray()).filter((n) => !n.deletedAt);
   }
 
+  /** A node that may have been undone away. */
+  async find(id: string): Promise<MapNode | undefined> {
+    return this.db.nodes.get(id);
+  }
+
   async node(id: string): Promise<MapNode> {
     const n = await this.db.nodes.get(id);
     if (!n) throw new Error(`No node ${id}`);
@@ -75,10 +80,15 @@ export class Repository {
 
   /** A subject's live map as a tree. */
   async subjectTree(subjectId: string): Promise<MapTree> {
-    const nodes = (await this.db.nodes.where('subjectId').equals(subjectId).toArray()).filter((n) => !n.deletedAt);
+    const nodes = await this.subjectNodes(subjectId);
     const root = buildTree(nodes).find((t) => t.node.id === subjectId);
     if (!root) throw new Error(`No subject ${subjectId}`);
     return root;
+  }
+
+  /** All of a subject's live nodes, unordered. */
+  async subjectNodes(subjectId: string): Promise<MapNode[]> {
+    return (await this.db.nodes.where('subjectId').equals(subjectId).toArray()).filter((n) => !n.deletedAt);
   }
 
   /** Root first. */
@@ -212,6 +222,94 @@ export class Repository {
     );
   }
 
+  /**
+   * Files an item under `subject › path` by titles, creating the subject and sections
+   * that are missing (an untouched "untitled" subject the item is in takes the new
+   * subject's name instead). A statement takes the one-sentence form unless the user
+   * edited it. Emptied 待归位 groups and untitled subjects go. Joins `group` when given.
+   * Returns the item's new path, or null (nothing written) when the item is gone or
+   * was written since `seen` (its updatedAt then): the user's later action wins.
+   */
+  async fileItem(
+    itemId: string,
+    seen: string,
+    place: { subject: string; path: string[]; statement?: string; untitled: string },
+    group?: string,
+  ): Promise<MapNode[] | null> {
+    let filed = false;
+    await this.group(
+      'fileItem',
+      async (w) => {
+        const item = await this.db.nodes.get(itemId);
+        if (!item || item.deletedAt || item.updatedAt !== seen) return;
+        if (item.kind !== 'item') throw new Error(`${itemId} is not an item`);
+        filed = true;
+        const key = (t: string) => t.trim().toLowerCase();
+        const current = await this.node(item.subjectId);
+        const isUntitled = (n: MapNode) => n.title === place.untitled && !n.editedByUser;
+        let subject = (await this.listSubjects()).find((s) => key(s.title) === key(place.subject));
+        if (!subject && isUntitled(current)) subject = await w.put({ ...current, title: place.subject.trim() });
+        subject ??= await this.createSubject(w, place.subject, 'user');
+        let parent = subject;
+        for (const title of place.path) {
+          const found = (await this.children(parent.id)).find((c) => c.kind === 'section' && !c.role && key(c.title) === key(title));
+          parent =
+            found ??
+            (await w.create({ subjectId: subject.id, kind: 'section', parentId: parent.id, order: await this.orderAt(parent.id), title: title.trim(), origin: 'user' }));
+        }
+        const oldParent = await this.node(item.parentId!);
+        let next = item;
+        if (parent.id !== item.parentId) {
+          await this.placeUnder(w, item, parent, await this.orderAt(parent.id));
+          next = await this.node(itemId);
+        }
+        if (place.statement && item.itemType === 'statement' && !item.editedByUser && place.statement !== item.title) {
+          await w.put({ ...next, title: place.statement.trim() });
+        }
+        if (oldParent.role === 'unplaced' && !(await this.children(oldParent.id)).length) await w.put({ ...oldParent, deletedAt: this.now() });
+        const old = await this.node(current.id);
+        if (old.id !== subject.id && isUntitled(old) && !(await this.subjectNodes(old.id)).some((n) => n.kind === 'item')) {
+          for (const n of await this.subjectNodes(old.id)) await w.put({ ...n, deletedAt: this.now() });
+        }
+      },
+      undefined,
+      group,
+    );
+    return filed ? this.pathOf(itemId) : null;
+  }
+
+  // ------------------------------------------------------------ placements and embeddings (not logged)
+
+  async notePlacement(itemId: string, suggestedPath: string[]): Promise<void> {
+    await this.db.placements.put({ id: itemId, suggestedPath, finalPath: suggestedPath, changedByUser: false, at: this.now() });
+  }
+
+  /** The user moved an item the extension had placed: its final path becomes a placement example. */
+  async notePlacementChange(itemId: string, finalPath: string[]): Promise<void> {
+    if (await this.db.placements.get(itemId)) await this.db.placements.update(itemId, { finalPath, changedByUser: true, at: this.now() });
+  }
+
+  /** The latest placements the user corrected, with the items' text, newest first. */
+  async placementExamples(limit: number): Promise<{ text: string; path: string[] }[]> {
+    const rows = (await this.db.placements.orderBy('at').reverse().toArray()).filter((p) => p.changedByUser);
+    const out: { text: string; path: string[] }[] = [];
+    for (const p of rows) {
+      const n = await this.db.nodes.get(p.id);
+      if (n && !n.deletedAt) out.push({ text: n.latex ?? n.title, path: p.finalPath });
+      if (out.length === limit) break;
+    }
+    return out;
+  }
+
+  async embeddings(nodeIds: string[]): Promise<Map<string, Embedding>> {
+    const rows = await this.db.embeddings.bulkGet(nodeIds);
+    return new Map(rows.filter((r): r is Embedding => r !== undefined).map((r) => [r.nodeId, r]));
+  }
+
+  async putEmbeddings(rows: Embedding[]): Promise<void> {
+    await this.db.embeddings.bulkPut(rows);
+  }
+
   // ------------------------------------------------------------ export and import
 
   /** Every live map node: the lossless JSON export. */
@@ -269,10 +367,11 @@ export class Repository {
     return { group, node };
   }
 
-  private async group(action: string, fn: (w: Writer) => Promise<void>, undoes?: string): Promise<string> {
+  /** One map write; `join` appends to an earlier write's group, so one undo reverts both. */
+  private async group(action: string, fn: (w: Writer) => Promise<void>, undoes?: string, join?: string): Promise<string> {
     const { nodes, oplog } = this.db;
     return this.db.transaction('rw', nodes, oplog, async () => {
-      const group = this.ulid(this.now());
+      const group = join ?? this.ulid(this.now());
       const log = async (entityId: string, before: MapNode | null, after: MapNode | null, id: string) =>
         oplog.add({ id, group, action, entityId, before, after, ...(undoes ? { undoes } : {}) });
       const w: Writer = {

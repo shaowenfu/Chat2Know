@@ -109,3 +109,57 @@ export function parseCircling(value: unknown): { domain: string; concept: string
   return { domain: str(o, 'domain'), concept: str(o, 'concept') };
 }
 
+
+// ---------------------------------------------------------------- automatic placement
+
+export interface PlacementInput {
+  itemType: 'formula' | 'statement';
+  text: string; // LaTeX for a formula, the recorded text for a statement
+  before: string; // the conversation just before it
+  after: string;
+  now: string; // where it sits now, "subject › … › topic"
+  candidates: string[]; // the closest topics, "subject › … › topic"
+  subjects: string; // every subject's chapters and topics, indented titles
+  examples: { text: string; path: string[] }[]; // where the user moved earlier notes
+}
+
+export interface PlacementReply {
+  subject: string;
+  path: string[]; // 1–3 chapter / topic titles below the subject
+  statement: string; // the one-sentence statement; "" for a formula
+}
+
+export const MAX_PATH = 3;
+
+export function placePrompt(input: PlacementInput): ChatMessage[] {
+  const examples = input.examples.length ? input.examples.map((e) => `- ${e.text} → ${e.path.join(' › ')}`).join('\n') : '(none yet)';
+  return [
+    system(
+      'place',
+      `You file one note into a learner's knowledge maps. Each subject (such as "Linear algebra") has chapters and topics; their titles are short nouns, never questions. Choose the subject and the path of 1–3 chapter / topic titles below it where the note belongs. Prefer an existing place: use a candidate or a path from the subjects' outline with the exact titles. Add a new topic (or chapter) only when nothing fits, and a new subject only when the note belongs to none. New titles are short nouns in the language of the note. The user's own corrections below show how they organize notes; follow them. ${
+        input.itemType === 'statement'
+          ? 'Also rewrite the note as one plain sentence that keeps its claim (about 40 Chinese characters or 20 English words at most), formulas as $...$, in the note\'s language.'
+          : 'The note is a formula: "statement" is "".'
+      } Return JSON only: {"subject": "...", "path": ["..."], "statement": "..."}.`,
+    ),
+    {
+      role: 'user',
+      content: [
+        `Note (${input.itemType}): ${input.text}`,
+        `Context: …${input.before} [NOTE] ${input.after}…`,
+        `Now in: ${input.now}`,
+        `Candidates:\n${input.candidates.map((c) => `- ${c}`).join('\n') || '(none)'}`,
+        `Subjects:\n${input.subjects || '(none yet)'}`,
+        `The user's corrections:\n${examples}`,
+      ].join('\n\n'),
+    },
+  ];
+}
+
+export function parsePlacement(value: unknown, itemType: 'formula' | 'statement'): PlacementReply {
+  const o = obj(value);
+  const path = strList(o, 'path');
+  if (path.length < 1 || path.length > MAX_PATH) throw new LlmError(`Expected 1–${MAX_PATH} titles in "path"`);
+  const statement = itemType === 'statement' ? str(o, 'statement') : '';
+  return { subject: str(o, 'subject'), path, statement };
+}

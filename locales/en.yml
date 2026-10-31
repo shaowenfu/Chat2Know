@@ -20,6 +20,7 @@ toast:
   duplicate: "Already in $1"
   undo: Undo
   addAnyway: Add anyway
+  notPlaced: "Kept in Unplaced: $1"
   noSelection: Select some text first.
 command:
   record: Add the selection to the map

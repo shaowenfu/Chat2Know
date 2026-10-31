@@ -54,7 +54,7 @@ export default defineContentScript({
               onRecorded(false);
             },
           },
-        ]);
+        ], result.itemId);
       } catch (err) {
         ui.toast(errorText(err), '', []);
       }
@@ -84,6 +84,12 @@ export default defineContentScript({
     onMessages({
       'site/recordSelection': () => {
         recordSelection();
+        return null;
+      },
+      // Automatic placement moved the item: the toast says where it went now.
+      'site/placed': ({ itemId, path, error }) => {
+        if (path) ui.updateToast(itemId, i18n.t('toast.recorded', ['\uE000']), path.join(PATH_SEPARATOR));
+        else ui.updateToast(itemId, i18n.t('toast.notPlaced', [error ?? '']), '');
         return null;
       },
     });

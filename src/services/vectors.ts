@@ -6,7 +6,7 @@ import type { Ask } from '@/src/db/types';
 export const EMBED_BATCH = 128;
 
 /** Embeds texts in provider-sized batches. */
-export async function embedAll(client: LlmClient, texts: string[]): Promise<number[][]> {
+export async function embedAll(client: Pick<LlmClient, 'embed'>, texts: string[]): Promise<number[][]> {
   const out: number[][] = [];
   for (let i = 0; i < texts.length; i += EMBED_BATCH) out.push(...(await client.embed(texts.slice(i, i + EMBED_BATCH))));
   return out;

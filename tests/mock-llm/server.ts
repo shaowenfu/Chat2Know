@@ -81,7 +81,23 @@ function prereqReply(user: string): string {
   return JSON.stringify({ concepts, edges: existing.size ? edges.filter((e) => concepts.includes(e.to)) : edges });
 }
 
-function chatReply(task: string, user: string): string {
+/** Where the mock files a note, by words in it: first match wins. */
+const MOCK_PLACES: [RegExp, string, string[]][] = [
+  [/attention|softmax/i, '深度学习', ['注意力机制']],
+  [/\^T|\^\{T\}|\\top|transpose|转置/i, '线性代数', ['矩阵', '转置']],
+  [/\\det|determinant|行列式/i, '线性代数', ['行列式']],
+];
+
+function placeReply(user: string): string {
+  const m = /^Note \((formula|statement)\): (.*)$/m.exec(user);
+  const [type, text] = [m?.[1] ?? 'formula', m?.[2] ?? ''];
+  const [, subject, path] = MOCK_PLACES.find(([re]) => re.test(text)) ?? [null, '线性代数', ['其他']];
+  // A statement keeps its first sentence.
+  const statement = type === 'statement' ? (text.split(/(?<=[.。])\s*/)[0] ?? text) : '';
+  return JSON.stringify({ subject, path, statement });
+}
+
+export function chatReply(task: string, user: string): string {
   switch (task) {
     case 'ping':
       return 'OK';
@@ -89,6 +105,8 @@ function chatReply(task: string, user: string): string {
       return tagReply(user);
     case 'prereq':
       return prereqReply(user);
+    case 'place':
+      return placeReply(user);
     case 'circling':
       return JSON.stringify(/derivative|求导|dimension|维度/i.test(user) ? { domain: 'Matrix calculus', concept: 'Layout conventions' } : { domain: '', concept: '' });
     default:

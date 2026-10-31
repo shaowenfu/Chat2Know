@@ -8,7 +8,11 @@ import { LlmClient } from '@/src/llm/client';
 import { UserError } from '@/src/errors';
 import { loadSettings, saveSettings, toPublic } from '@/src/llm/settings';
 import { isRecording, loadSites, saveSites, shouldRecord, type SiteSettings } from '@/src/sites/settings';
-import { recordItem } from '@/src/services/record';
+import { recordItem, type RecordResult } from '@/src/services/record';
+import { placeItem } from '@/src/services/placement';
+import { isConfigured } from '@/src/llm/settings';
+import { errorText } from '@/src/errors';
+import type { TextQuote } from '@/src/capture/text-quote';
 import { sendTabMessage } from '@/src/messaging';
 import { siteFor } from '@/src/capture/sites';
 import { i18n } from '#i18n';
@@ -89,6 +93,35 @@ async function recordSelection(tabId: number): Promise<void> {
   await sendTabMessage(tabId, 'site/recordSelection', {});
 }
 
+/**
+ * After a record: with a model set up, the item moves to where it belongs and the
+ * page's toast follows. Without one it stays where it was put. A failure is shown
+ * on the page; the item keeps its place.
+ */
+async function placeAfterRecord(result: Extract<RecordResult, { status: 'recorded' }>, quote: TextQuote, tabId: number): Promise<void> {
+  const settings = await loadSettings();
+  if (!isConfigured(settings)) return;
+  let reply: { itemId: string; path?: string[]; error?: string };
+  try {
+    const { unplaced, newSubject } = labels();
+    const path = await placeItem(await repo(), new LlmClient(settings), settings.embeddingModel, {
+      itemId: result.itemId,
+      group: result.group,
+      before: quote.prefix,
+      after: quote.suffix,
+      untitled: newSubject,
+      unplaced,
+    });
+    if (!path) return;
+    notifyChanged();
+    reply = { itemId: result.itemId, path };
+  } catch (err) {
+    reply = { itemId: result.itemId, error: errorText(err) };
+  }
+  // The tab may have closed meanwhile; the map has the result either way.
+  await sendTabMessage(tabId, 'site/placed', reply).catch(() => {});
+}
+
 const labels = (): { unplaced: string; newSubject: string } => ({ unplaced: i18n.t('map.unplaced'), newSubject: i18n.t('map.newSubject') });
 
 export default defineBackground(() => {
@@ -145,6 +178,7 @@ export default defineBackground(() => {
       const source = { url, pageTitle, quoteExact: quote.exact, quotePrefix: quote.prefix, quoteSuffix: quote.suffix, capturedAt: Date.now() };
       const result = await recordItem(await repo(), { itemType, title, ...(latex === undefined ? {} : { latex }), source, ...(force ? { force } : {}) }, labels());
       notifyChanged();
+      if (result.status === 'recorded') void placeAfterRecord(result, quote, sender.tab.id!);
       return result;
     },
     'map/undo': async ({ group }) => {

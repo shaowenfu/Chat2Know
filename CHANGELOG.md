@@ -11,6 +11,7 @@ v2 rebuild: Chat2Know becomes a knowledge map you record into with one click (se
 - On the AI sites you tick, a ＋ beside every display formula records it to the map in one click; the formula shows "Added" and a toast says where it went, with Undo. The same formula is not added twice unless you choose "Add anyway".
 - Alt+S or the "Add to Chat2Know map" menu records the selection on any page (one formula selected becomes a formula item).
 - A recorded item goes where the previous item of the same conversation went, else into the subject's "Unplaced" group; it never waits for a model.
+- With a model set up, a recorded item then moves to its subject and topic (new topics and subjects are created as needed) and a long selection becomes one sentence; the toast follows, and Undo takes back both. Your later corrections teach where notes go.
 - "Also record the questions I send on these sites" is a separate switch; ticking a site no longer records questions by itself.
 - New map database: every change can be undone; a deleted chapter's contents move up a level; deleted nodes can be restored.
 - Export the map as JSON (lossless), Markdown or OPML; import a v2 JSON export, or a v0.1 export whose knowledge cards become items to place.

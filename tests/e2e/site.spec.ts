@@ -1,7 +1,7 @@
 /// <reference types="chrome" />
 import { mkdirSync } from 'node:fs';
 import { expect, test } from './fixtures';
-import { selectText, send, tabIdOf } from './helpers';
+import { configureModel, selectText, send, tabIdOf } from './helpers';
 
 const SITE_PAGES: Record<string, number> = {
   'chatgpt-zh-softmax.html': 38,
@@ -64,12 +64,36 @@ test('＋ beside formulas on ticked sites: record, toast, undo, duplicates; noth
 });
 
 test('＋ on the saved pages of the six AI sites', async ({ context, extensionId, fixtureServer }) => {
+  test.setTimeout(90_000); // large saved pages whose external assets are blocked
   const panel = await context.newPage();
   await panel.goto(`chrome-extension://${extensionId}/sidepanel.html`);
   await send(panel, 'sites/setOrigins', { origins: [fixtureServer] });
   const page = await context.newPage();
   for (const [file, formulas] of Object.entries(SITE_PAGES)) {
-    await page.goto(`${fixtureServer}/${file}`);
+    await page.goto(`${fixtureServer}/${file}`, { waitUntil: 'domcontentloaded' });
     await expect(page.locator('chat2know-ui button[data-state="add"]'), file).toHaveCount(formulas);
   }
+});
+
+test('with a model, the recorded formula moves to its topic and the toast follows; a model error keeps it in Unplaced', async ({ context, extensionId, fixtureServer, mockLlm }) => {
+  const panel = await context.newPage();
+  await panel.goto(`chrome-extension://${extensionId}/sidepanel.html`);
+  await send(panel, 'sites/setOrigins', { origins: [fixtureServer] });
+  await configureModel(panel, mockLlm.url, 'wrong-key');
+  const page = await context.newPage();
+  await page.goto(`${fixtureServer}/synthetic-chat-katex.html`);
+  const toast = page.locator('chat2know-ui .toast');
+
+  await page.locator('chat2know-ui button[data-state="add"]').click();
+  await expect(toast).toContainText('Kept in Unplaced: HTTP 401: Invalid API key');
+  await toast.getByRole('button', { name: 'Undo' }).click();
+
+  await configureModel(panel, mockLlm.url);
+  await page.locator('chat2know-ui button[data-state="add"]').click();
+  await expect(toast).toContainText('Added to 深度学习 › 注意力机制');
+  const md = (await send<string>(panel, 'map/export', { format: 'markdown' })).data;
+  expect(md).toMatch(/^# 深度学习\n\n## 注意力机制\n\n- \$\\mathrm\{Attention\}/);
+  // 撤销 takes back the record and the placement together.
+  await toast.getByRole('button', { name: 'Undo' }).click();
+  await expect.poll(async () => (await send<string>(panel, 'map/export', { format: 'markdown' })).data).toBe('\n');
 });

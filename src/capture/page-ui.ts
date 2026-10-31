@@ -72,6 +72,8 @@ export class PageUi {
   private frame = 0;
   private rescanTimer: ReturnType<typeof setTimeout> | undefined;
   private toastEl: HTMLElement | undefined;
+  private toastKey: string | undefined;
+  private toastText: HTMLElement | undefined;
   private toastTimer: ReturnType<typeof setTimeout> | undefined;
 
   constructor(
@@ -131,18 +133,15 @@ export class PageUi {
     this.place();
   }
 
-  /** The bottom toast: a message, `\uE000` in it marking the path to set in bold, and links. */
-  toast(message: string, bold: string, actions: ToastAction[]): void {
+  /** The bottom toast: a message, `\uE000` in it marking the path to set in bold, and links. `key` names it for `updateToast`. */
+  toast(message: string, bold: string, actions: ToastAction[], key?: string): void {
     this.toastEl?.remove();
     clearTimeout(this.toastTimer);
     const el = this.doc.createElement('div');
     el.className = 'toast';
     el.setAttribute('role', 'status');
     const span = this.doc.createElement('span');
-    const [before, after = ''] = message.split('\uE000');
-    const b = this.doc.createElement('b');
-    b.textContent = bold;
-    span.append(before!, ...(message.includes('\uE000') ? [b, after] : []));
+    this.fillToast(span, message, bold);
     el.append(span);
     for (const action of actions) {
       const button = this.doc.createElement('button');
@@ -156,6 +155,8 @@ export class PageUi {
     }
     this.layer.append(el);
     this.toastEl = el;
+    this.toastKey = key;
+    this.toastText = span;
     // Kept while the pointer is on it, so its links can be reached.
     const arm = () => (this.toastTimer = setTimeout(() => this.hideToast(), TOAST_MS));
     el.addEventListener('mouseenter', () => clearTimeout(this.toastTimer));
@@ -163,10 +164,23 @@ export class PageUi {
     arm();
   }
 
+  /** New text for the toast named `key`, if it is still showing; its links stay. */
+  updateToast(key: string, message: string, bold: string): void {
+    if (this.toastKey === key && this.toastText) this.fillToast(this.toastText, message, bold);
+  }
+
+  private fillToast(span: HTMLElement, message: string, bold: string): void {
+    const [before, after = ''] = message.split('\uE000');
+    const b = this.doc.createElement('b');
+    b.textContent = bold;
+    span.replaceChildren(before!, ...(message.includes('\uE000') ? [b, after] : []));
+  }
+
   hideToast(): void {
     clearTimeout(this.toastTimer);
     this.toastEl?.remove();
     this.toastEl = undefined;
+    this.toastKey = undefined;
   }
 
   private rescanSoon(): void {

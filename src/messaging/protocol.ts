@@ -44,6 +44,8 @@ export interface MessageMap {
   'map/undo': { req: { group?: string }; res: { undone: boolean } };
   /** Background -> site script: record the page's selection (Alt+S, context menu). */
   'site/recordSelection': { req: Record<string, never>; res: null };
+  /** Background -> site script: automatic placement moved a recorded item (or failed, and it stays). */
+  'site/placed': { req: { itemId: string; path?: string[]; error?: string }; res: null };
 
   // The map's data
   /** The whole map as a file's text; Markdown and OPML leave grey outline nodes out unless asked. */
