@@ -44,7 +44,7 @@ Your data stays in your browser. The only thing that leaves it is the text you a
 - [Install guide with screenshots (中文 / English)](docs/install.md)
 - [Privacy policy](PRIVACY.md)
 - [Project plan (中文)](docs/project-plan.md)
-- [Learning diagnosis module (中文)](docs/module-learning-diagnosis.md)
+- [v0.1 docs (archived)](docs/archive-v0.1/)
 - [Contributing](CONTRIBUTING.md)
 
 ## License
