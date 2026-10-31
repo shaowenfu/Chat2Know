@@ -1,11 +1,13 @@
 name: Release
 
-# Pushing a tag like v0.1.0 checks the code, builds the Chrome package and
-# publishes a GitHub release with it. The release notes are the CHANGELOG
-# section for that version.
+# Releases the version in package.json: checks the code, builds the Chrome
+# package and publishes a GitHub release tagged v<version> with it. The notes
+# are the CHANGELOG section for that version. Start it by pushing that tag, or
+# run it from the Actions tab on main (the tag is then created at that commit).
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -22,15 +24,21 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - run: npm run check
-      - name: Tag matches package.json version
-        run: test "v$(node -p "require('./package.json').version")" = "$GITHUB_REF_NAME"
+      - name: Version from package.json (a pushed tag must match it)
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          if [ "$GITHUB_REF_TYPE" = tag ]; then test "v$version" = "$GITHUB_REF_NAME"; fi
+          echo "VERSION=$version" >> "$GITHUB_ENV"
       - run: npm run zip
       - name: Release notes from CHANGELOG
         run: |
-          version="${GITHUB_REF_NAME#v}"
+          version="$VERSION"
           awk -v v="$version" '$0 ~ "^## \\[" v "\\]" {on=1; next} /^## \[/ {on=0} on' CHANGELOG.md > notes.md
           test -s notes.md
       - uses: softprops/action-gh-release@v2
         with:
+          tag_name: v${{ env.VERSION }}
+          target_commitish: ${{ github.sha }}
+          name: Chat2Know ${{ env.VERSION }}
           body_path: notes.md
           files: .output/chat2know-*-chrome.zip
