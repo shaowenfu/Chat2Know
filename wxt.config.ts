@@ -14,6 +14,7 @@ export default defineConfig({
   manifest: {
     name: '__MSG_extName__',
     description: '__MSG_extDescription__',
+    homepage_url: 'https://github.com/shaowenfu/Chat2Know',
     default_locale: 'en',
     permissions: ['sidePanel', 'storage', 'activeTab', 'scripting', 'contextMenus'],
     // The model endpoint is requested at runtime when the user saves settings.

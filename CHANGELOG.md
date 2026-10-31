@@ -4,7 +4,15 @@ All notable changes to this project are documented here. Format follows [Keep a 
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-10-31
+
+First public release, for Chrome and other Chromium browsers (Edge, Brave, Arc). Firefox is not supported yet.
+
+**Install:** download `chat2know-0.1.0-chrome.zip` below, unzip it into a folder, open `chrome://extensions`, turn on **Developer mode**, click **Load unpacked** and pick that folder. Step-by-step guide with screenshots: [docs/install.md](https://github.com/shaowenfu/Chat2Know/blob/main/docs/install.md).
+
 ### Added
+
+- Release: extension icon, privacy policy (`PRIVACY.md`), install guide with screenshots, Chrome Web Store listing draft, and a release workflow that publishes the Chrome package for each version tag.
 
 - Learning diagnosis (D1–D4), off until you tick a site:
   - Record the questions you send on ChatGPT, Claude, Gemini, DeepSeek, Kimi, Doubao or any other site you tick (a generic rule covers the rest). Access is asked for each ticked site only; a REC badge shows while recording; pause, exclude a conversation, search, delete and export in the new **Learning** tab. Password and other `input` fields are never read.

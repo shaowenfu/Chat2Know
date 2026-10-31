@@ -6,24 +6,24 @@ Chat2Know is a browser extension that sits on top of any AI chat client as a kno
 
 Chat2Know 是一个浏览器插件：叠在所有 AI 客户端之上的"知识层"，负责捕获、蒸馏、组织和检验对话中的知识。
 
-> Status: early development (M5 and learning diagnosis D1–D4 done). Usable for daily dogfooding; expect changes.
+> Status: 0.1.0, the first public release. Chrome and other Chromium browsers (Edge, Brave, Arc); Firefox is not supported yet. Usable for daily use; expect changes.
 
-## Try it locally
+## Install
 
-Requires Node.js 22+.
+**Download** (no developer tools needed): get `chat2know-<version>-chrome.zip` from the [latest release](https://github.com/shaowenfu/Chat2Know/releases/latest), unzip it into a folder you keep, open `chrome://extensions`, turn on **Developer mode**, click **Load unpacked** and pick that folder.
+
+**Or build from source** (Node.js 22+):
 
 ```bash
 git clone https://github.com/shaowenfu/Chat2Know.git
 cd Chat2Know
 npm install
-npm run build
+npm run build   # then Load unpacked: .output/chrome-mv3
 ```
-
-Open `chrome://extensions`, enable **Developer mode**, click **Load unpacked** and pick `.output/chrome-mv3`. After pulling updates, run `npm install && npm run build` again and click the reload button on the extension card.
 
 Step-by-step guide with screenshots (中文 / English): [docs/install.md](docs/install.md).
 
-### Using it
+## Using it
 
 1. Click the Chat2Know toolbar icon to open the side panel. Open **⚙ Model settings** and enter any OpenAI-compatible endpoint: base URL, model and API key (an embedding model is optional and enables placement suggestions). Capturing works without a model.
 2. Select text on the page and click **Save** (knowledge) or **Idea** in the floating toolbar. Alternatively press **Alt+Shift+K** / **Alt+Shift+I**, or right-click → *Save to Chat2Know*.
@@ -35,11 +35,12 @@ Step-by-step guide with screenshots (中文 / English): [docs/install.md](docs/i
 7. **Learning** (optional, off by default): tick the AI sites on which Chat2Know may record the questions you send. They stay in your browser; you can pause, exclude a conversation or delete anything. From time to time the questions are tagged with concepts and checked for gaps (the same concept asked again and again, basics asked in the middle of harder work, going in circles). A suspected gap shows its evidence, your own questions; confirm it with a two-minute quiz or say whether it is accurate. A confirmed gap gets a systematic review you can keep as cards to know by heart.
 8. **Export ▾** everything as JSON, Markdown, OPML (mind maps) or Anki CSV; import JSON to restore. Recorded questions have their own export in the Learning tab.
 
-Your data stays in your browser. The only thing that leaves it is the text you ask about, organize, check or analyze, sent to the model provider you configured, with your own key. No telemetry.
+Your data stays in your browser. The only thing that leaves it is the text you ask about, organize, check or analyze, sent to the model provider you configured, with your own key. No telemetry. Details: [PRIVACY.md](PRIVACY.md).
 
 ## Docs
 
 - [Install guide with screenshots (中文 / English)](docs/install.md)
+- [Privacy policy](PRIVACY.md)
 - [Project plan (中文)](docs/project-plan.md)
 - [Learning diagnosis module (中文)](docs/module-learning-diagnosis.md)
 - [Contributing](CONTRIBUTING.md)

@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <!-- Chat2Know: a chat bubble with a check mark (what you chatted about, verified). -->
+  <rect width="128" height="128" rx="28" fill="#0969da"/>
+  <path d="M34 22h60a18 18 0 0 1 18 18v38a18 18 0 0 1-18 18H58l-24 18v-18a18 18 0 0 1-18-18V40a18 18 0 0 1 18-18z" fill="#ffffff"/>
+  <path d="M42 59l15 15 30-30" fill="none" stroke="#0969da" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

@@ -1,6 +1,6 @@
 {
   "name": "chat2know",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "private": true,
   "description": "A knowledge layer on top of any AI chat client.",
   "license": "AGPL-3.0-or-later",
@@ -8,7 +8,6 @@
   "scripts": {
     "dev": "wxt",
     "build": "wxt build",
-    "build:firefox": "wxt build -b firefox",
     "zip": "wxt zip",
     "postinstall": "wxt prepare",
     "prepare": "git config core.hooksPath .githooks",

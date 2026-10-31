@@ -295,7 +295,7 @@ interface KNode {
 
 每个里程碑都要能独立使用，验收标准写成可以自动测试的形式，交给 Claude Code 按标准实现和自测。M1 不接 AI 也已经是一个有用的工具。
 
-**进度（2026-10-30）：** M0–M5 已完成，学习诊断模块 D1–D4 也已完成。执行记录与偏差说明见 `tasks/LONG-RUN-M2-M4.md` 和 `tasks/LONG-RUN-D1-D4.md`。M5 的"论文测试"需要产品负责人用真实论文和真实模型跑一遍。与本表的差异：
+**进度（2026-10-31）：** M0–M5 已完成，学习诊断模块 D1–D4 也已完成。M6 发布了 0.1.0（Chrome 与其他 Chromium 浏览器）：图标、隐私说明（`PRIVACY.md`）、带截图的安装指引（`docs/install.md`）、商店上架文案草稿（`docs/store-listing.md`），推送版本标签即自动构建并发布 GitHub Release。Firefox 暂不支持：它没有 Chrome 式的侧边栏 API，需要单独适配并手动测试，放到后续版本。上架 Chrome 应用商店需要产品负责人用自己的开发者账号提交。执行记录与偏差说明见 `tasks/LONG-RUN-M2-M4.md` 和 `tasks/LONG-RUN-D1-D4.md`。M5 的"论文测试"需要产品负责人用真实论文和真实模型跑一遍。与本表的差异：
 
 - M2 只支持一种模型配置：用户填写兼容 OpenAI 格式的接口地址、模型名和 Key（产品负责人决定，不做 Ollama 和多服务商适配）。
 - M4 的嵌入改用同一服务商的 `/embeddings` 接口（可选的嵌入模型），不再在本地运行 transformers.js；没有配置嵌入模型时，挂载推荐和概念合并不显示。
