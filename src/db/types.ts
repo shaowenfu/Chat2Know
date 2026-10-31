@@ -1,44 +1,11 @@
-export type NodeType = 'topic' | 'knowledge' | 'insight' | 'idea' | 'question';
-export type NodeStatus = 'open' | 'draft' | 'confirmed' | 'mastered';
-export type Mastery = 'internalize' | 'understand' | 'index';
+/** subject › section (chapter, topic) › item. Subjects are roots; items are leaves. */
+export type NodeKind = 'subject' | 'section' | 'item';
+export type ItemType = 'formula' | 'statement';
+/** Who put the node on the map: the user (solid), the extension with consent (light blue dashed), an outline (grey dashed). */
+export type Origin = 'user' | 'plugin' | 'outline';
 
-export interface KNode {
-  id: string; // ULID, sortable by time
-  type: NodeType;
-  title: string; // usually a question worth reviewing; may be empty for an ask-later with no question yet
-  originalAsk?: string; // the question as the user first asked it, kept as the path of understanding
-  term?: string; // for ask-later questions: the selected term the question is about
-  summary?: string; // 1–3 sentence statement, drafted by AI and confirmed by the user
-  body?: string; // original Markdown, keeps formulas, code and tables
-  mastery?: Mastery; // chosen by the user (AI suggests from M4); not set for ideas and topics
-  status: NodeStatus; // `open` = unresolved question; `mastered` is only set by a passed review
-  askCount: number; // times this was asked later; repetition signals importance
-  titleCandidates?: string[]; // AI-proposed question titles awaiting the user's pick (draft cards)
-  distillError?: string; // last distillation failure, shown with a retry button
-  createdAt: number;
-  updatedAt: string; // hybrid logical clock, for future conflict merging
-  deletedAt?: number; // soft delete
-}
-
-export type EdgeKind = 'child' | 'arose_from' | 'instance_of' | 'related' | 'derived';
-
-/**
- * Tree edges point from parent (`from`) to child (`to`); `kind` says how the
- * child relates to the parent: a plain child, a question that arose from the
- * parent's answer, or an instance of the parent concept. A node has at most
- * one incoming tree edge.
- */
-export interface Edge {
-  id: string;
-  from: string;
-  to: string;
-  kind: EdgeKind;
-  order: string; // fractional index among siblings
-}
-
-export interface Source {
-  id: string;
-  nodeId: string;
+/** Where an item came from; jumps back to the conversation. */
+export interface ItemSource {
   url: string;
   pageTitle: string;
   quoteExact: string;
@@ -47,47 +14,54 @@ export interface Source {
   capturedAt: number;
 }
 
-export type Verdict = 'pass' | 'partial' | 'fail';
-
-/** recall: answer the question title from memory; apply: solve a problem with it; explain: teach it back. */
-export type ReviewMode = 'recall' | 'apply' | 'explain';
-
-export interface Review {
-  id: string;
-  nodeId: string;
-  mode: ReviewMode;
-  prompt: string;
-  answer: string;
-  verdict: Verdict;
-  feedback?: string;
-  dueAt: number;
-  interval: number; // days until the next review
+/**
+ * One node of a subject's map. The tree lives on the nodes themselves: every node
+ * but a subject has one parent, ordered among its siblings by a fractional index.
+ * "Grey" (nothing learned below) is derived, never stored.
+ */
+export interface MapNode {
+  id: string; // ULID
+  subjectId: string; // a subject's own id for the subject itself
+  kind: NodeKind;
+  parentId?: string; // absent only on subjects
+  order: string; // fractional index among siblings
+  title: string; // structure: a noun; statement: the one sentence; formula: may be empty
+  itemType?: ItemType; // items only
+  latex?: string; // formula items: kept verbatim
+  source?: ItemSource; // items the user recorded
+  origin: Origin;
+  /** The subject's "待归位" group: where items wait for automatic placement. Titled by the UI. */
+  role?: 'unplaced';
+  editedByUser?: boolean; // once the user edits the text, the extension never rewrites it
   createdAt: number;
+  updatedAt: string; // HLC of the last write
+  deletedAt?: number; // soft delete
 }
 
-/** Temporary inbox: answers to ask-now / ask-later live here until the user keeps them. Not synced. */
-export interface InboxItem {
-  id: string;
-  questionNodeId: string;
-  question: string;
-  quote: string;
-  answer: string;
-  createdAt: number;
-  expiresAt: number;
-  promotedNodeId?: string;
+/**
+ * One node write. Every map write is a group of entries sharing `group`; undo
+ * reverts a group. `before` / `after` are whole rows (`null`: did not exist).
+ */
+export interface OpLogEntry {
+  id: string; // HLC, totally ordered
+  group: string;
+  action: string; // the repository method, for display ("undo move")
+  entityId: string;
+  before: MapNode | null;
+  after: MapNode | null;
+  undoes?: string; // set on the entries of an undo: the group it reverted
 }
 
-/** The user's accept / edit / delete decisions on recording suggestions, used as few-shot examples. */
-export interface Preference {
-  id: string;
-  questionType: 'concept' | 'instance' | 'curiosity';
-  suggestion: string;
-  userAction: 'accept' | 'edit' | 'delete';
-  finalText?: string;
-  createdAt: number;
+/** Where automatic placement put an item and where it ended up; the user's corrections are placement examples. */
+export interface Placement {
+  id: string; // the item id
+  suggestedPath: string[];
+  finalPath: string[];
+  changedByUser: boolean;
+  at: number;
 }
 
-/** Cached embedding of a node's text; recomputed when the model or the text changes. Not synced. */
+/** Cached embedding of a node's text; recomputed when the model or the text changes. */
 export interface Embedding {
   nodeId: string;
   model: string;
@@ -96,7 +70,7 @@ export interface Embedding {
 }
 
 /**
- * A question the user sent on an AI site, recorded for learning diagnosis.
+ * A question the user sent on an AI site, recorded for gap detection.
  * Local only: not in the oplog, not in the default export.
  */
 export interface Ask {
@@ -105,83 +79,34 @@ export interface Ask {
   conversationUrl: string; // page URL without the hash; tells "same conversation" from "across conversations"
   text: string;
   sentAt: number;
-  taggedAt?: number; // set once concept tagging has looked at it, even when it found no concept
+  taggedAt?: number; // set once tagging has looked at it, even when it found nothing
   vector?: number[]; // embedding for circling detection, computed once per embedding model
   vectorModel?: string;
 }
 
-/** A concept in a domain's prerequisite graph (learning diagnosis). Local only. */
-export interface Concept {
+/** A recorded question is about this section node. Local only. */
+export interface AskTag {
   id: string;
-  domain: string;
-  name: string;
-  nodeId?: string; // the note card about this concept, when there is one
-  createdAt: number;
+  askId: string;
+  sectionId: string;
 }
 
-/** `from` must be understood before `to`. */
+/** Section `from` must be understood before section `to`. Local only. */
 export interface PrereqEdge {
   id: string;
   from: string;
   to: string;
 }
 
-export type DiagnosisStatus = 'suspected' | 'confirmed' | 'dismissed';
+export type GapStatus = 'suspected' | 'asked' | 'filled' | 'dismissed';
 
-/**
- * A hypothesis about a gap in the learner's foundations, from their own questions.
- * Suspected until the learner takes the quiz or decides; "remediated" is derived
- * (confirmed, and the concept's card later passed a check).
- */
-export interface Diagnosis {
+/** A possible gap on a section node (orange outline), from the user's own questions. Local only. */
+export interface Gap {
   id: string;
-  rootConceptId: string;
-  signals: { kind: 'repeat' | 'downshift' | 'circling'; count: number }[];
+  sectionId: string;
   evidenceAskIds: string[];
-  status: DiagnosisStatus;
-  feedback?: 'accurate' | 'inaccurate';
+  signals: { kind: 'repeat' | 'downshift' | 'circling'; count: number }[];
+  status: GapStatus;
   createdAt: number;
-  decidedAt?: number; // when it was confirmed or dismissed
-}
-
-/** The short quiz that confirms or withdraws a diagnosis. */
-export interface DiagnosisQuiz {
-  id: string;
-  diagnosisId: string;
-  items: { question: string; expected: string }[];
-  answers: string[];
-  results: { verdict: Verdict; feedback: string }[];
-  passed: boolean;
-  takenAt: number;
-}
-
-/** A recorded question is about this concept. */
-export interface AskTag {
-  id: string;
-  askId: string;
-  conceptId: string;
-}
-
-export type Entity = 'nodes' | 'edges' | 'sources' | 'reviews' | 'preferences';
-
-export interface OpLogEntry {
-  id: string; // HLC timestamp, totally ordered
-  entity: Entity;
-  entityId: string;
-  op: 'put' | 'delete';
-  patch: Record<string, unknown>;
-}
-
-/** A due card and how it is checked this time. */
-export interface QuizItem extends NodeView {
-  mode: Extract<ReviewMode, 'recall' | 'apply'>;
-}
-
-/** A node as the side panel shows it. */
-export interface NodeView extends KNode {
-  sources: Source[];
-  /** Verdict of the latest review in any mode; a miss shows on the map until the next check. */
-  lastVerdict?: Verdict;
-  /** Incoming tree edge, if the node has a parent. */
-  parent?: { id: string; kind: EdgeKind; order: string };
+  coolDownUntil?: number;
 }

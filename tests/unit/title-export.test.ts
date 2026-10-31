@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { titleFromMarkdown } from '@/src/db/title';
-import { nodesToMarkdown } from '@/src/export/markdown';
-import { nodesToOpml } from '@/src/export/opml';
-import type { NodeView } from '@/src/db/types';
+import { mapToMarkdown } from '@/src/export/markdown';
+import { mapToOpml } from '@/src/export/opml';
+import { buildTree } from '@/src/graph/tree';
+import type { MapNode } from '@/src/db/types';
 
 describe('titleFromMarkdown', () => {
   it('uses the first meaningful line without Markdown syntax', () => {
@@ -20,58 +21,42 @@ describe('titleFromMarkdown', () => {
   });
 });
 
-describe('nodesToMarkdown', () => {
-  it('renders cards with type, body and source link', () => {
-    const md = nodesToMarkdown(
-      [
-        {
-          id: '1',
-          type: 'idea',
-          title: 'Spaced recall',
-          body: 'Test yourself.',
-          status: 'draft',
-          askCount: 0,
-          createdAt: Date.UTC(2026, 9, 21),
-          updatedAt: 'x',
-          sources: [{ id: 's', nodeId: '1', url: 'https://a.dev', pageTitle: 'A [chat]', quoteExact: '', quotePrefix: '', quoteSuffix: '', capturedAt: 0 }],
-        },
-      ],
-      new Date(Date.UTC(2026, 9, 22)),
-    );
-    expect(md).toBe(
-      '# Chat2Know export\n\nExported 2026-10-22T00:00:00.000Z · 1 cards\n\n---\n\n## Spaced recall\n\n*Idea* · 2026-10-21\n\nTest yourself.\n\nSource: [A chat](https://a.dev)\n',
-    );
-  });
-});
-
-const node = (id: string, title: string, extra: Partial<NodeView> = {}): NodeView => ({
+const at = { createdAt: 0, updatedAt: 'x' };
+const n = (id: string, kind: MapNode['kind'], parentId: string | undefined, order: string, title: string, extra: Partial<MapNode> = {}): MapNode => ({
   id,
-  type: 'knowledge',
+  subjectId: 's',
+  kind,
+  ...(parentId ? { parentId } : {}),
+  order,
   title,
-  status: 'confirmed',
-  askCount: 0,
-  createdAt: Date.UTC(2026, 9, 21),
-  updatedAt: 'x',
-  sources: [],
+  origin: 'user',
+  ...at,
   ...extra,
 });
-const branch = [
-  node('1', 'What does attention do?', { summary: 'Mixes values by "similarity" & weight.', mastery: 'internalize' }),
-  node('2', 'Why scale?', { summary: 'Avoids saturation.', parent: { id: '1', kind: 'child', order: 'a0' } }),
-  node('3', 'Draft', { status: 'draft', summary: 'not kept yet' }),
-];
+const [map] = buildTree([
+  n('s', 'subject', undefined, 'a0', '线性代数'),
+  n('m', 'section', 's', 'a0', '矩阵'),
+  n('t', 'section', 'm', 'a0', '转置 & "T"'),
+  n('f', 'item', 't', 'a0', '', { itemType: 'formula', latex: '(AB)^T = B^T A^T', source: { url: 'https://chatgpt.com/c/1', pageTitle: '', quoteExact: '', quotePrefix: '', quoteSuffix: '', capturedAt: 0 } }),
+  n('g', 'section', 's', 'a1', '特征值', { origin: 'outline' }),
+  n('u', 'section', 's', 'a2', '', { role: 'unplaced' }),
+  n('x', 'item', 'u', 'a0', '可逆当且仅当 det A ≠ 0', { itemType: 'statement' }),
+]);
+const opts = { unplacedTitle: '待归位' };
 
-describe('tree exports', () => {
-  it('Markdown nests a child one heading level below its parent', () => {
-    const md = nodesToMarkdown(branch, new Date(0));
-    expect(md).toContain('## What does attention do?');
-    expect(md).toContain('### Why scale?');
-    expect(md.indexOf('### Why scale?')).toBeGreaterThan(md.indexOf('## What does attention do?'));
+describe('map exports', () => {
+  it('Markdown has a heading per structure node and a bullet per item, grey nodes left out', () => {
+    expect(mapToMarkdown([map!], opts)).toBe(
+      '# 线性代数\n\n## 矩阵\n\n### 转置 & "T"\n\n- $(AB)^T = B^T A^T$ ([source](https://chatgpt.com/c/1))\n\n## 待归位\n\n- 可逆当且仅当 det A ≠ 0\n',
+    );
+    expect(mapToMarkdown([map!], { ...opts, includeGrey: true })).toContain('## 特征值');
   });
 
-  it('OPML keeps the tree, with statements as notes, escaped', () => {
-    const opml = nodesToOpml(branch, new Date(0));
-    expect(opml).toContain('<outline text="What does attention do?" _note="Mixes values by &quot;similarity&quot; &amp; weight.">\n      <outline text="Why scale?" _note="Avoids saturation."/>\n    </outline>');
-    expect(opml).toContain('<outline text="Draft" _note="not kept yet"/>');
+  it('OPML keeps the tree, escaped', () => {
+    const opml = mapToOpml([map!], opts, new Date(0));
+    expect(opml).toContain(
+      '    <outline text="线性代数">\n      <outline text="矩阵">\n        <outline text="转置 &amp; &quot;T&quot;">\n          <outline text="$(AB)^T = B^T A^T$"/>',
+    );
+    expect(opml).not.toContain('特征值');
   });
 });

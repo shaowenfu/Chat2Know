@@ -134,7 +134,7 @@
 
 ## 数据模型
 
-新数据库名 `chat2know-v2`，不在 v0.1 的库上升级。核心三张表；仓储层、HLC、oplog、分数索引沿用 v0.1。
+新数据库名 `chat2know-v2`，不在 v0.1 的库上升级。导图只有一张 `nodes` 表：每个节点只有一个父节点和一个出处，所以父节点、顺序和出处直接存在节点上，不另设边表和出处表。仓储层、HLC、oplog、分数索引沿用 v0.1。
 
 ```ts
 type NodeKind = 'subject' | 'section' | 'item';   // 学科 / 章和知识点 / 条目
@@ -145,19 +145,22 @@ interface MapNode {
   id: string;              // ULID
   subjectId: string;       // 所属学科（学科节点自己的 id 就是它）
   kind: NodeKind;
+  parentId?: string;       // 只有学科没有
+  order: string;           // 兄弟间的分数索引
   title: string;           // 结构节点的名称；结论条目的那一句话
   itemType?: ItemType;     // 只有 item 有
   latex?: string;          // 公式条目的 LaTeX
+  source?: { url; pageTitle; quoteExact; quotePrefix; quoteSuffix; capturedAt };  // 用户记下的条目
   origin: Origin;
+  role?: 'unplaced';       // 学科下的"待归位"分组，标题由界面按语言显示
   editedByUser?: boolean;  // 用户改过文字后，插件不再改写
   createdAt: number;
   updatedAt: string;       // HLC
   deletedAt?: number;      // 软删除
 }
-
-interface TreeEdge { id: string; from: string; to: string; order: string }   // 父 → 子，每个节点最多一条入边
-interface Source { id: string; nodeId: string; url: string; pageTitle: string; quoteExact: string; quotePrefix: string; quoteSuffix: string; capturedAt: number }
 ```
+
+**oplog 与撤销。** 每次导图写操作是一组 oplog 记录（同一个 `group`），每条记下节点写之前和之后的整行。撤销一组 = 把组里的节点恢复成写之前的样子；之后又被别的操作改过的节点保持现状。撤销本身也记入 oplog，不能再被撤销。"恢复已删除"就是撤销那次删除。
 
 | 辅助表 | 字段 | 用途 |
 | --- | --- | --- |

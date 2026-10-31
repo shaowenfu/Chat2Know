@@ -1,29 +1,27 @@
-import type { NodeView } from '@/src/db/types';
-import { buildTree, type TreeNode } from '@/src/graph/tree';
+import type { MapTree } from '@/src/graph/tree';
+import { itemText, structureTitle, visible, type ExportOptions } from './markdown';
 
 const xml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/\n/g, '&#10;');
 
-/** The card tree as an OPML outline (mind-map and outliner apps): question titles, statements as notes. */
-export function nodesToOpml(nodes: NodeView[], exportedAt: Date): string {
+/** The maps as an OPML outline for mind-map and outliner apps. */
+export function mapToOpml(subjects: MapTree[], o: ExportOptions, exportedAt: Date): string {
   const lines = [
     '<?xml version="1.0" encoding="UTF-8"?>',
     '<opml version="2.0">',
     `  <head><title>Chat2Know</title><dateCreated>${exportedAt.toUTCString()}</dateCreated></head>`,
     '  <body>',
   ];
-  const walk = (items: TreeNode[], indent: string) => {
-    for (const { node: n, children } of items) {
-      const attrs = `text="${xml(n.title || 'Untitled')}"${n.summary ? ` _note="${xml(n.summary)}"` : ''}`;
-      if (!children.length) {
-        lines.push(`${indent}<outline ${attrs}/>`);
-        continue;
-      }
-      lines.push(`${indent}<outline ${attrs}>`);
-      walk(children, `${indent}  `);
-      lines.push(`${indent}</outline>`);
+  const walk = (t: MapTree, indent: string) => {
+    const text = xml(t.node.kind === 'item' ? itemText(t.node) : structureTitle(t.node, o));
+    if (!t.children.length) {
+      lines.push(`${indent}<outline text="${text}"/>`);
+      return;
     }
+    lines.push(`${indent}<outline text="${text}">`);
+    t.children.forEach((c) => walk(c, `${indent}  `));
+    lines.push(`${indent}</outline>`);
   };
-  walk(buildTree(nodes), '    ');
+  visible(subjects, o).forEach((t) => walk(t, '    '));
   lines.push('  </body>', '</opml>');
   return `${lines.join('\n')}\n`;
 }

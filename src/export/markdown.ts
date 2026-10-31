@@ -1,27 +1,34 @@
-import type { NodeView } from '@/src/db/types';
-import { buildTree, type TreeNode } from '@/src/graph/tree';
+import { isGrey, type MapTree } from '@/src/graph/tree';
+import type { MapNode } from '@/src/db/types';
 
-const TYPE_LABEL: Record<NodeView['type'], string> = {
-  topic: 'Topic',
-  knowledge: 'Knowledge',
-  insight: 'Insight',
-  idea: 'Idea',
-  question: 'Question',
-};
+export interface ExportOptions {
+  /** The "待归位" group's title in the user's language. */
+  unplacedTitle: string;
+  /** Grey (not yet learned) outline nodes are left out unless asked for. */
+  includeGrey?: boolean;
+}
 
-/** One Markdown document with every live node in tree order: a card's heading is one level below its parent's. */
-export function nodesToMarkdown(nodes: NodeView[], exportedAt: Date): string {
-  const parts = [`# Chat2Know export`, '', `Exported ${exportedAt.toISOString()} · ${nodes.length} cards`];
-  const walk = (items: TreeNode[], depth: number) => {
-    for (const { node: n, children } of items) {
-      const heading = '#'.repeat(Math.min(2 + depth, 6));
-      parts.push('', '---', '', `${heading} ${n.title || 'Untitled'}`, '', `*${TYPE_LABEL[n.type]}* · ${new Date(n.createdAt).toISOString().slice(0, 10)}`);
-      if (n.summary) parts.push('', `> ${n.summary}`);
-      if (n.body) parts.push('', n.body);
-      for (const s of n.sources) parts.push('', `Source: [${(s.pageTitle || s.url).replace(/[[\]]/g, '')}](${s.url})`);
-      walk(children, depth + 1);
+export const structureTitle = (n: MapNode, o: ExportOptions) => (n.role === 'unplaced' ? o.unplacedTitle : n.title);
+
+/** Keeps the trees' structure, without grey nodes unless asked for. */
+export function visible(trees: MapTree[], o: ExportOptions): MapTree[] {
+  return trees.filter((t) => o.includeGrey || !isGrey(t)).map((t) => ({ node: t.node, children: visible(t.children, o) }));
+}
+
+export const itemText = (n: MapNode) => [n.latex === undefined ? '' : `$${n.latex}$`, n.title].filter(Boolean).join(' — ');
+
+/** One Markdown document: a heading per structure node, one bullet per item with a link to its source. */
+export function mapToMarkdown(subjects: MapTree[], o: ExportOptions): string {
+  const parts: string[] = [];
+  const walk = (t: MapTree, depth: number) => {
+    const n = t.node;
+    if (n.kind === 'item') {
+      parts.push(`- ${itemText(n)}${n.source ? ` ([source](${n.source.url}))` : ''}`);
+      return;
     }
+    parts.push('', `${'#'.repeat(Math.min(depth, 6))} ${structureTitle(n, o)}`, '');
+    t.children.forEach((c) => walk(c, depth + 1));
   };
-  walk(buildTree(nodes), 0);
-  return `${parts.join('\n')}\n`;
+  visible(subjects, o).forEach((t) => walk(t, 1));
+  return `${parts.join('\n').replace(/\n{3,}/g, '\n\n').trim()}\n`;
 }

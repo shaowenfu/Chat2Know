@@ -4,3 +4,4 @@ actionTitle: 打开 Chat2Know
 error:
   modelNotConfigured: 请先在设置里配置模型。
   baseUrlProtocol: 服务地址必须以 http:// 或 https:// 开头。
+  mapTooDeep: 导图最多 4 层。

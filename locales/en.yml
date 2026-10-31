@@ -4,3 +4,4 @@ actionTitle: Open Chat2Know
 error:
   modelNotConfigured: Set up a model in settings first.
   baseUrlProtocol: The base URL must start with http:// or https://.
+  mapTooDeep: A map has at most 4 levels.
