@@ -33,6 +33,12 @@ export interface MessageMap {
   /** Stop recording a conversation and delete what was recorded in it. */
   'asks/exclude': { req: { conversationUrl: string }; res: RecordingSettings };
 
+  // The map's data
+  /** The whole map as a file's text; Markdown and OPML leave grey outline nodes out unless asked. */
+  'map/export': { req: { format: 'json' | 'markdown' | 'opml'; includeGrey?: boolean }; res: string };
+  /** A v2 export merges into the map; a v0.1 export becomes one subject with its knowledge in "待归位". */
+  'map/import': { req: { json: string }; res: { nodes: number } };
+
   // Background -> extension pages (broadcast)
   /** Data or settings changed; open pages reload. */
   'event/dataChanged': { req: Record<string, never>; res: null };

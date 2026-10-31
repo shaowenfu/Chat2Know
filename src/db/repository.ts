@@ -86,12 +86,7 @@ export class Repository {
   // ------------------------------------------------------------ map writes (logged, undoable)
 
   async addSubject(title: string, origin: Origin = 'user'): Promise<Written> {
-    return this.write('addSubject', async (w) => {
-      const subjects = await this.listSubjects();
-      const id = this.ulid(this.now());
-      const order = generateKeyBetween(subjects.at(-1)?.order ?? null, null);
-      return w.put({ id, subjectId: id, kind: 'subject', order, title: title.trim(), origin, createdAt: this.now(), updatedAt: '' });
-    });
+    return this.write('addSubject', (w) => this.createSubject(w, title, origin));
   }
 
   async addSection(parentId: string, title: string, origin: Origin = 'user', beforeId?: string): Promise<Written> {
@@ -106,17 +101,7 @@ export class Repository {
   async addItem(place: ItemPlace, input: ItemInput): Promise<Written> {
     return this.write('addItem', async (w) => {
       const parent = 'parentId' in place ? await this.structure(place.parentId) : await this.unplacedGroup(w, place.unplacedIn);
-      return w.create({
-        subjectId: parent.subjectId,
-        kind: 'item',
-        parentId: parent.id,
-        order: await this.orderAt(parent.id),
-        title: input.title.trim(),
-        itemType: input.itemType,
-        ...(input.latex === undefined ? {} : { latex: input.latex }),
-        ...(input.source ? { source: input.source } : {}),
-        origin: input.origin ?? 'user',
-      });
+      return w.create(this.newItem(parent, input, await this.orderAt(parent.id)));
     });
   }
 
@@ -219,7 +204,54 @@ export class Repository {
     );
   }
 
+  // ------------------------------------------------------------ export and import
+
+  /** Every live map node: the lossless JSON export. */
+  async exportNodes(): Promise<MapNode[]> {
+    return (await this.db.nodes.toArray()).filter((n) => !n.deletedAt);
+  }
+
+  /** Merges exported nodes into the map, as one undoable write; a node with the same id is replaced. */
+  async importNodes(nodes: MapNode[]): Promise<string> {
+    for (const n of nodes) this.clock.receive(n.updatedAt);
+    return this.group('import', async (w) => {
+      for (const n of nodes) await w.put(n);
+    });
+  }
+
+  /** A new subject with the items in its "待归位" group, as one undoable write. */
+  async importItems(subjectTitle: string, items: ItemInput[]): Promise<Written> {
+    return this.write('importItems', async (w) => {
+      const subject = await this.createSubject(w, subjectTitle, 'user');
+      const group = await this.unplacedGroup(w, subject.id);
+      const keys = generateNKeysBetween(null, null, items.length);
+      for (const [i, input] of items.entries()) await w.create(this.newItem(group, input, keys[i]!));
+      return subject;
+    });
+  }
+
   // ------------------------------------------------------------ internals
+
+  private async createSubject(w: Writer, title: string, origin: Origin): Promise<MapNode> {
+    const subjects = await this.listSubjects();
+    const id = this.ulid(this.now());
+    const order = generateKeyBetween(subjects.at(-1)?.order ?? null, null);
+    return w.put({ id, subjectId: id, kind: 'subject', order, title: title.trim(), origin, createdAt: this.now(), updatedAt: '' });
+  }
+
+  private newItem(parent: MapNode, input: ItemInput, order: string): NewNode {
+    return {
+      subjectId: parent.subjectId,
+      kind: 'item',
+      parentId: parent.id,
+      order,
+      title: input.title.trim(),
+      itemType: input.itemType,
+      ...(input.latex === undefined ? {} : { latex: input.latex }),
+      ...(input.source ? { source: input.source } : {}),
+      origin: input.origin ?? 'user',
+    };
+  }
 
   private async write(action: string, fn: (w: Writer) => Promise<MapNode>): Promise<Written> {
     let node!: MapNode;

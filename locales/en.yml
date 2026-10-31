@@ -5,3 +5,9 @@ error:
   modelNotConfigured: Set up a model in settings first.
   baseUrlProtocol: The base URL must start with http:// or https://.
   mapTooDeep: A map has at most 4 levels.
+  notExport: Not a Chat2Know export file.
+  exportVersion: "Unsupported export version: $1"
+  invalidExport: "Invalid \"$1\" in the export file."
+map:
+  unplaced: Unplaced
+  importedSubject: Imported notes

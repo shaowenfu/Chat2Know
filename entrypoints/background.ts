@@ -9,6 +9,10 @@ import { UserError } from '@/src/errors';
 import { loadSettings, saveSettings, toPublic } from '@/src/llm/settings';
 import { isRecording, loadRecording, saveRecording, shouldRecord, type RecordingSettings } from '@/src/recording/settings';
 import { siteFor } from '@/src/capture/sites';
+import { i18n } from '#i18n';
+import { EXPORT_FORMAT, EXPORT_VERSION, parseImport, type ExportFile } from '@/src/export/json';
+import { mapToMarkdown } from '@/src/export/markdown';
+import { mapToOpml } from '@/src/export/opml';
 
 const RECORDER_SCRIPT = '/content-scripts/recorder.js';
 const RECORDER_ID = 'chat2know-recorder';
@@ -118,6 +122,24 @@ export default defineBackground(() => {
       await (await repo()).recordAsk({ site: siteFor(host)?.id ?? host, conversationUrl: url, text });
       notifyChanged();
       return { recorded: true };
+    },
+    'map/export': async ({ format, includeGrey }) => {
+      const r = await repo();
+      if (format === 'json') {
+        const file: ExportFile = { format: EXPORT_FORMAT, version: EXPORT_VERSION, exportedAt: Date.now(), nodes: await r.exportNodes() };
+        return JSON.stringify(file, null, 2);
+      }
+      const trees = await Promise.all((await r.listSubjects()).map((s) => r.subjectTree(s.id)));
+      const options = { unplacedTitle: i18n.t('map.unplaced'), includeGrey: includeGrey ?? false };
+      return format === 'markdown' ? mapToMarkdown(trees, options) : mapToOpml(trees, options, new Date());
+    },
+    'map/import': async ({ json }) => {
+      const file = parseImport(json);
+      const r = await repo();
+      if (file.version === 2) await r.importNodes(file.nodes);
+      else await r.importItems(i18n.t('map.importedSubject'), file.items);
+      notifyChanged();
+      return { nodes: file.version === 2 ? file.nodes.length : file.items.length };
     },
     'asks/list': async () => (await repo()).listAsks(),
     'asks/delete': async ({ id }) => {

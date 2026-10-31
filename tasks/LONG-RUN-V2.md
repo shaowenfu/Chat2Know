@@ -43,7 +43,7 @@ canvas (https://claude.ai/artifact/YbcpyaNR6aWbC2EvmAAsjr, 8 artboards) is the r
 ## R1: data layer
 
 - [x] R1.1 New database `chat2know-v2`: `nodes` (MapNode with parent, order and source), `placements`, `embeddings`, `asks`, `askTags`, `prereqEdges`, `gaps`, `oplog`. Repository: add subject / section / item (with source), move, rename, merge sections, soft delete (items move up), restore, undo (every map write), list a subject's tree.
-- [ ] R1.2 Export JSON / Markdown / OPML (grey nodes left out by default); import v2 JSON (lossless round trip) and v0.1 JSON (knowledge cards → items in the subject's 待归位 group).
+- [x] R1.2 Export JSON / Markdown / OPML (grey nodes left out by default); import v2 JSON (lossless round trip) and v0.1 JSON (knowledge cards → items in the subject's 待归位 group).
 
 ## R2: recording
 
@@ -76,3 +76,4 @@ canvas (https://claude.ai/artifact/YbcpyaNR6aWbC2EvmAAsjr, 8 artboards) is the r
 - R0.1: The v0.1 docs are archived in `docs/archive-v0.1/`; their release-era files (`PRIVACY.md`, `docs/install.md`, `docs/store-listing.md`) stay and are rewritten in R6.
 - R0.2: The old DB schema and types (`src/db/schema.ts`, `types.ts`) and the old-type users `src/export/*` and `src/graph/tree.ts` stay until R1 rebuilds the data layer on a new database; the repository is already cut down to recorded questions. Commands and the `contextMenus` permission are removed until R2 adds "记到导图". Locale files hold only the strings in use. The tag / prerequisite / circling prompts and `src/graph/` algorithms stay for R5; their service code went.
 - R1.1: Parent, order and source live on the node (one parent, one source per node), so there are no `edges` / `sources` tables. Undo reverts a whole oplog group except nodes changed since (compared without their write time); an undo always logs a marker so it is never undone twice. `restore` = undo of the node's latest deletion. Deleting a subject soft-deletes its whole map. The `edit` method is the user's; the extension's own rewrites come with R3. Markdown / OPML export already take subject trees.
+- R1.2: JSON export = every live node (grey ones too) under `format: chat2know, version: 2`; import merges by id as one undoable write and checks every node and its parent strictly. A v0.1 file (`version: 1`) becomes a new subject "Imported notes" with one formula item per display formula of a knowledge card, else one statement (summary, else first line), in its 待归位 group; R3 placement will move them. Messages `map/export` / `map/import` with a message-level E2E; the buttons come with the R4 settings page.
