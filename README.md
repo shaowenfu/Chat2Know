@@ -1,14 +1,12 @@
 # Chat2Know
 
-> 下一版正在 [`v2`](https://github.com/shaowenfu/Chat2Know/tree/v2) 分支重构。The next version is being rebuilt on the [`v2`](https://github.com/shaowenfu/Chat2Know/tree/v2) branch.
+**A knowledge map for your notes: one click puts a formula from your AI chat in the right place.** · 和 AI 聊天时，点一下就把公式或结论记到知识导图里合适的位置。
 
-**Everything you chatted about, you can explain.** · 聊过的，都能讲出来。
+Chat2Know is a browser extension for people who learn by chatting with an AI. While you read an answer, a ＋ sits beside every formula; one click records it, and Chat2Know files it on that subject's map (subject › chapter › topic). Over time the map shows what you have covered, and, if you let it, which parts you keep coming back to.
 
-Chat2Know is a browser extension that sits on top of any AI chat client as a knowledge layer: it captures, distills, organizes and **verifies** what you learn from AI conversations, so you can still explain it after you close the tab.
+Chat2Know 是一个浏览器插件：在 AI 对话里看到值得记的公式或结论，点一下就行，放到哪里由插件来定。导图会告诉你一门课学到了哪里、哪一块还缺。
 
-Chat2Know 是一个浏览器插件：叠在所有 AI 客户端之上的"知识层"，负责捕获、蒸馏、组织和检验对话中的知识。
-
-> Status: 0.1.0, the first public release. Chrome and other Chromium browsers (Edge, Brave, Arc); Firefox is not supported yet. Usable for daily use; expect changes.
+> Status: 0.2.0 in development on this branch (`v2`), a rebuild of 0.1. The released 0.1.0 is on `main`. Chrome and other Chromium browsers (Edge, Brave, Arc); Firefox is not supported yet.
 
 ## Install
 
@@ -19,29 +17,29 @@ Chat2Know 是一个浏览器插件：叠在所有 AI 客户端之上的"知识�
 ```bash
 git clone https://github.com/shaowenfu/Chat2Know.git
 cd Chat2Know
+git checkout v2
 npm install
 npm run build   # then Load unpacked: .output/chrome-mv3
 ```
 
-Step-by-step guide with screenshots (中文 / English): [docs/install.md](docs/install.md).
+Step-by-step guide with screenshots (中文 / English): [docs/install.md](docs/install.md). Coming from 0.1: [docs/migration-v0.1.md](docs/migration-v0.1.md).
 
 ## Using it
 
-1. Click the Chat2Know toolbar icon to open the side panel. Open **⚙ Model settings** and enter any OpenAI-compatible endpoint: base URL, model and API key (an embedding model is optional and enables placement suggestions). Capturing works without a model.
-2. Select text on the page and click **Save** (knowledge) or **Idea** in the floating toolbar. Alternatively press **Alt+Shift+K** / **Alt+Shift+I**, or right-click → *Save to Chat2Know*.
-3. Hit a term you don't fully get? Select it and click **Ask later** (or press **Alt+Q**), optionally type your question, and keep reading. Work through the **Ask later** tab in the side panel when you're done; **Copy follow-up** gives you a ready-to-paste question for the chat.
-   Need it right away? **Ask now** answers in the side panel without touching the page.
-4. In **Ask later**, click **Ask here** for an answer. Answers wait in an inbox for 7 days; click **Keep** and choose a question to review it by and a short statement to keep. Anything you don't keep just expires.
-5. In **Cards**, pick one of the proposed questions as the title, drag cards into a tree, switch to **Conclusions** for an outline, or **Organize page** / **Organize pasted text** to turn a whole conversation into candidate cards.
-6. Mark what you must **know by heart** and use **Quiz me**: you recall a card, and on its next round use it to solve a short problem the model writes. On any kept card, **Explain it to me** checks your own explanation of the card and everything under it (missed cards are marked on the map), and **Explain it in one minute** writes a script to say out loud. The number of know-by-heart cards you pass each week is what Chat2Know optimizes for.
-7. **Learning** (optional, off by default): tick the AI sites on which Chat2Know may record the questions you send. They stay in your browser; you can pause, exclude a conversation or delete anything. From time to time the questions are tagged with concepts and checked for gaps (the same concept asked again and again, basics asked in the middle of harder work, going in circles). A suspected gap shows its evidence, your own questions; confirm it with a two-minute quiz or say whether it is accurate. A confirmed gap gets a systematic review you can keep as cards to know by heart.
-8. **Export ▾** everything as JSON, Markdown, OPML (mind maps) or Anki CSV; import JSON to restore. Recorded questions have their own export in the Learning tab.
+1. Click the Chat2Know icon to open the side panel and tick the AI sites you use (ChatGPT, Claude, Gemini, DeepSeek, Kimi, 豆包). The browser asks for access to each ticked site only.
+2. In an answer on those sites, click the **＋** beside a formula. It shows **Added**, and a toast says where it went, with **Move** and **Undo**. On any page, select text and press **Alt+S** (or right-click → *Add to Chat2Know map*): one formula selected becomes a formula, anything else a one-sentence statement.
+3. Set up a model (any OpenAI-compatible endpoint: base URL, model, key; an embedding model is optional and places notes more accurately) in **Settings** (the side panel's *Set up a model* link, or ⚙ on the full map). With a model, each note moves to its subject and topic, new topics are created as needed, and a long selection becomes one sentence. Without one, notes wait in **Unplaced** and you drag them where they belong. Recording never waits for a model.
+4. The side panel is the map: switch subjects, fold chapters, drag items onto topics, right-click to move, edit or delete, Ctrl+Z to undo. Click an item to jump back to the conversation. **Full map ↗** opens a full page with a detail pane per topic, where you can also add a formula or statement by hand.
+5. After a subject's first note, Chat2Know offers once to lay out the course's outline, or your textbook's table of contents, as grey topics. Grey means "not learned yet"; the less grey, the more of the course you have covered.
+6. Optional: **Also record the questions I send on these sites** (settings). Chat2Know then matches your questions to the map's topics. A topic you keep coming back to is outlined in orange, and at most once a day the side panel asks about one: add its core formulas and statements (light blue, you can untick any), try one question, or say no for 30 days.
+7. Export the map as JSON, Markdown or OPML (mind-map apps); import a JSON export, or your 0.1 data.
 
-Your data stays in your browser. The only thing that leaves it is the text you ask about, organize, check or analyze, sent to the model provider you configured, with your own key. No telemetry. Details: [PRIVACY.md](PRIVACY.md).
+Your data stays in your browser. The only thing that leaves it is what a model call needs, sent to the provider you configured, with your own key. No account, no server, no telemetry. Details: [PRIVACY.md](PRIVACY.md).
 
 ## Docs
 
 - [Install guide with screenshots (中文 / English)](docs/install.md)
+- [Moving from 0.1](docs/migration-v0.1.md)
 - [Privacy policy](PRIVACY.md)
 - [Project plan (中文)](docs/project-plan.md)
 - [v0.1 docs (archived)](docs/archive-v0.1/)

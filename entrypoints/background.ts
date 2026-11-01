@@ -7,7 +7,7 @@ import { Repository } from '@/src/db/repository';
 import { LlmClient } from '@/src/llm/client';
 import { UserError } from '@/src/errors';
 import { loadSettings, saveSettings, toPublic } from '@/src/llm/settings';
-import { isRecording, loadSites, saveSites, shouldRecord, type SiteSettings } from '@/src/sites/settings';
+import { isRecording, loadSites, migrateV01Sites, saveSites, shouldRecord, type SiteSettings } from '@/src/sites/settings';
 import { recordItem, type RecordResult } from '@/src/services/record';
 import { placeItem, placeUnplaced } from '@/src/services/placement';
 import { textFragmentUrl } from '@/src/capture/text-fragment';
@@ -21,13 +21,18 @@ import type { TextQuote } from '@/src/capture/text-quote';
 import { sendTabMessage } from '@/src/messaging';
 import { siteFor } from '@/src/capture/sites';
 import { i18n } from '#i18n';
-import { EXPORT_FORMAT, EXPORT_VERSION, parseImport, type ExportFile } from '@/src/export/json';
+import { EXPORT_FORMAT, EXPORT_VERSION, parseImport, v01Items, type ExportFile } from '@/src/export/json';
+import { readV01 } from '@/src/db/legacy';
+import { sameItem } from '@/src/services/record';
+import type { ItemInput } from '@/src/db/repository';
 import { mapToMarkdown } from '@/src/export/markdown';
 import { mapToOpml } from '@/src/export/opml';
 
 const SITE_SCRIPT = '/content-scripts/site.js';
 const SITE_SCRIPT_ID = 'chat2know-site';
 const MENU_ID = 'chat2know-record';
+/** 0.1's question recorder; its script file is gone in 0.2. */
+const V01_RECORDER_ID = 'chat2know-recorder';
 
 async function deviceId(): Promise<string> {
   const { deviceId } = await browser.storage.local.get('deviceId');
@@ -171,6 +176,18 @@ function analyzeGaps(): Promise<void> {
   return analyzing;
 }
 
+/** v0.1 notes join a new subject's 待归位 group, without the ones already on the map (importing twice adds nothing). */
+async function importV01Items(items: ItemInput[]): Promise<number> {
+  const r = await repo();
+  const existing = await r.listItems();
+  const fresh = items.filter((i) => !existing.some((e) => sameItem(e, i)));
+  if (!fresh.length) return 0;
+  await r.importItems(i18n.t('map.importedSubject'), fresh);
+  notifyChanged();
+  void placeWaiting();
+  return fresh.length;
+}
+
 const labels = (): { unplaced: string; newSubject: string } => ({ unplaced: i18n.t('map.unplaced'), newSubject: i18n.t('map.newSubject') });
 
 export default defineBackground(() => {
@@ -179,7 +196,13 @@ export default defineBackground(() => {
   // Registered scripts survive restarts; re-registering on install / update keeps them in step with the settings.
   browser.runtime.onStartup.addListener(() => void loadSites().then(showRecordingBadge));
   browser.runtime.onInstalled.addListener(() => {
-    void loadSites().then(registerSiteScript);
+    void (async () => {
+      if ((await browser.scripting.getRegisteredContentScripts({ ids: [V01_RECORDER_ID] })).length) {
+        await browser.scripting.unregisterContentScripts({ ids: [V01_RECORDER_ID] });
+      }
+      await migrateV01Sites();
+      await registerSiteScript(await loadSites());
+    })();
     browser.contextMenus.create({ id: MENU_ID, title: i18n.t('menu.record'), contexts: ['selection'] });
   });
   browser.commands.onCommand.addListener((command, tab) => {
@@ -392,12 +415,15 @@ export default defineBackground(() => {
     },
     'map/import': async ({ json }) => {
       const file = parseImport(json);
-      const r = await repo();
-      if (file.version === 2) await r.importNodes(file.nodes);
-      else await r.importItems(i18n.t('map.importedSubject'), file.items);
+      if (file.version === 1) return { nodes: await importV01Items(file.items) };
+      await (await repo()).importNodes(file.nodes);
       notifyChanged();
       void placeWaiting();
-      return { nodes: file.version === 2 ? file.nodes.length : file.items.length };
+      return { nodes: file.nodes.length };
+    },
+    'map/importV01': async () => {
+      const old = await readV01();
+      return old ? { found: true, nodes: await importV01Items(v01Items(old)) } : { found: false, nodes: 0 };
     },
     'asks/list': async () => (await repo()).listAsks(),
     'asks/delete': async ({ id }) => {

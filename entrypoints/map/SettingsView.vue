@@ -20,6 +20,7 @@ const message = ref('');
 const origins = ref<string[]>([]);
 const recordAsks = ref(false);
 const confirmClear = ref(false);
+const askCount = ref(0);
 
 async function run(action: () => Promise<unknown>) {
   try {
@@ -36,6 +37,7 @@ onMounted(() =>
     [baseUrl.value, model.value, embeddingModel.value, hasKey.value] = [s.baseUrl, s.model, s.embeddingModel, s.hasKey];
     const sites = await sendMessage('sites/get', {});
     [origins.value, recordAsks.value] = [sites.origins, sites.recordAsks];
+    askCount.value = (await sendMessage('asks/list', {})).length;
   }),
 );
 
@@ -68,6 +70,14 @@ async function test() {
     status.value = 'failed';
     emit('error', errorText(err));
   }
+}
+
+async function clearAsks() {
+  await run(async () => {
+    await sendMessage('asks/clear', {});
+    askCount.value = 0;
+    message.value = i18n.t('settings.asksCleared');
+  });
 }
 
 async function setRecordAsks(on: boolean) {
@@ -157,6 +167,7 @@ async function clearAll() {
               <span class="muted small">{{ i18n.t('settings.recordAsksNote') }}</span>
             </span>
           </label>
+          <button v-if="askCount" type="button" class="danger-link" data-testid="clear-asks" @click="clearAsks">{{ i18n.t('settings.clearAsks', [String(askCount)]) }}</button>
         </section>
 
         <section class="card">

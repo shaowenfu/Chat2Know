@@ -208,13 +208,26 @@ function onKey(e: KeyboardEvent) {
   }
 }
 
-async function importOld(event: Event) {
-  const file = (event.target as HTMLInputElement).files?.[0];
+const oldFile = ref<HTMLInputElement>();
+
+/** v0.1's data in this browser comes over directly; without it, the user picks a v0.1 export file. */
+async function importOld() {
+  await run(async () => {
+    const { found, nodes } = await sendMessage('map/importV01', {});
+    if (found) showNotice(i18n.t('empty.imported', [String(nodes)]), '');
+    else oldFile.value!.click();
+  });
+}
+
+async function importOldFile(event: Event) {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
   if (!file) return;
   await run(async () => {
     const { nodes } = await sendMessage('map/import', { json: await file.text() });
     showNotice(i18n.t('empty.imported', [String(nodes)]), '');
   });
+  input.value = '';
 }
 
 function onMessage(message: unknown) {
@@ -269,10 +282,8 @@ const subjectNode = computed(() => tree.value?.node);
         <p v-if="error" class="error" role="alert">{{ error }}</p>
       </div>
       <footer class="foot split">
-        <label class="link-button">
-          {{ i18n.t('empty.importOld') }}
-          <input type="file" accept="application/json,.json" hidden data-testid="import-old" @change="importOld">
-        </label>
+        <button type="button" class="link-button" @click="importOld">{{ i18n.t('empty.importOld') }}</button>
+        <input ref="oldFile" type="file" accept="application/json,.json" hidden data-testid="import-old" @change="importOldFile">
         <span class="muted">{{ notice?.text ?? i18n.t('empty.local') }}</span>
       </footer>
     </template>

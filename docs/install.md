@@ -70,18 +70,20 @@ Click the Chat2Know icon in the toolbar to open the side panel. If it is not the
 
 ![工具栏上的 Chat2Know · Chat2Know in the toolbar](images/install/8-open.png)
 
-提示里的"想要访问此网站 / Wants access to this site"是正常的：Chat2Know 不申请"读取所有网站"的权限，只有你在某个页面上点了它的图标（或按快捷键、用右键菜单）时，才能在这个页面上划词保存。
-"Wants access to this site" is expected: Chat2Know does not ask to read every site. It works on a page once you click its icon there (or use a shortcut or the right-click menu).
+Chat2Know 不申请"读取所有网站"的权限：只有你在侧栏勾选的 AI 网站上会显示 ＋，勾选时浏览器会单独请求该网站的权限。
+Chat2Know does not ask to read every site: ＋ shows only on the AI sites you tick in the side panel, and the browser asks for each one when you tick it.
 
 ## 6. 第一次使用 · First use
 
-1. 在侧栏点 **⚙** 填写模型设置：任意兼容 OpenAI 格式的接口地址、模型名和 API Key。不填也能保存知识，只是不能提炼和回答。
-   In the side panel, click **⚙** and enter any OpenAI-compatible base URL, model and API key. Saving works without a model; distilling and answering need one.
-2. 在任意网页上划选一段文字，点浮动工具条上的 **存知识 / Save**，卡片就出现在侧栏里。
-   Select text on any page and click **Save** in the floating toolbar; the card appears in the side panel.
+1. 在侧栏勾选你常用的 AI 网站（ChatGPT、Claude、Gemini、DeepSeek、Kimi、豆包），浏览器会请求该网站的访问权限。
+   In the side panel, tick the AI sites you use; the browser asks for access to each.
+2. 在这些网站的回答里，点公式旁边的 **＋**，就记下了；底部提示会告诉你记到了哪里，可以"改位置"或"撤销"。其他网页上选中文字按 **Alt+S**，或右键"记到 Chat2Know 导图"。
+   In an answer on those sites, click **＋** beside a formula; a toast says where it went, with *Move* and *Undo*. On other pages, select text and press **Alt+S**, or right-click → *Add to Chat2Know map*.
+3. 在设置里填写任意兼容 OpenAI 格式的接口地址、模型名和 API Key，记下的内容就会自动归位到对应的学科和知识点。不填也能记，只是会先放在"待归位"里，由你拖到合适的位置。
+   In Settings, enter any OpenAI-compatible base URL, model and API key, and what you record is filed under its subject and topic. Without one, recording still works; notes wait in *Unplaced* for you to drag them into place.
 
-更多用法见 [README](../README.md#using-it)。
-More in the [README](../README.md#using-it).
+用过 0.1？见 [从 0.1 升级](migration-v0.1.md)。更多用法见 [README](../README.md#using-it)。
+Used 0.1? See [Moving from 0.1](migration-v0.1.md). More in the [README](../README.md#using-it).
 
 ## 更新 · Updating
 
@@ -99,5 +101,7 @@ Then click the reload button ⟳ on the Chat2Know card in the extensions page. Y
   Check `node -v` (22 or later).
 - **加载时报错"清单文件缺失" / "Manifest file is missing"**：选的文件夹不对，应选直接包含 `manifest.json` 的那个文件夹：解压出来的文件夹，或 `.output/chrome-mv3`（不是项目根目录，也不是 `.output`）。
   You picked the wrong folder: choose the one that directly contains `manifest.json`, the unzipped folder or `.output/chrome-mv3` (not the project root or `.output`).
-- **划词后没有工具条 / No toolbar after selecting text**：先在这个页面上点一次 Chat2Know 图标，或用快捷键 **Alt+Shift+K**、右键菜单保存。浏览器自带页面（`chrome://`、扩展商店）上插件不能运行。
-  Click the Chat2Know icon on that page once, or use **Alt+Shift+K** or the right-click menu. Extensions cannot run on built-in pages such as `chrome://` or the Web Store.
+- **公式旁没有 ＋ / No ＋ beside formulas**：先在侧栏勾选这个网站；勾选前已经打开的页面会自动加上，个别页面需要刷新。只有独立成行的公式旁才有 ＋，行内公式请选中后按 **Alt+S**。浏览器自带页面（`chrome://`、扩展商店）上插件不能运行。
+  Tick the site in the side panel first; pages already open get the ＋ at once, a few need a reload. Only formulas on a line of their own get a ＋; for inline ones, select and press **Alt+S**. Extensions cannot run on built-in pages such as `chrome://` or the Web Store.
+- **Alt+S 没反应 / Alt+S does nothing**：在 `chrome://extensions/shortcuts` 查看是否被其他扩展占用，可以改成别的组合键。
+  Check `chrome://extensions/shortcuts`: another extension may use it; pick another key there.

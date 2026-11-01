@@ -28,3 +28,32 @@ test('map data: a v0.1 export imports into 待归位; JSON / Markdown / OPML exp
   expect((await send(panel, 'map/import', { json })).data).toEqual({ nodes: 3 });
   expect((await send<string>(panel, 'map/export', { format: 'markdown' })).data).toBe(md);
 });
+
+test('导入旧版数据 reads the v0.1 database left in this browser; importing again adds nothing', async ({ context, extensionId }) => {
+  const panel = await context.newPage();
+  await panel.goto(`chrome-extension://${extensionId}/sidepanel.html`);
+  // What v0.1 left behind: its IndexedDB, with a formula card, a statement card and an idea.
+  await panel.evaluate(
+    () =>
+      new Promise<void>((resolve, reject) => {
+        const open = indexedDB.open('chat2know', 40);
+        open.onupgradeneeded = () => {
+          const db = open.result;
+          const nodes = db.createObjectStore('nodes', { keyPath: 'id' });
+          const sources = db.createObjectStore('sources', { keyPath: 'id' });
+          nodes.add({ id: 'k1', type: 'knowledge', title: 'Why?', body: '$$\n(AB)^T = B^T A^T\n$$' });
+          nodes.add({ id: 'k2', type: 'knowledge', title: 'When?', body: 'long', summary: 'A is invertible iff det A ≠ 0.' });
+          nodes.add({ id: 'i1', type: 'idea', title: 'idea', body: 'skip' });
+          sources.add({ id: 's1', nodeId: 'k1', url: 'https://chatgpt.com/c/1', pageTitle: 'Chat', quoteExact: 'x', quotePrefix: '', quoteSuffix: '', capturedAt: 1 });
+        };
+        open.onsuccess = () => (open.result.close(), resolve());
+        open.onerror = () => reject(open.error);
+      }),
+  );
+  await panel.reload();
+  await panel.getByRole('button', { name: 'Import v0.1 data' }).click();
+  await expect(panel.getByRole('tree')).toContainText('2 items');
+  const md = (await send<string>(panel, 'map/export', { format: 'markdown' })).data;
+  expect(md).toBe('# Imported notes\n\n## Unplaced\n\n- $(AB)^T = B^T A^T$ ([source](https://chatgpt.com/c/1))\n- A is invertible iff det A ≠ 0.\n');
+  expect((await send(panel, 'map/importV01', {})).data).toEqual({ found: true, nodes: 0 });
+});

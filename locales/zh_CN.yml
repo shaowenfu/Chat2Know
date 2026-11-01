@@ -111,6 +111,8 @@ settings:
   sitesExplain: 在这些网站的公式旁显示 ＋
   recordAsks: 也记录我在这些网站上发出的提问，用来发现短板
   recordAsksNote: 只存本地；分析时分批发给上面的模型。
+  clearAsks: "删除提问记录（$1 条）"
+  asksCleared: 已删除提问记录。
   data: 数据
   exportJson: 导出 JSON
   exportMarkdown: 导出 Markdown

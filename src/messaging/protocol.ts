@@ -56,6 +56,8 @@ export interface MessageMap {
   'map/addSection': { req: { parentId: string; title: string }; res: { id: string } };
   /** An item the user types in on the full page (a formula's LaTeX, or a statement). */
   'map/addItem': { req: { parentId: string; itemType: ItemType; text: string }; res: { id: string } };
+  /** "导入旧版数据": the v0.1 database in this browser, if there is one (`found` false otherwise). */
+  'map/importV01': { req: Record<string, never>; res: { found: boolean; nodes: number } };
   /** "清空所有数据". */
   'map/clear': { req: Record<string, never>; res: null };
   /** Opens the item's conversation in a new tab, scrolled to the quote. */

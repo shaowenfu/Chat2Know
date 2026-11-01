@@ -78,7 +78,7 @@ const displayFormulas = (body: string) => [...body.matchAll(/\$\$([\s\S]+?)\$\$/
  * formula item per formula, any other card one statement (its summary, else its
  * first line). Question titles are dropped; the first source is kept.
  */
-function v01Items(file: Record<string, unknown>): ItemInput[] {
+export function v01Items(file: Record<string, unknown>): ItemInput[] {
   const nodes = file.nodes;
   const sources = file.sources;
   if (!Array.isArray(nodes) || !nodes.every(isObject)) throw new UserError('error.invalidExport', ['nodes']);

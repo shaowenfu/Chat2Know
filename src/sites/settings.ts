@@ -30,3 +30,18 @@ export function shouldRecord(s: SiteSettings, url: string): boolean {
   const u = new URL(url);
   return isRecording(s) && s.origins.includes(u.origin) && !s.excluded.includes(u.href.replace(/#.*$/, ''));
 }
+
+/** 0.1 kept its ticked sites under `recording` (for its question recorder) and analysis state under `analysis`. */
+const V01_KEYS = { recording: 'recording', analysis: 'analysis' };
+
+/**
+ * After an update from 0.1: its ticked sites become the site script's sites, with
+ * question recording on unless it was paused there; 0.1's keys go. Does nothing otherwise.
+ */
+export async function migrateV01Sites(): Promise<void> {
+  const stored = await browser.storage.local.get([V01_KEYS.recording, SITES_KEY]);
+  const old = stored[V01_KEYS.recording] as { origins?: string[]; paused?: boolean; excluded?: string[] } | undefined;
+  if (!old) return;
+  if (!stored[SITES_KEY]) await saveSites({ origins: old.origins ?? [], recordAsks: (old.origins ?? []).length > 0 && !old.paused, excluded: old.excluded ?? [] });
+  await browser.storage.local.remove([V01_KEYS.recording, V01_KEYS.analysis]);
+}

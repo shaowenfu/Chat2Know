@@ -111,6 +111,8 @@ settings:
   sitesExplain: Show ＋ beside formulas on these sites
   recordAsks: Also record the questions I send on these sites, to find gaps
   recordAsksNote: Kept in this browser; sent to the model above in batches for analysis.
+  clearAsks: "Delete the recorded questions ($1)"
+  asksCleared: Recorded questions deleted.
   data: Data
   exportJson: Export JSON
   exportMarkdown: Export Markdown
