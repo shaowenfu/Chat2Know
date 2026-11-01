@@ -28,3 +28,9 @@ export const isGrey = (t: MapTree): boolean => t.node.kind !== 'item' && itemCou
 
 /** The trees without grey nodes (outline nodes nothing has been learned under). */
 export const withoutGrey = (trees: MapTree[]): MapTree[] => trees.filter((t) => !isGrey(t)).map((t) => ({ node: t.node, children: withoutGrey(t.children) }));
+
+/** An outline to lay over a subject: titles only. */
+export interface OutlineNode {
+  title: string;
+  children: OutlineNode[];
+}

@@ -145,6 +145,32 @@ test('full page: tabs, outline toggle, detail pane with sources, adding an item;
   expect(await markdown(panel)).toBe('\n');
 });
 
+test('outline: offered once per subject with a preview; laid as grey sections, or from a pasted table of contents', async ({ context, extensionId, mockLlm }) => {
+  const panel = await context.newPage();
+  await panel.goto(`chrome-extension://${extensionId}/sidepanel.html`);
+  await configureModel(panel, mockLlm.url);
+  const subject = (await send<{ id: string }>(panel, 'map/addSubject', { title: '线性代数' })).data.id;
+  const topic = (await send<{ id: string }>(panel, 'map/addSection', { parentId: subject, title: '转置' })).data.id;
+  // No offer before the first note.
+  expect((await send<{ offer: boolean }>(panel, 'outline/state', { subjectId: subject })).data.offer).toBe(false);
+  await send(panel, 'map/addItem', { parentId: topic, itemType: 'formula', text: '(AB)^T = B^T A^T' });
+
+  const offer = panel.getByTestId('outline-offer');
+  await expect(offer).toContainText('This is your first note in "线性代数"');
+  await expect(offer.locator('li.known')).toHaveText(['转置1']);
+  await offer.getByRole('button', { name: 'From my textbook' }).click();
+  await offer.getByTestId('toc').fill('1 矩阵\n  1.1 转置\n  1.2 逆矩阵\n2 行列式');
+  await offer.getByRole('button', { name: 'Use this table of contents' }).click();
+  await expect(offer.locator('li')).toHaveText(['矩阵', '转置1', '逆矩阵', '行列式']);
+  await offer.getByRole('button', { name: 'Lay it out' }).click();
+
+  await expect(offer).toHaveCount(0);
+  await expect(panel.getByRole('tree')).toContainText('行列式not yet');
+  expect(await markdown(panel)).toBe('# 线性代数\n\n## 矩阵\n\n### 转置\n\n- $(AB)^T = B^T A^T$\n\n### 逆矩阵\n\n## 行列式\n');
+  // Asked once: laid, it is not offered again.
+  expect((await send<{ offer: boolean }>(panel, 'outline/state', { subjectId: subject })).data.offer).toBe(false);
+});
+
 test.describe('screenshots in Chinese, compared with the artboards', () => {
   test.use({ uiLang: 'zh-CN' });
 
@@ -170,6 +196,12 @@ test.describe('screenshots in Chinese, compared with the artboards', () => {
     await page.locator('chat2know-ui button[data-state="add"]').click();
     await expect(page.locator('chat2know-ui .toast')).toContainText('已记到 深度学习 › 注意力机制');
     await panel.bringToFront();
+    // A new subject with its first note: the outline offer, once.
+    const offer = panel.getByTestId('outline-offer');
+    await expect(offer).toContainText('这是你在「深度学习」下记的第一条');
+    await expect(offer).toContainText('正则化');
+    await panel.screenshot({ path: `${SHOTS}/5-outline-offer.png` });
+    await offer.getByRole('button', { name: '不用' }).click();
     await expect(panel.getByRole('tree')).toContainText('刚记下');
     await panel.screenshot({ path: `${SHOTS}/1-sidepanel.png` });
 

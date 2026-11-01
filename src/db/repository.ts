@@ -1,7 +1,7 @@
 import { generateKeyBetween, generateNKeysBetween } from 'fractional-indexing';
 import { monotonicFactory } from 'ulid';
 import { UserError } from '@/src/errors';
-import { buildTree, byOrder, type MapTree } from '@/src/graph/tree';
+import { buildTree, byOrder, type MapTree, type OutlineNode } from '@/src/graph/tree';
 import type { Hlc } from './hlc';
 import type { Chat2KnowDB } from './schema';
 import type { Ask, Embedding, ItemSource, ItemType, MapNode, Origin } from './types';
@@ -287,6 +287,39 @@ export class Repository {
       group,
     );
     return filed ? this.pathOf(itemId) : null;
+  }
+
+  /**
+   * Lays an outline over a subject as grey (outline) sections, one undoable write.
+   * A section the user already has, by title, is used instead of a grey one: as a
+   * child of the right parent if it is there, else moved there from elsewhere in the
+   * subject when the depth allows. Nothing else of the user's moves, and no item is added.
+   */
+  async layOutline(subjectId: string, outline: OutlineNode[]): Promise<string> {
+    return this.group('layOutline', async (w) => {
+      const subject = await this.structure(subjectId);
+      if (subject.kind !== 'subject') throw new Error(`${subjectId} is not a subject`);
+      const key = (t: string) => t.trim().toLowerCase();
+      const claimed = new Set<string>();
+      const lay = async (nodes: OutlineNode[], parent: MapNode): Promise<void> => {
+        for (const o of nodes) {
+          const sections = (await this.subjectNodes(subjectId)).filter((n) => n.kind === 'section' && !n.role && !claimed.has(n.id) && key(n.title) === key(o.title));
+          let node = sections.find((n) => n.parentId === parent.id);
+          if (!node && sections.length) {
+            const path = await this.pathOf(parent.id);
+            const elsewhere = sections.find((n) => !path.some((p) => p.id === n.id));
+            if (elsewhere && path.length + (await this.sectionHeight(elsewhere)) <= MAX_DEPTH) {
+              await this.placeUnder(w, elsewhere, parent, await this.orderAt(parent.id, undefined, elsewhere.id));
+              node = await this.node(elsewhere.id);
+            }
+          }
+          node ??= await w.create({ subjectId, kind: 'section', parentId: parent.id, order: await this.orderAt(parent.id), title: o.title.trim(), origin: 'outline' });
+          claimed.add(node.id);
+          if ((await this.depthOf(node)) < MAX_DEPTH) await lay(o.children, node);
+        }
+      };
+      await lay(outline, subject);
+    });
   }
 
   // ------------------------------------------------------------ placements and embeddings (not logged)

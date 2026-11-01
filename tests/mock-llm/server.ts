@@ -97,6 +97,31 @@ function placeReply(user: string): string {
   return JSON.stringify({ subject, path, statement });
 }
 
+const MOCK_OUTLINE = [
+  { title: '向量与向量空间', children: [] },
+  { title: '矩阵', children: [{ title: '矩阵乘法', children: [] }, { title: '转置', children: [] }, { title: '逆矩阵', children: [] }, { title: '秩', children: [] }] },
+  { title: '行列式', children: [] },
+  { title: '线性方程组', children: [] },
+  { title: '特征值与特征向量', children: [] },
+  { title: '二次型', children: [] },
+];
+
+/** A pasted table of contents: each unindented line a chapter, indented lines its topics; else the standard outline. */
+function outlineReply(user: string): string {
+  const toc = user.split('Table of contents:\n')[1];
+  if (!toc && /^Subject: 深度学习$/m.test(user)) {
+    return JSON.stringify({ outline: ['神经网络', '注意力机制', '优化', '正则化'].map((title) => ({ title, children: [] })) });
+  }
+  if (!toc) return JSON.stringify({ outline: MOCK_OUTLINE });
+  const outline: { title: string; children: { title: string; children: [] }[] }[] = [];
+  for (const line of toc.split('\n').filter((l) => l.trim())) {
+    const title = line.trim().replace(/^[\d.]+\s*/, '');
+    if (/^\s/.test(line) && outline.length) outline.at(-1)!.children.push({ title, children: [] });
+    else outline.push({ title, children: [] });
+  }
+  return JSON.stringify({ outline });
+}
+
 export function chatReply(task: string, user: string): string {
   switch (task) {
     case 'ping':
@@ -105,6 +130,8 @@ export function chatReply(task: string, user: string): string {
       return tagReply(user);
     case 'prereq':
       return prereqReply(user);
+    case 'outline':
+      return outlineReply(user);
     case 'place':
       return placeReply(user);
     case 'circling':

@@ -11,6 +11,8 @@ import { isRecording, loadSites, saveSites, shouldRecord, type SiteSettings } fr
 import { recordItem, type RecordResult } from '@/src/services/record';
 import { placeItem, placeUnplaced } from '@/src/services/placement';
 import { textFragmentUrl } from '@/src/capture/text-fragment';
+import { outlineOfferable, proposeOutline } from '@/src/services/outline';
+import { loadOutlines, saveOutline } from '@/src/outline/state';
 import { moveByUser, parentPath, placeOptions, searchPlaces } from '@/src/services/relocate';
 import { isConfigured } from '@/src/llm/settings';
 import { errorText } from '@/src/errors';
@@ -249,6 +251,31 @@ export default defineBackground(() => {
       const { source } = await (await repo()).node(itemId);
       if (!source) throw new Error(`Item ${itemId} has no source`);
       await browser.tabs.create({ url: textFragmentUrl(source.url, { exact: source.quoteExact, prefix: source.quotePrefix, suffix: source.quoteSuffix }), active: true });
+      return null;
+    },
+    'outline/state': async ({ subjectId }) => {
+      const decision = (await loadOutlines())[subjectId];
+      const offerable = outlineOfferable(await (await repo()).subjectTree(subjectId)) && isConfigured(await loadSettings());
+      const open = decision?.status !== 'laid' && decision?.status !== 'declined';
+      return { offer: offerable && open, ...(open && decision?.outline ? { outline: decision.outline } : {}) };
+    },
+    'outline/propose': async ({ subjectId, toc }) => {
+      const outline = await proposeOutline(await repo(), new LlmClient(await loadSettings()), subjectId, toc);
+      await saveOutline(subjectId, { status: 'proposed', outline });
+      return outline;
+    },
+    'outline/apply': async ({ subjectId }) => {
+      const outline = (await loadOutlines())[subjectId]?.outline;
+      if (!outline) throw new Error(`No outline proposed for ${subjectId}`);
+      const group = await (await repo()).layOutline(subjectId, outline);
+      await saveOutline(subjectId, { status: 'laid' });
+      notifyChanged();
+      void placeWaiting();
+      return { group };
+    },
+    'outline/decline': async ({ subjectId }) => {
+      await saveOutline(subjectId, { status: 'declined' });
+      notifyChanged();
       return null;
     },
     'map/placeOptions': async ({ itemId }) => {

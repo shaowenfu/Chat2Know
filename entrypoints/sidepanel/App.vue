@@ -11,6 +11,8 @@ import ContextMenu from '@/src/ui/ContextMenu.vue';
 import SiteChecklist from '@/src/ui/SiteChecklist.vue';
 import { provideMap } from '@/src/ui/map-context';
 import { formulaHtml } from '@/src/ui/math';
+import OutlineOffer from '@/src/ui/OutlineOffer.vue';
+import type { OutlineNode } from '@/src/graph/tree';
 
 /** An item recorded this recently is marked "刚记下". */
 const JUST_MS = 10 * 60_000;
@@ -29,6 +31,7 @@ const notice = ref<{ text: string; group: string }>();
 const menu = ref<{ node: MapNode; x: number; y: number }>();
 const switching = ref(false);
 const loaded = ref(false);
+const outlineOffer = ref<{ outline?: OutlineNode[] }>();
 
 const expanded = ref(new Set<string>(readExpanded()));
 const newestId = ref<string>();
@@ -91,6 +94,8 @@ async function load() {
   const latest = [...subs].sort((a, b) => b.latest - a.latest)[0]!;
   if (!subs.some((s) => s.id === currentId.value) || !picked.value) currentId.value = latest.id;
   tree.value = await sendMessage('map/tree', { subjectId: currentId.value! });
+  const offer = await sendMessage('outline/state', { subjectId: currentId.value! });
+  outlineOffer.value = offer.offer ? { ...(offer.outline ? { outline: offer.outline } : {}) } : undefined;
   const path = newestPath(tree.value);
   newestId.value = path.at(-1)?.id;
   for (const n of path.slice(1, -1)) expanded.value.add(n.id);
@@ -267,7 +272,8 @@ const subjectNode = computed(() => tree.value?.node);
       </div>
       <p v-if="error" class="error" role="alert">{{ error }}</p>
 
-      <section class="map" role="tree" :aria-label="current.title">
+      <OutlineOffer v-if="outlineOffer" :key="current.id" :tree="tree" :outline="outlineOffer.outline" @done="run(load)" />
+      <section v-else class="map" role="tree" :aria-label="current.title">
         <div
           class="chip-row"
           :class="{ target: dropTarget === subjectNode!.id }"
@@ -295,7 +301,7 @@ const subjectNode = computed(() => tree.value?.node);
           <span>{{ notice.text }}</span>
           <button v-if="notice.group" type="button" class="link-button" @click="undo(notice.group)">{{ i18n.t('toast.undo') }}</button>
         </template>
-        <span v-else class="muted">{{ configured ? i18n.t('panel.hint') : i18n.t('panel.hintNoModel') }}</span>
+        <span v-else class="muted">{{ outlineOffer ? i18n.t('outline.footer') : configured ? i18n.t('panel.hint') : i18n.t('panel.hintNoModel') }}</span>
       </footer>
     </template>
 

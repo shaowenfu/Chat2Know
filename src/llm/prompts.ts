@@ -1,6 +1,7 @@
 import type { ChatMessage } from './client';
 import { LlmError } from './client';
 import { obj, str, strList } from './validate';
+import type { OutlineNode } from '@/src/graph/tree';
 
 /**
  * Every prompt starts its system message with a `[task:<name>]` tag. Real models
@@ -162,4 +163,43 @@ export function parsePlacement(value: unknown, itemType: 'formula' | 'statement'
   if (path.length < 1 || path.length > MAX_PATH) throw new LlmError(`Expected 1–${MAX_PATH} titles in "path"`);
   const statement = itemType === 'statement' ? str(o, 'statement') : '';
   return { subject: str(o, 'subject'), path, statement };
+}
+
+// ---------------------------------------------------------------- outline
+
+/** Chapters, topics and one more level at most: the subject plus three levels. */
+export const OUTLINE_DEPTH = 3;
+const OUTLINE_MAX_NODES = 200;
+
+export function outlinePrompt(input: { subject: string; existing: string[]; toc?: string }): ChatMessage[] {
+  return [
+    system(
+      'outline',
+      `You lay out a subject as the outline of a learner's knowledge map: chapters, their topics, and at most one level below a topic. Titles are short nouns (never questions), no numbering, in the language of the subject's name. The outline holds structure only: no formulas, statements or explanations. ${
+        input.toc
+          ? 'Follow the table of contents the learner pasted: its chapters and sections become the outline, in its order, titles shortened to nouns.'
+          : 'Cover the subject as a standard course or textbook does: about 6–12 chapters with 2–8 topics each.'
+      } Where one of the learner's existing sections fits, use its exact title. Return JSON only: {"outline": [{"title": "...", "children": [{"title": "...", "children": []}]}]}.`,
+    ),
+    {
+      role: 'user',
+      content: [`Subject: ${input.subject}`, `Existing sections:\n${input.existing.map((e) => `- ${e}`).join('\n') || '(none)'}`, ...(input.toc ? [`Table of contents:\n${input.toc}`] : [])].join('\n\n'),
+    },
+  ];
+}
+
+export function parseOutline(value: unknown): OutlineNode[] {
+  let count = 0;
+  const nodes = (list: unknown, depth: number): OutlineNode[] => {
+    if (!Array.isArray(list)) throw new LlmError('Expected a list of outline nodes');
+    if (depth > OUTLINE_DEPTH && list.length) throw new LlmError(`The outline is deeper than ${OUTLINE_DEPTH} levels`);
+    return list.map((item) => {
+      const o = obj(item);
+      if (++count > OUTLINE_MAX_NODES) throw new LlmError(`The outline has more than ${OUTLINE_MAX_NODES} nodes`);
+      return { title: str(o, 'title'), children: o.children === undefined ? [] : nodes(o.children, depth + 1) };
+    });
+  };
+  const outline = nodes(obj(value).outline, 1);
+  if (!outline.length) throw new LlmError('The outline is empty');
+  return outline;
 }

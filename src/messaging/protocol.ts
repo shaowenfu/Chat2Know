@@ -10,7 +10,7 @@ import type { TextQuote } from '@/src/capture/text-quote';
 import type { ItemType } from '@/src/db/types';
 import type { RecordResult } from '@/src/services/record';
 import type { Place } from '@/src/services/relocate';
-import type { MapTree } from '@/src/graph/tree';
+import type { MapTree, OutlineNode } from '@/src/graph/tree';
 import type { PublicSettings } from '@/src/llm/settings';
 
 export type Context = 'content' | 'background' | 'sidepanel';
@@ -69,6 +69,16 @@ export interface MessageMap {
   'site/recordSelection': { req: Record<string, never>; res: null };
   /** Background -> site script: automatic placement moved a recorded item (or failed, and it stays). */
   'site/placed': { req: { itemId: string; path?: string[]; error?: string }; res: null };
+
+  // Laying an outline over a subject (asked once per subject)
+  /** Whether to offer an outline for the subject, and the one already proposed. */
+  'outline/state': { req: { subjectId: string }; res: { offer: boolean; outline?: OutlineNode[] } };
+  /** Proposes the standard outline, or the pasted table of contents as one. */
+  'outline/propose': { req: { subjectId: string; toc?: string }; res: OutlineNode[] };
+  /** "铺上大纲": lays the proposed outline as grey sections and files what waits in 待归位. */
+  'outline/apply': { req: { subjectId: string }; res: { group: string } };
+  /** "不用": never asked again for this subject. */
+  'outline/decline': { req: { subjectId: string }; res: null };
 
   // The map's data
   /** The whole map as a file's text; Markdown and OPML leave grey outline nodes out unless asked. */

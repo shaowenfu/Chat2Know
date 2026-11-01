@@ -120,3 +120,15 @@ settings:
   clear: 清空所有数据
   clearConfirm: 再点一次确认清空
   cleared: 已清空所有数据。
+outline:
+  askFirst: "这是你在「$1」下记的第一条。要我铺上这门课的大纲吗？"
+  ask: "要我铺上「$1」这门课的大纲吗？"
+  explain: 大纲是灰色的，只用来告诉你整门课有哪些部分、你记到了哪里，不算你的笔记。以后你记的内容会自动挂到对应的位置。
+  lay: 铺上大纲
+  myBook: 按我的教材
+  no: 不用
+  tocPlaceholder: 粘贴你教材的目录
+  fromToc: 按这个目录生成
+  preview: 预览
+  generating: 正在生成大纲…
+  footer: 黑色是你记下的，灰色是大纲。灰色越少，这门课就学得越完整。

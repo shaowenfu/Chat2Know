@@ -120,3 +120,15 @@ settings:
   clear: Delete all data
   clearConfirm: Click again to delete everything
   cleared: All data deleted.
+outline:
+  askFirst: "This is your first note in \"$1\". Shall I lay out the course's outline?"
+  ask: "Shall I lay out the outline of \"$1\"?"
+  explain: The outline is grey. It only shows what the whole course covers and where your notes are; it is not your notes. What you record later goes to its place in it.
+  lay: Lay it out
+  myBook: From my textbook
+  no: No thanks
+  tocPlaceholder: Paste your textbook's table of contents
+  fromToc: Use this table of contents
+  preview: Preview
+  generating: Drafting the outline…
+  footer: Black is what you recorded, grey is the outline. The less grey, the more of the course you have covered.
