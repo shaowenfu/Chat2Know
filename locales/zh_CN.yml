@@ -132,3 +132,17 @@ outline:
   preview: 预览
   generating: 正在生成大纲…
   footer: 黑色是你记下的，灰色是大纲。灰色越少，这门课就学得越完整。
+gaps:
+  question: "你是不是不太熟悉「$1」？"
+  evidence: "最近两周你在 $1 段对话里问了 $2 次相关的问题。要我把这一块整理出来，放到导图里吗？"
+  preview: 会加入（预览）
+  drafting: 正在整理…
+  nothingNew: 你的导图里已经都有了。
+  fill: 整理进来
+  tryQuestion: 出道题试试
+  no: 不用
+  showAsks: "看看我问过的 $1 句"
+  answerPlaceholder: 写下你的答案
+  check: 提交
+  right: 答对了。
+  addAfterWrong: 要把这一块整理进来吗？

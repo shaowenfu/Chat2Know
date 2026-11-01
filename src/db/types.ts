@@ -100,13 +100,23 @@ export interface PrereqEdge {
 
 export type GapStatus = 'suspected' | 'asked' | 'filled' | 'dismissed';
 
-/** A possible gap on a section node (orange outline), from the user's own questions. Local only. */
+/**
+ * A possible gap on a section node (orange outline), from the user's own questions.
+ * Suspected silently; asked once in the side panel; filled ("整理进来") or dismissed
+ * ("不用", or a passed question), then quiet until `coolDownUntil`. Local only.
+ */
 export interface Gap {
   id: string;
   sectionId: string;
+  explains: string[]; // the sections whose questions it accounts for
   evidenceAskIds: string[];
   signals: { kind: 'repeat' | 'downshift' | 'circling'; count: number }[];
   status: GapStatus;
   createdAt: number;
+  askedAt?: number;
   coolDownUntil?: number;
+  /** What "整理进来" would add, drafted once when the card is shown. */
+  proposal?: { itemType: ItemType; text: string }[];
+  /** The question of "出道题试试", once asked. */
+  quiz?: string;
 }

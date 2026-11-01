@@ -132,3 +132,17 @@ outline:
   preview: Preview
   generating: Drafting the outline…
   footer: Black is what you recorded, grey is the outline. The less grey, the more of the course you have covered.
+gaps:
+  question: "Not quite at home with $1?"
+  evidence: "In the last two weeks you asked about this $2 times in $1 conversations. Shall I put this part together on your map?"
+  preview: Will be added (preview)
+  drafting: Putting it together…
+  nothingNew: Your map already has all of it.
+  fill: Add them
+  tryQuestion: Try a question
+  no: No thanks
+  showAsks: "See the $1 questions I asked"
+  answerPlaceholder: Your answer
+  check: Check
+  right: Right.
+  addAfterWrong: Shall I add this part to your map?

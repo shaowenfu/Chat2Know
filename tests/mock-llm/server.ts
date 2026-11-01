@@ -35,50 +35,51 @@ function between(text: string, start: string, end = '\n'): string {
   return (stop < 0 ? rest : rest.slice(0, stop)).trim();
 }
 
-/**
- * What the mock "knows" about prerequisites, per domain, and which words in a
- * question point to which concept. Enough structure for diagnosis tests:
- * transpose, multiplication order and trace all rest on "Matrix operation rules".
- */
-const MOCK_GRAPH: Record<string, [string, string][]> = {
-  'Linear algebra': [
-    ['Matrix basics', 'Matrix operation rules'],
-    ['Matrix operation rules', 'Transpose properties'],
-    ['Matrix operation rules', 'Matrix multiplication order'],
-    ['Matrix operation rules', 'Trace properties'],
-  ],
-  'Matrix calculus': [
-    ['Derivative basics', 'Layout conventions'],
-    ['Layout conventions', 'Matrix derivatives'],
-  ],
-};
-const MOCK_TAGS: [RegExp, string, string][] = [
-  [/transpose|转置/i, 'Linear algebra', 'Transpose properties'],
-  [/multipl|乘法/i, 'Linear algebra', 'Matrix multiplication order'],
-  [/trace|迹/i, 'Linear algebra', 'Trace properties'],
-  [/derivative|gradient|求导|梯度/i, 'Matrix calculus', 'Matrix derivatives'],
-  [/layout|布局/i, 'Matrix calculus', 'Layout conventions'],
+/** Words in a question that point to a topic title (besides the title itself). */
+const MOCK_TAGS: [RegExp, string][] = [
+  [/transpose|转置/i, '转置'],
+  [/multipl|乘法/i, '矩阵乘法'],
+  [/trace|迹/i, '迹'],
+  [/inverse|逆/i, '逆矩阵'],
+];
+/** Prerequisites between topic titles the mock knows. */
+const MOCK_PREREQS: [string, string][] = [
+  ['矩阵乘法', '转置'],
+  ['矩阵乘法', '逆矩阵'],
+  ['转置', '特征值与特征向量'],
 ];
 
+const list = (text: string, header: string) =>
+  [...(text.split(`${header}:\n`)[1] ?? '').matchAll(/^\[(\d+)\] (.*)$/gm)].map(([, n, t]) => ({ n: Number(n), text: t!, last: t!.split(' › ').at(-1)! }));
+
 function tagReply(user: string): string {
-  const tags = [...user.matchAll(/^\[(\d+)\] (.*)$/gm)].map(([, n, text]) => {
-    const hits = MOCK_TAGS.filter(([re]) => re.test(text!));
-    return { ask: Number(n), domain: hits[0]?.[1] ?? '', concepts: [...new Set(hits.filter((h) => h[1] === hits[0]![1]).map((h) => h[2]))] };
+  const topics = list(user, 'Topics');
+  const tags = list(user.split('\n\nTopics:')[0]!, 'Questions').map((q) => {
+    const titles = new Set([...MOCK_TAGS.filter(([re]) => re.test(q.text)).map(([, t]) => t), ...topics.filter((t) => q.text.includes(t.last)).map((t) => t.last)]);
+    return { ask: q.n, sections: topics.filter((t) => titles.has(t.last)).map((t) => t.n).slice(0, 3) };
   });
   return JSON.stringify({ tags });
 }
 
 function prereqReply(user: string): string {
-  const domain = between(user, 'Domain:');
-  const existing = new Set(between(user, 'Existing concepts:').split('; ').filter(Boolean));
-  const required = between(user, 'Required concepts:').split('; ').filter(Boolean);
-  const graph = MOCK_GRAPH[domain] ?? [];
-  const names = [...new Set([...graph.flat(), ...required])];
-  const concepts = names.filter((n) => !existing.has(n));
-  // Unknown required concepts hang under the domain's first concept.
-  const extra = required.filter((r) => !graph.flat().includes(r) && graph.length).map((r) => [graph[0]![0], r] as [string, string]);
-  const edges = [...graph, ...extra].map(([from, to]) => ({ from, to }));
-  return JSON.stringify({ concepts, edges: existing.size ? edges.filter((e) => concepts.includes(e.to)) : edges });
+  const topics = list(user, 'Topics');
+  const n = (title: string) => topics.find((t) => t.last === title)?.n;
+  return JSON.stringify({ edges: MOCK_PREREQS.map(([a, b]) => ({ from: n(a), to: n(b) })).filter((e) => e.from && e.to) });
+}
+
+function fillReply(user: string): string {
+  const topic = between(user, 'Topic:').split(' › ').at(-1)!;
+  if (topic === '转置') {
+    return JSON.stringify({
+      items: [
+        { type: 'formula', text: '(AB)^T = B^T A^T' },
+        { type: 'formula', text: '(A+B)^T = A^T + B^T' },
+        { type: 'formula', text: '(A^T)^T = A' },
+        { type: 'statement', text: 'A 与 A^T 的秩相同。' },
+      ],
+    });
+  }
+  return JSON.stringify({ items: [{ type: 'statement', text: `${topic}的定义。` }] });
 }
 
 /** Where the mock files a note, by words in it: first match wins. */
@@ -134,8 +135,12 @@ export function chatReply(task: string, user: string): string {
       return outlineReply(user);
     case 'place':
       return placeReply(user);
-    case 'circling':
-      return JSON.stringify(/derivative|求导|dimension|维度/i.test(user) ? { domain: 'Matrix calculus', concept: 'Layout conventions' } : { domain: '', concept: '' });
+    case 'fill':
+      return fillReply(user);
+    case 'quiz':
+      return JSON.stringify({ question: '(AB)^T 等于什么？' });
+    case 'judge':
+      return JSON.stringify(/B\^?T\s*A\^?T|BᵀAᵀ/.test(between(user, 'Answer:')) ? { correct: true, feedback: '对，顺序反过来。' } : { correct: false, feedback: '顺序要反过来：BᵀAᵀ。' });
     default:
       return `Unknown task ${task}`;
   }

@@ -13,6 +13,7 @@ import { provideMap } from '@/src/ui/map-context';
 import { formulaHtml } from '@/src/ui/math';
 import OutlineOffer from '@/src/ui/OutlineOffer.vue';
 import type { OutlineNode } from '@/src/graph/tree';
+import type { GapCard } from '@/src/services/gaps';
 
 /** An item recorded this recently is marked "刚记下". */
 const JUST_MS = 10 * 60_000;
@@ -32,6 +33,8 @@ const menu = ref<{ node: MapNode; x: number; y: number }>();
 const switching = ref(false);
 const loaded = ref(false);
 const outlineOffer = ref<{ outline?: OutlineNode[] }>();
+const gapMarks = ref(new Set<string>());
+const gapCard = ref<GapCard>();
 
 const expanded = ref(new Set<string>(readExpanded()));
 const newestId = ref<string>();
@@ -96,10 +99,25 @@ async function load() {
   tree.value = await sendMessage('map/tree', { subjectId: currentId.value! });
   const offer = await sendMessage('outline/state', { subjectId: currentId.value! });
   outlineOffer.value = offer.offer ? { ...(offer.outline ? { outline: offer.outline } : {}) } : undefined;
+  const gaps = await sendMessage('gaps/view', { subjectId: currentId.value! });
+  gapMarks.value = new Set(gaps.marks);
+  // A card the user is in the middle of stays as it is; its section's chapter unfolds so it shows.
+  if (gaps.card?.gap.id !== gapCard.value?.gap.id) gapCard.value = gaps.card;
+  if (gapCard.value) for (const id of ancestorsOf(tree.value, gapCard.value.gap.sectionId) ?? []) expanded.value.add(id);
   const path = newestPath(tree.value);
   newestId.value = path.at(-1)?.id;
   for (const n of path.slice(1, -1)) expanded.value.add(n.id);
   for (const c of tree.value.children) if (c.node.role === 'unplaced') expanded.value.add(c.node.id);
+}
+
+/** The ids from the subject down to a node's parent; undefined when the node is not in the tree. */
+function ancestorsOf(t: MapTree, id: string, path: string[] = []): string[] | undefined {
+  if (t.node.id === id) return path;
+  for (const c of t.children) {
+    const hit = ancestorsOf(c, id, [...path, t.node.id]);
+    if (hit) return hit;
+  }
+  return undefined;
 }
 
 function pick(id: string) {
@@ -118,6 +136,12 @@ function showNotice(text: string, group: string) {
 
 provideMap({
   expanded,
+  gapMarks,
+  gapCard,
+  gapDone() {
+    gapCard.value = undefined;
+    void run(load);
+  },
   newestId,
   editingId,
   dragging,
@@ -198,7 +222,12 @@ function onMessage(message: unknown) {
 }
 
 onMounted(() => {
-  void run(load);
+  // Opening the panel ends a conversation for gap finding: new questions are looked at, then the map reloads.
+  void run(async () => {
+    await load();
+    await sendMessage('gaps/check', {});
+    await load();
+  });
   browser.runtime.onMessage.addListener(onMessage);
   window.addEventListener('keydown', onKey);
 });

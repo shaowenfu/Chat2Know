@@ -13,7 +13,7 @@ export async function embedAll(client: Pick<LlmClient, 'embed'>, texts: string[]
 }
 
 /** Embeds the questions that have no vector for this model yet, and stores the vectors on them. */
-export async function embedAsks(repo: Repository, client: LlmClient, model: string, asks: Ask[]): Promise<void> {
+export async function embedAsks(repo: Repository, client: Pick<LlmClient, 'embed'>, model: string, asks: Ask[]): Promise<void> {
   const missing = asks.filter((a) => a.vectorModel !== model);
   if (!missing.length) return;
   const vectors = await embedAll(client, missing.map((a) => a.text));

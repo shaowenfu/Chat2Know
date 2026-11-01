@@ -12,6 +12,7 @@ import { recordItem, type RecordResult } from '@/src/services/record';
 import { placeItem, placeUnplaced } from '@/src/services/placement';
 import { textFragmentUrl } from '@/src/capture/text-fragment';
 import { outlineOfferable, proposeOutline } from '@/src/services/outline';
+import { EMPTY_STATE, analyze, dismissGap, fillGap, gapMarks, gapCard, judgeGap, nextGap, proposeFill, quizGap, type GapState } from '@/src/services/gaps';
 import { loadOutlines, saveOutline } from '@/src/outline/state';
 import { moveByUser, parentPath, placeOptions, searchPlaces } from '@/src/services/relocate';
 import { isConfigured } from '@/src/llm/settings';
@@ -130,13 +131,44 @@ let placing: Promise<void> = Promise.resolve();
 
 /** With a model set up, the items waiting in 待归位 go to their places; one run at a time. */
 function placeWaiting(): Promise<void> {
-  placing = placing.then(async () => {
-    const settings = await loadSettings();
-    if (!isConfigured(settings)) return;
-    const { unplaced, newSubject } = labels();
-    if (await placeUnplaced(await repo(), new LlmClient(settings), settings.embeddingModel, { unplaced, untitled: newSubject })) notifyChanged();
-  });
+  placing = placing
+    .catch(() => {}) // a failed run already surfaced (to its caller, or in the extension's error log); the next one still runs
+    .then(async () => {
+      const settings = await loadSettings();
+      if (!isConfigured(settings)) return;
+      const { unplaced, newSubject } = labels();
+      if (await placeUnplaced(await repo(), new LlmClient(settings), settings.embeddingModel, { unplaced, untitled: newSubject })) notifyChanged();
+    });
   return placing;
+}
+
+const GAP_ALARM = 'chat2know-gaps';
+const GAP_STATE = 'gapState';
+/** A conversation counts as over 10 minutes after its last question. */
+const CONVERSATION_IDLE_MIN = 10;
+/** Tabs that sent recorded questions in this session: closing one ends its conversation. */
+const askingTabs = new Set<number>();
+
+async function loadGapState(): Promise<GapState> {
+  return ((await browser.storage.local.get(GAP_STATE))[GAP_STATE] as GapState | undefined) ?? EMPTY_STATE;
+}
+const saveGapState = (state: GapState) => browser.storage.local.set({ [GAP_STATE]: state });
+
+let analyzing: Promise<void> = Promise.resolve();
+
+/** After a conversation (idle, closed, or the side panel opened): new questions are tagged and gaps marked. One run at a time. */
+function analyzeGaps(): Promise<void> {
+  analyzing = analyzing
+    .catch(() => {}) // a failed run already surfaced (to its caller, or in the extension's error log); the next one still runs
+    .then(async () => {
+      const settings = await loadSettings();
+      if (!isConfigured(settings)) return;
+      const r = await repo();
+      const before = (await r.listGaps()).length;
+      await saveGapState(await analyze(r, new LlmClient(settings), settings.embeddingModel, Date.now(), await loadGapState()));
+      if ((await r.listGaps()).length !== before) notifyChanged();
+    });
+  return analyzing;
 }
 
 const labels = (): { unplaced: string; newSubject: string } => ({ unplaced: i18n.t('map.unplaced'), newSubject: i18n.t('map.newSubject') });
@@ -152,6 +184,12 @@ export default defineBackground(() => {
   });
   browser.commands.onCommand.addListener((command, tab) => {
     if (command === 'record-selection' && tab?.id !== undefined) void recordSelection(tab.id);
+  });
+  browser.alarms.onAlarm.addListener((alarm) => {
+    if (alarm.name === GAP_ALARM) void analyzeGaps();
+  });
+  browser.tabs.onRemoved.addListener((tabId) => {
+    if (askingTabs.delete(tabId)) void analyzeGaps();
   });
   browser.contextMenus.onClicked.addListener((info, tab) => {
     if (info.menuItemId === MENU_ID && tab?.id !== undefined) void recordSelection(tab.id);
@@ -278,6 +316,42 @@ export default defineBackground(() => {
       notifyChanged();
       return null;
     },
+    'gaps/check': async () => {
+      await analyzeGaps();
+      return null;
+    },
+    'gaps/view': async ({ subjectId }) => {
+      const r = await repo();
+      const marks = await gapMarks(r, subjectId);
+      if (!isConfigured(await loadSettings())) return { marks };
+      const next = await nextGap(r, subjectId, Date.now(), await loadGapState());
+      if (!next) return { marks };
+      await saveGapState(next.state);
+      return { marks, card: next.card };
+    },
+    'gaps/marks': async ({ subjectId }) => gapMarks(await repo(), subjectId),
+    'gaps/forSection': async ({ sectionId }) => {
+      const r = await repo();
+      const gap = (await r.listGaps()).find((g) => g.sectionId === sectionId && (g.status === 'suspected' || g.status === 'asked'));
+      return gap ? gapCard(r, gap.id) : null;
+    },
+    'gaps/proposeFill': async ({ gapId }) => proposeFill(await repo(), new LlmClient(await loadSettings()), gapId),
+    'gaps/fill': async ({ gapId, skip }) => {
+      const group = await fillGap(await repo(), gapId, skip, Date.now());
+      notifyChanged();
+      return { group };
+    },
+    'gaps/quiz': async ({ gapId }) => ({ question: await quizGap(await repo(), new LlmClient(await loadSettings()), gapId) }),
+    'gaps/judge': async ({ gapId, answer }) => {
+      const verdict = await judgeGap(await repo(), new LlmClient(await loadSettings()), gapId, answer, Date.now());
+      if (verdict.correct) notifyChanged();
+      return verdict;
+    },
+    'gaps/dismiss': async ({ gapId }) => {
+      await dismissGap(await repo(), gapId, Date.now());
+      notifyChanged();
+      return null;
+    },
     'map/placeOptions': async ({ itemId }) => {
       const r = await repo();
       const settings = await loadSettings();
@@ -301,6 +375,8 @@ export default defineBackground(() => {
       if (!url || sender.id !== browser.runtime.id || !shouldRecord(await loadSites(), url)) return { recorded: false };
       const host = new URL(url).hostname;
       await (await repo()).recordAsk({ site: siteFor(host)?.id ?? host, conversationUrl: url, text });
+      if (sender.tab?.id !== undefined) askingTabs.add(sender.tab.id);
+      await browser.alarms.create(GAP_ALARM, { delayInMinutes: CONVERSATION_IDLE_MIN });
       notifyChanged();
       return { recorded: true };
     },

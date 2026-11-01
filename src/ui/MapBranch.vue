@@ -5,6 +5,7 @@ import { isGrey, itemCount, type MapTree } from '@/src/graph/tree';
 import type { MapNode } from '@/src/db/types';
 import { formulaHtml, textHtml } from './math';
 import { useMap } from './map-context';
+import GapCard from './GapCard.vue';
 
 defineOptions({ name: 'MapBranch' });
 const props = defineProps<{ trees: MapTree[]; unplaced?: boolean }>();
@@ -98,6 +99,7 @@ function finishEdit(node: MapNode, save: boolean) {
             'is-unplaced': t.node.role === 'unplaced',
             target: map.dropTarget.value === t.node.id,
             selected: map.selectedId?.value === t.node.id,
+            gap: map.gapMarks.value.has(t.node.id),
           }"
           data-testid="map-section"
           draggable="true"
@@ -139,6 +141,7 @@ function finishEdit(node: MapNode, save: boolean) {
                   : itemCount(t)
           }}</span>
         </div>
+        <GapCard v-if="map.gapCard?.value?.gap.sectionId === t.node.id" :key="map.gapCard.value.gap.id" :card="map.gapCard.value" @done="map.gapDone?.()" />
         <MapBranch v-if="isOpen(t) && t.children.length" :trees="t.children" :unplaced="t.node.role === 'unplaced'" />
       </template>
     </li>
@@ -174,6 +177,10 @@ li {
 }
 .row.selected {
   background: var(--bg-soft);
+}
+.row.gap {
+  outline: 2px solid #b4480f;
+  outline-offset: 1px;
 }
 .row.target {
   background: var(--accent-soft);

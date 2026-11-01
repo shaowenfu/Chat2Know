@@ -22,7 +22,7 @@ export interface RecordLabels {
 
 const stripHash = (url: string) => url.replace(/#.*$/, '');
 
-const sameItem = (a: MapNode, r: RecordRequest) =>
+export const sameItem = (a: MapNode, r: Pick<RecordRequest, 'itemType' | 'title' | 'latex'>) =>
   a.itemType === r.itemType &&
   (r.itemType === 'formula' ? normalizeLatex(a.latex ?? '') === normalizeLatex(r.latex ?? '') : normalizeStatement(a.title) === normalizeStatement(r.title));
 
@@ -41,6 +41,11 @@ export async function placePath(repo: Repository, nodeId: string, labels: Record
 export async function recordItem(repo: Repository, req: RecordRequest, labels: RecordLabels): Promise<RecordResult> {
   const items = await repo.listItems();
   const duplicate = req.force ? undefined : items.find((i) => sameItem(i, req));
+  // Recording what the extension had added makes it the user's own (solid black).
+  if (duplicate?.origin === 'plugin') {
+    const { group } = await repo.adopt(duplicate.id, req.source);
+    return { status: 'recorded', group, itemId: duplicate.id, path: await placePath(repo, duplicate.id, labels) };
+  }
   if (duplicate) return { status: 'duplicate', itemId: duplicate.id, path: await placePath(repo, duplicate.id, labels) };
 
   const newestFirst = [...items].sort((a, b) => b.createdAt - a.createdAt);

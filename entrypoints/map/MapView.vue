@@ -9,6 +9,8 @@ import MapBranch from '@/src/ui/MapBranch.vue';
 import ContextMenu from '@/src/ui/ContextMenu.vue';
 import { provideMap } from '@/src/ui/map-context';
 import { formulaHtml, textHtml } from '@/src/ui/math';
+import GapCardView from '@/src/ui/GapCard.vue';
+import type { GapCard } from '@/src/services/gaps';
 
 /** The full-page map: the subject's outline tree and, for the selected section, its items. */
 const props = defineProps<{ subjectId?: string; subjects: SubjectSummary[]; version: number; showGrey: boolean }>();
@@ -23,6 +25,8 @@ const dropTarget = ref<string>();
 const menu = ref<{ node: MapNode; x: number; y: number }>();
 const addType = ref<ItemType>('formula');
 const addText = ref('');
+const gapMarks = ref(new Set<string>());
+const sectionGap = ref<GapCard | null>(null);
 
 async function run(action: () => Promise<unknown>) {
   try {
@@ -44,7 +48,16 @@ async function load() {
     selectedId.value = undefined;
   }
   tree.value = t;
+  gapMarks.value = new Set(await sendMessage('gaps/marks', { subjectId: props.subjectId }));
+  await loadGap();
 }
+
+/** The detail pane shows the selected section's open gap, if it has one. */
+async function loadGap() {
+  const id = selectedId.value;
+  sectionGap.value = id && gapMarks.value.has(id) ? await sendMessage('gaps/forSection', { sectionId: id }) : null;
+}
+watch(selectedId, () => void run(loadGap));
 watch(() => [props.subjectId, props.version], () => void run(load), { immediate: true });
 
 const shown = computed(() => (tree.value ? (props.showGrey ? tree.value.children : withoutGrey(tree.value.children)) : []));
@@ -65,6 +78,7 @@ const dateOf = (at: number) => new Date(at).toLocaleDateString(i18n.t('mapPage.d
 
 provideMap({
   expanded,
+  gapMarks,
   newestId: ref<string>(),
   editingId,
   dragging,
@@ -196,6 +210,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey));
             <span v-else class="muted small">{{ i18n.t('mapPage.noSource') }}</span>
           </li>
         </ul>
+        <GapCardView v-if="sectionGap" :key="sectionGap.gap.id" :card="sectionGap" @done="run(load)" />
         <form v-if="!selected.t.node.role" class="add" @submit.prevent="addItem">
           <div class="add-type" role="radiogroup">
             <label><input v-model="addType" type="radio" value="formula"> {{ i18n.t('mapPage.addFormula') }}</label>

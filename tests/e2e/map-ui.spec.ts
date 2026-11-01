@@ -217,4 +217,55 @@ test.describe('screenshots in Chinese, compared with the artboards', () => {
     await expect(full.getByTestId('base-url')).toHaveValue(mockLlm.url);
     await full.screenshot({ path: `${SHOTS}/3-settings.png` });
   });
+
+  test('a gap from the questions sent: orange mark, the card, a question to try, 整理进来 (artboard 4)', async ({ context, extensionId, fixtureServer, mockLlm }) => {
+    const setup = await context.newPage();
+    await setup.goto(`chrome-extension://${extensionId}/sidepanel.html`);
+    await importSeed(setup);
+    await configureModel(setup, mockLlm.url);
+    await send(setup, 'sites/setOrigins', { origins: [fixtureServer] });
+    await send(setup, 'sites/setRecordAsks', { on: true });
+    await setup.close();
+
+    // Three questions about 转置 in two conversations.
+    const chat = await context.newPage();
+    for (const [conversation, question] of [
+      ['1', '为什么转置之后乘积的顺序要反过来？'],
+      ['1', '转置和逆的顺序规则是一样的吗？'],
+      ['2', '矩阵转置到底改变了什么？'],
+    ]) {
+      if (!chat.url().endsWith(`c=${conversation}`)) {
+        await chat.goto(`${fixtureServer}/synthetic-chat-input.html?c=${conversation}`);
+        await chat.locator('chat2know-ui').waitFor({ state: 'attached' });
+        await chat.waitForTimeout(300); // the question listener attaches once the settings are read
+      }
+      await chat.locator('#prompt').fill(question!);
+      await chat.locator('#prompt').press('Enter');
+      await chat.locator('#prompt').fill('');
+      await chat.waitForTimeout(150); // the recorder reports once the box is empty
+    }
+    const panel = await context.newPage();
+    await panel.setViewportSize({ width: 380, height: 820 });
+    await panel.goto(`chrome-extension://${extensionId}/sidepanel.html`);
+    await expect.poll(async () => (await send<unknown[]>(panel, 'asks/list', {})).data.length).toBe(3);
+
+    // Opening the panel looks at the new questions: 转置 is marked and asked about once.
+    const card = panel.getByTestId('gap-card');
+    await expect(card).toContainText('你是不是不太熟悉「转置」？');
+    await expect(card).toContainText('2 段对话里问了 3 次');
+    await expect(card.locator('.proposed')).toHaveCount(2); // the two transpose rules already on the map are left out
+    await expect(panel.locator('.row.gap')).toHaveCount(1);
+    await panel.screenshot({ path: `${SHOTS}/4-gap.png` });
+
+    await card.getByRole('button', { name: '出道题试试' }).click();
+    await expect(card).toContainText('(AB)^T 等于什么？');
+    await card.getByTestId('gap-answer').fill('A^T B^T');
+    await card.getByRole('button', { name: '提交' }).click();
+    await expect(card).toContainText('顺序要反过来');
+    await card.getByRole('button', { name: '整理进来' }).click();
+    await expect(card).toHaveCount(0);
+    await expect(panel.locator('.row.gap')).toHaveCount(0);
+    const json = JSON.parse((await send<string>(panel, 'map/export', { format: 'json' })).data) as { nodes: { latex?: string; origin: string }[] };
+    expect(json.nodes.filter((n) => n.origin === 'plugin').map((n) => n.latex)).toEqual(['(A^T)^T = A', undefined]);
+  });
 });

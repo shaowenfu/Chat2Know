@@ -48,15 +48,19 @@ afterAll(async () => {
 });
 
 describe('eval', () => {
-  it('concept tagging: a tagged concept names the expected topic; chit-chat gets none', async () => {
+  it('tagging: each question lands on a topic of the seeded maps that names the expected keyword; chit-chat on none', async () => {
     const cases = data('tags.json') as { question: string; expected: string[] }[];
-    const tags = await client.json(tagPrompt({ asks: cases.map((c) => c.question), known: [] }), (v) => parseTags(v, cases.length));
+    const { map } = data('placement.json') as { map: Record<string, Record<string, string[]>> };
+    const sections = Object.entries(map).flatMap(([subject, chapters]) =>
+      Object.entries(chapters).flatMap(([chapter, topics]) => [`${subject} › ${chapter}`, ...topics.map((t) => `${subject} › ${chapter} › ${t}`)]),
+    );
+    const tags = await client.json(tagPrompt({ asks: cases.map((c) => c.question), sections }), (v) => parseTags(v, cases.length, sections.length));
     const hit = cases.filter((c, i) => {
-      const names = tags[i]!.concepts.map((n) => n.toLowerCase());
-      return c.expected.length ? names.some((n) => c.expected.some((e) => n.includes(e.toLowerCase()))) : names.length === 0;
+      const titles = tags[i]!.map((k) => sections[k]!.toLowerCase());
+      return c.expected.length ? titles.some((t) => c.expected.some((e) => t.includes(e.toLowerCase()))) : titles.length === 0;
     });
     results.tagAccuracy = hit.length / cases.length;
-    results.tagSamples = cases.map((c, i) => ({ question: c.question, domain: tags[i]!.domain, concepts: tags[i]!.concepts }));
+    results.tagSamples = cases.map((c, i) => ({ question: c.question, sections: tags[i]!.map((k) => sections[k]) }));
     expect(tags).toHaveLength(cases.length);
   });
 

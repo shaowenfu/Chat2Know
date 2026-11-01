@@ -9,107 +9,124 @@ import type { OutlineNode } from '@/src/graph/tree';
  */
 const system = (task: string, text: string): ChatMessage => ({ role: 'system', content: `[task:${task}]\n${text}` });
 
-// ---------------------------------------------------------------- concept tags (learning diagnosis)
+// ---------------------------------------------------------------- gaps: tagging questions onto the map
 
-export interface AskTagging {
-  domain: string; // empty when the question has no concepts
-  concepts: string[];
-}
+/** Numbered lists are 1-based in prompts; replies refer to the numbers. */
+const numbered = (lines: string[]) => lines.map((l, i) => `[${i + 1}] ${l}`).join('\n');
 
-export function tagPrompt(input: { asks: string[]; known: { domain: string; names: string[] }[] }): ChatMessage[] {
-  const known = input.known.length ? input.known.map((d) => `${d.domain}: ${d.names.join('; ')}`).join('\n') : '(none yet)';
+const index = (v: unknown, max: number, what: string): number => {
+  if (typeof v !== 'number' || !Number.isInteger(v) || v < 1 || v > max) throw new LlmError(`Unexpected ${what} ${String(v)}`);
+  return v - 1;
+};
+
+/** Which sections of the learner's maps each question is about (0–3 each). */
+export function tagPrompt(input: { asks: string[]; sections: string[] }): ChatMessage[] {
   return [
     system(
       'tag',
-      `A learner asked an AI the numbered questions below. For each, name the knowledge domain (such as "Linear algebra" or "Matrix calculus") and the 1–3 specific concepts it is about (such as "Transpose properties" or "Order of matrix multiplication"): teachable units, not the whole domain and not the exercise itself. Reuse a known concept or domain name exactly when it fits; otherwise give a short new name at the same granularity. A question that is not about learnable knowledge (chit-chat, formatting or writing requests) gets "domain": "" and no concepts. Return JSON only: {"tags": [{"ask": 1, "domain": "...", "concepts": ["..."]}]} with every question exactly once. Names in the language of the questions.\n\nKnown concepts by domain:\n${known}`,
+      'A learner asked an AI the numbered questions below. Their knowledge maps have the numbered topics listed after them ("subject › chapter › topic"). For each question, give the numbers of the 0–3 most specific topics it is about. A question about none of them (chit-chat, writing or formatting requests, another subject) gets none. Return JSON only: {"tags": [{"ask": 1, "sections": [3]}]} with every question exactly once.',
     ),
-    { role: 'user', content: input.asks.map((a, i) => `[${i + 1}] ${a}`).join('\n') },
+    { role: 'user', content: `Questions:\n${numbered(input.asks)}\n\nTopics:\n${numbered(input.sections)}` },
   ];
 }
 
-export function parseTags(value: unknown, askCount: number): AskTagging[] {
+/** Section indexes per question, in question order. */
+export function parseTags(value: unknown, askCount: number, sectionCount: number): number[][] {
   const list = obj(value).tags;
   if (!Array.isArray(list)) throw new LlmError('Expected "tags" to be a list');
-  const byAsk = new Map<number, AskTagging>();
+  const byAsk = new Map<number, number[]>();
   for (const item of list) {
     const t = obj(item);
-    const n = t.ask;
-    if (typeof n !== 'number' || n < 1 || n > askCount || byAsk.has(n)) throw new LlmError(`Unexpected ask ${String(n)}`);
-    const concepts = Array.isArray(t.concepts) && t.concepts.length === 0 ? [] : strList(t, 'concepts');
-    byAsk.set(n, { domain: concepts.length ? str(t, 'domain') : '', concepts });
+    const n = index(t.ask, askCount, 'ask');
+    if (byAsk.has(n)) throw new LlmError(`Ask ${n + 1} tagged twice`);
+    if (!Array.isArray(t.sections) || t.sections.length > 3) throw new LlmError('Expected 0–3 "sections"');
+    byAsk.set(n, [...new Set(t.sections.map((x) => index(x, sectionCount, 'section')))]);
   }
   if (byAsk.size !== askCount) throw new LlmError(`Expected ${askCount} tagged questions, got ${byAsk.size}`);
-  return Array.from({ length: askCount }, (_, i) => byAsk.get(i + 1)!);
+  return Array.from({ length: askCount }, (_, i) => byAsk.get(i)!);
 }
 
-// ---------------------------------------------------------------- prerequisite graph
-
-export interface GraphAddition {
-  concepts: string[];
-  edges: { from: string; to: string }[];
-}
-
-export function prereqPrompt(input: { domain: string; existing: string[]; existingEdges: { from: string; to: string }[]; required: string[] }): ChatMessage[] {
-  const isNew = input.existing.length === 0;
+/** Which topics of one subject must be understood before which. */
+export function prereqPrompt(input: { subject: string; sections: string[] }): ChatMessage[] {
   return [
     system(
       'prereq',
-      `You build the prerequisite graph of a knowledge domain, used to find the foundations a learner is missing. Concepts are specific, teachable units. An edge {"from": A, "to": B} means A must be understood before B. ${
-        isNew
-          ? 'This is a new domain: give its core concepts from the foundations up (about 10–30 in total), including every required concept by its exact name.'
-          : 'Extend the existing graph: add every required concept by its exact name, plus only the missing prerequisites that connect them to the existing concepts.'
-      } Refer to existing concepts by their exact names. No cycles. Return JSON only: {"concepts": ["names of the concepts you add"], "edges": [{"from": "...", "to": "..."}]}. Names in the language of the required concepts.`,
+      'You map prerequisites between the numbered topics of one subject, to tell basics from what builds on them. An edge {"from": A, "to": B} means topic A must be understood before topic B. Give only direct, real prerequisites between the listed topics; a chapter is not a prerequisite of its own topics. No cycles. Return JSON only: {"edges": [{"from": 1, "to": 2}]}.',
     ),
-    {
-      role: 'user',
-      content: [
-        `Domain: ${input.domain}`,
-        isNew ? '' : `Existing concepts: ${input.existing.join('; ')}`,
-        isNew || !input.existingEdges.length ? '' : `Existing edges:\n${input.existingEdges.map((e) => `${e.from} -> ${e.to}`).join('\n')}`,
-        `Required concepts: ${input.required.join('; ')}`,
-      ]
-        .filter(Boolean)
-        .join('\n\n'),
-    },
+    { role: 'user', content: `Subject: ${input.subject}\n\nTopics:\n${numbered(input.sections)}` },
   ];
 }
 
-/** Validates a graph addition: every required concept is present, every edge joins known concepts. Cycles are checked by the caller on the merged graph. */
-export function parseGraphAddition(value: unknown, existing: string[], required: string[], key: (name: string) => string): GraphAddition {
-  const o = obj(value);
-  const concepts = Array.isArray(o.concepts) && o.concepts.length === 0 ? [] : strList(o, 'concepts');
-  if (!Array.isArray(o.edges)) throw new LlmError('Expected "edges" to be a list');
-  const known = new Set([...existing, ...concepts].map(key));
-  const edges = o.edges.map((e) => {
-    const x = obj(e);
-    const edge = { from: str(x, 'from'), to: str(x, 'to') };
-    for (const end of [edge.from, edge.to]) if (!known.has(key(end))) throw new LlmError(`Edge names an unknown concept "${end}"`);
-    if (key(edge.from) === key(edge.to)) throw new LlmError(`"${edge.from}" cannot be its own prerequisite`);
+export function parsePrereqs(value: unknown, sectionCount: number): { from: number; to: number }[] {
+  const list = obj(value).edges;
+  if (!Array.isArray(list)) throw new LlmError('Expected "edges" to be a list');
+  return list.map((item) => {
+    const e = obj(item);
+    const edge = { from: index(e.from, sectionCount, 'topic'), to: index(e.to, sectionCount, 'topic') };
+    if (edge.from === edge.to) throw new LlmError('A topic cannot be its own prerequisite');
     return edge;
   });
-  for (const r of required) if (!known.has(key(r))) throw new LlmError(`Graph is missing the required concept "${r}"`);
-  return { concepts, edges };
 }
 
-// ---------------------------------------------------------------- circling: the concept behind a run of questions
+// ---------------------------------------------------------------- gaps: filling one in, or a question to try
 
-export function circlingPrompt(input: { asks: string[]; known: { domain: string; names: string[] }[] }): ChatMessage[] {
-  const known = input.known.length ? input.known.map((d) => `${d.domain}: ${d.names.join('; ')}`).join('\n') : '(none yet)';
+export const FILL_MAX = 8;
+
+export interface FillItem {
+  itemType: 'formula' | 'statement';
+  text: string; // LaTeX for a formula, one sentence for a statement
+}
+
+/** The core formulas and statements of a topic the learner keeps asking about, without what they already have. */
+export function fillPrompt(input: { path: string; existing: string[]; asks: string[] }): ChatMessage[] {
   return [
     system(
-      'circling',
-      `A learner asked these questions one after another in one conversation, rephrasing without getting unstuck. Answered one by one each looks fine; looked at together they may share one more fundamental concept which, once understood, resolves all of them (for example, layout conventions behind confusion about transposes and dimensions in matrix derivatives). Name that concept as a teachable unit, with its domain; reuse a known name exactly when it fits. If there is no single underlying concept, return an empty concept. Return JSON only: {"domain": "...", "concept": "..."}. Names in the language of the questions.\n\nKnown concepts by domain:\n${known}`,
+      'fill',
+      `A learner keeps asking about the topic below; their map of it is thin. Give the core formulas and statements of this topic that answer what they asked: at most ${FILL_MAX}, each one formula (LaTeX, no $ delimiters) or one plain sentence (about 40 Chinese characters or 20 English words, formulas inside as $...$), in the language of the topic. Leave out what the learner already has. Return JSON only: {"items": [{"type": "formula", "text": "..."}, {"type": "statement", "text": "..."}]}.`,
     ),
-    { role: 'user', content: input.asks.map((a, i) => `[${i + 1}] ${a}`).join('\n') },
+    { role: 'user', content: `Topic: ${input.path}\n\nAlready on the map:\n${input.existing.map((e) => `- ${e}`).join('\n') || '(nothing)'}\n\nThe learner asked:\n${input.asks.map((a) => `- ${a}`).join('\n')}` },
   ];
 }
 
-export function parseCircling(value: unknown): { domain: string; concept: string } | null {
-  const o = obj(value);
-  if (typeof o.concept === 'string' && !o.concept.trim()) return null;
-  return { domain: str(o, 'domain'), concept: str(o, 'concept') };
+export function parseFill(value: unknown): FillItem[] {
+  const list = obj(value).items;
+  if (!Array.isArray(list) || list.length === 0 || list.length > FILL_MAX) throw new LlmError(`Expected 1–${FILL_MAX} "items"`);
+  return list.map((item) => {
+    const o = obj(item);
+    const type = o.type;
+    if (type !== 'formula' && type !== 'statement') throw new LlmError('Expected "type" formula or statement');
+    return { itemType: type, text: str(o, 'text') };
+  });
 }
 
+/** One short question that shows whether the learner has the topic. */
+export function quizPrompt(input: { path: string; items: string[]; asks: string[] }): ChatMessage[] {
+  return [
+    system(
+      'quiz',
+      'Write one short question that shows whether a learner really has the topic below: something they can answer in a line or two, aimed at what they kept asking about, in the language of the topic. Return JSON only: {"question": "..."}.',
+    ),
+    { role: 'user', content: `Topic: ${input.path}\n\nOn their map:\n${input.items.map((e) => `- ${e}`).join('\n') || '(nothing)'}\n\nThey asked:\n${input.asks.map((a) => `- ${a}`).join('\n')}` },
+  ];
+}
+
+export const parseQuiz = (value: unknown): string => str(obj(value), 'question');
+
+export function judgePrompt(input: { path: string; question: string; answer: string }): ChatMessage[] {
+  return [
+    system(
+      'judge',
+      'Judge a learner\'s answer to a question about the topic below. "correct" is true when the answer gets the essential point right, even if brief or informal. "feedback" is one sentence: what was right, or the key point that was missing, in the language of the question. Return JSON only: {"correct": true, "feedback": "..."}.',
+    ),
+    { role: 'user', content: `Topic: ${input.path}\nQuestion: ${input.question}\nAnswer: ${input.answer}` },
+  ];
+}
+
+export function parseJudgement(value: unknown): { correct: boolean; feedback: string } {
+  const o = obj(value);
+  if (typeof o.correct !== 'boolean') throw new LlmError('Expected boolean "correct"');
+  return { correct: o.correct, feedback: str(o, 'feedback') };
+}
 
 // ---------------------------------------------------------------- automatic placement
 

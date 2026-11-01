@@ -4,7 +4,7 @@ import { UserError } from '@/src/errors';
 import { buildTree, byOrder, type MapTree, type OutlineNode } from '@/src/graph/tree';
 import type { Hlc } from './hlc';
 import type { Chat2KnowDB } from './schema';
-import type { Ask, Embedding, ItemSource, ItemType, MapNode, Origin } from './types';
+import type { Ask, AskTag, Embedding, Gap, ItemSource, ItemType, MapNode, Origin, PrereqEdge } from './types';
 
 const stripHash = (url: string) => url.replace(/#.*$/, '');
 
@@ -524,6 +524,70 @@ export class Repository {
   /** "清空所有数据": every table, the map, its history and the local recordings. */
   async clearAll(): Promise<void> {
     await Promise.all(this.db.tables.map((t) => t.clear()));
+  }
+
+  /** "整理进来": items the extension adds with the user's consent (light blue), one undoable write. */
+  async addPluginItems(sectionId: string, items: { itemType: ItemType; title: string; latex?: string }[]): Promise<string> {
+    return this.group('addPluginItems', async (w) => {
+      const parent = await this.structure(sectionId);
+      const keys = generateNKeysBetween((await this.children(parent.id)).at(-1)?.order ?? null, null, items.length);
+      for (const [i, item] of items.entries()) await w.create(this.newItem(parent, { ...item, origin: 'plugin' }, keys[i]!));
+    });
+  }
+
+  /** The user recorded an item the extension had added: it becomes theirs (black), with their source. */
+  async adopt(itemId: string, source: ItemSource): Promise<Written> {
+    return this.write('adopt', async (w) => w.put({ ...(await this.live(itemId)), origin: 'user', source }));
+  }
+
+  // ------------------------------------------------------------ gaps (local only, not logged)
+
+  async untaggedAsks(limit: number): Promise<Ask[]> {
+    return (await this.db.asks.orderBy('sentAt').toArray()).filter((a) => a.taggedAt === undefined).slice(0, limit);
+  }
+
+  async tagAsks(rows: { askId: string; sectionIds: string[] }[]): Promise<void> {
+    const at = this.now();
+    await this.db.transaction('rw', this.db.asks, this.db.askTags, async () => {
+      for (const { askId, sectionIds } of rows) {
+        await this.db.askTags.bulkAdd(sectionIds.map((sectionId) => ({ id: this.ulid(at), askId, sectionId })));
+        await this.db.asks.update(askId, { taggedAt: at });
+      }
+    });
+  }
+
+  async listAskTags(): Promise<AskTag[]> {
+    return this.db.askTags.toArray();
+  }
+
+  async listPrereqs(): Promise<PrereqEdge[]> {
+    return this.db.prereqEdges.toArray();
+  }
+
+  /** Replaces the prerequisite edges among these sections. */
+  async setPrereqs(sectionIds: string[], edges: { from: string; to: string }[]): Promise<void> {
+    await this.db.transaction('rw', this.db.prereqEdges, async () => {
+      await this.db.prereqEdges.where('from').anyOf(sectionIds).delete();
+      await this.db.prereqEdges.bulkAdd(edges.map((e) => ({ id: this.ulid(this.now()), ...e })));
+    });
+  }
+
+  async listGaps(): Promise<Gap[]> {
+    return this.db.gaps.toArray();
+  }
+
+  async gap(id: string): Promise<Gap> {
+    const g = await this.db.gaps.get(id);
+    if (!g) throw new Error(`No gap ${id}`);
+    return g;
+  }
+
+  async putGap(gap: Gap): Promise<void> {
+    await this.db.gaps.put(gap);
+  }
+
+  newId(): string {
+    return this.ulid(this.now());
   }
 
   // ------------------------------------------------------------ recorded questions (local only, not logged)

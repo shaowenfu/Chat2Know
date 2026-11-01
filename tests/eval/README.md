@@ -16,7 +16,7 @@ npm run eval
 
 | Metric | Data | What it measures |
 | --- | --- | --- |
-| `tagAccuracy` | `data/tags.json` | A tagged concept names the expected topic (any listed keyword); non-knowledge questions get no concepts. `tagSamples` shows the domains and names for a manual look |
+| `tagAccuracy` | `data/tags.json` | A question is tagged with a topic of the seeded maps (`data/placement.json`) whose path names the expected keyword; non-knowledge questions get no topic. `tagSamples` shows the tags for a manual look |
 | `placementSubjectAccuracy` | `data/placement.json` | Automatic placement picks the expected subject on a seeded map (a note of a subject not on the map should get a new one) |
 | `placementTopicAccuracy` | `data/placement.json` | The subject is right and the path names the expected topic (any listed keyword) |
 | `statementMaxLength` | `data/placement.json` | The longest one-sentence statement placement made of a long selection (target: about 40 Chinese characters) |
