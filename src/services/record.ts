@@ -22,7 +22,8 @@ export interface RecordLabels {
 
 const stripHash = (url: string) => url.replace(/#.*$/, '');
 
-export const sameItem = (a: MapNode, r: Pick<RecordRequest, 'itemType' | 'title' | 'latex'>) =>
+/** The same formula (normalized LaTeX) or statement (normalized text). */
+export const sameItem = (a: Pick<MapNode, 'itemType' | 'title' | 'latex'>, r: Pick<RecordRequest, 'itemType' | 'title' | 'latex'>) =>
   a.itemType === r.itemType &&
   (r.itemType === 'formula' ? normalizeLatex(a.latex ?? '') === normalizeLatex(r.latex ?? '') : normalizeStatement(a.title) === normalizeStatement(r.title));
 

@@ -5,7 +5,7 @@ import { i18n } from '#i18n';
 import { sendMessage } from '@/src/messaging';
 import { UserError, errorText } from '@/src/errors';
 import SiteChecklist from '@/src/ui/SiteChecklist.vue';
-import { download, stamp } from './download';
+import { EXPORT_FORMATS, download, stamp, type ExportFormat } from './download';
 
 /** Settings (artboard 3): the model, the sites and question recording, the data. */
 const emit = defineEmits<{ error: [message: string] }>();
@@ -84,13 +84,7 @@ async function setRecordAsks(on: boolean) {
   await run(async () => (recordAsks.value = (await sendMessage('sites/setRecordAsks', { on })).recordAsks));
 }
 
-const FORMATS = [
-  { format: 'json', ext: 'json', type: 'application/json', label: 'settings.exportJson' },
-  { format: 'markdown', ext: 'md', type: 'text/markdown', label: 'settings.exportMarkdown' },
-  { format: 'opml', ext: 'opml', type: 'text/x-opml', label: 'settings.exportOpml' },
-] as const;
-
-async function exportAs(f: (typeof FORMATS)[number]) {
+async function exportAs(f: ExportFormat) {
   await run(async () => download(`chat2know-${stamp()}.${f.ext}`, await sendMessage('map/export', { format: f.format }), f.type));
 }
 
@@ -173,7 +167,7 @@ async function clearAll() {
         <section class="card">
           <h2>{{ i18n.t('settings.data') }}</h2>
           <div class="buttons wrap">
-            <button v-for="f in FORMATS" :key="f.format" type="button" class="button" @click="exportAs(f)">{{ i18n.t(f.label) }}</button>
+            <button v-for="f in EXPORT_FORMATS" :key="f.format" type="button" class="button" @click="exportAs(f)">{{ i18n.t(f.label) }}</button>
             <label class="button">
               {{ i18n.t('settings.import') }}
               <input type="file" accept="application/json,.json" hidden data-testid="import" @change="importFile">

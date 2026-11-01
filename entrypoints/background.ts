@@ -23,7 +23,7 @@ import { siteFor } from '@/src/capture/sites';
 import { i18n } from '#i18n';
 import { EXPORT_FORMAT, EXPORT_VERSION, parseImport, v01Items, type ExportFile } from '@/src/export/json';
 import { readV01 } from '@/src/db/legacy';
-import { sameItem } from '@/src/services/record';
+import { importV01 } from '@/src/services/import';
 import type { ItemInput } from '@/src/db/repository';
 import { mapToMarkdown } from '@/src/export/markdown';
 import { mapToOpml } from '@/src/export/opml';
@@ -176,16 +176,14 @@ function analyzeGaps(): Promise<void> {
   return analyzing;
 }
 
-/** v0.1 notes join a new subject's 待归位 group, without the ones already on the map (importing twice adds nothing). */
+/** v0.1 notes join the map; with a model they then find their places. */
 async function importV01Items(items: ItemInput[]): Promise<number> {
-  const r = await repo();
-  const existing = await r.listItems();
-  const fresh = items.filter((i) => !existing.some((e) => sameItem(e, i)));
-  if (!fresh.length) return 0;
-  await r.importItems(i18n.t('map.importedSubject'), fresh);
-  notifyChanged();
-  void placeWaiting();
-  return fresh.length;
+  const count = await importV01(await repo(), items, i18n.t('map.importedSubject'));
+  if (count) {
+    notifyChanged();
+    void placeWaiting();
+  }
+  return count;
 }
 
 const labels = (): { unplaced: string; newSubject: string } => ({ unplaced: i18n.t('map.unplaced'), newSubject: i18n.t('map.newSubject') });
@@ -203,7 +201,8 @@ export default defineBackground(() => {
       await migrateV01Sites();
       await registerSiteScript(await loadSites());
     })();
-    browser.contextMenus.create({ id: MENU_ID, title: i18n.t('menu.record'), contexts: ['selection'] });
+    // onInstalled also fires when the browser updates, while the menu still exists.
+    void browser.contextMenus.removeAll().then(() => browser.contextMenus.create({ id: MENU_ID, title: i18n.t('menu.record'), contexts: ['selection'] }));
   });
   browser.commands.onCommand.addListener((command, tab) => {
     if (command === 'record-selection' && tab?.id !== undefined) void recordSelection(tab.id);

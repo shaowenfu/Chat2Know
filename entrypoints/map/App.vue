@@ -6,7 +6,7 @@ import { isEnvelope, sendMessage, type SubjectSummary } from '@/src/messaging';
 import { errorText } from '@/src/errors';
 import MapView from './MapView.vue';
 import SettingsView from './SettingsView.vue';
-import { download, stamp } from './download';
+import { EXPORT_FORMATS, download, stamp, type ExportFormat } from './download';
 
 const GREY_KEY = 'chat2know.showGrey';
 
@@ -35,13 +35,7 @@ function setShowGrey(on: boolean) {
   }
 }
 
-const FORMATS = [
-  { format: 'json', ext: 'json', type: 'application/json', label: 'settings.exportJson' },
-  { format: 'markdown', ext: 'md', type: 'text/markdown', label: 'settings.exportMarkdown' },
-  { format: 'opml', ext: 'opml', type: 'text/x-opml', label: 'settings.exportOpml' },
-] as const;
-
-async function exportAs(f: (typeof FORMATS)[number]) {
+async function exportAs(f: ExportFormat) {
   await run(async () => {
     const text = await sendMessage('map/export', { format: f.format, includeGrey: showGrey.value });
     download(`chat2know-${stamp()}.${f.ext}`, text, f.type);
@@ -123,7 +117,7 @@ onUnmounted(() => {
         <details class="export">
           <summary class="button">{{ i18n.t('mapPage.export') }}</summary>
           <div class="export-menu">
-            <button v-for="f in FORMATS" :key="f.format" type="button" @click="exportAs(f)">{{ i18n.t(f.label) }}</button>
+            <button v-for="f in EXPORT_FORMATS" :key="f.format" type="button" @click="exportAs(f)">{{ i18n.t(f.label) }}</button>
           </div>
         </details>
         <a href="#settings" class="icon" :aria-label="i18n.t('mapPage.settingsTab')" :title="i18n.t('mapPage.settingsTab')">

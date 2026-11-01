@@ -102,7 +102,8 @@ export default defineContentScript({
     function recordFormula(block: FormulaBlock): Promise<void> {
       const range = document.createRange();
       range.selectNode(block.el);
-      const quote = quoteFromRange(range, document.body, buildTextIndex(document.body)) ?? { exact: block.latex, prefix: '', suffix: '' };
+      // A formula drawn as an image has no text to quote; its source then opens the conversation without a highlight.
+      const quote = quoteFromRange(range, document.body, buildTextIndex(document.body)) ?? { exact: '', prefix: '', suffix: '' };
       return record({ itemType: 'formula', title: '', latex: block.latex, quote, pageTitle: document.title }, (recorded) => ui.markRecorded(block, recorded));
     }
 

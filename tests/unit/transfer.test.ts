@@ -4,6 +4,7 @@ import { Chat2KnowDB } from '@/src/db/schema';
 import { Hlc } from '@/src/db/hlc';
 import { Repository } from '@/src/db/repository';
 import { EXPORT_FORMAT, EXPORT_VERSION, parseImport } from '@/src/export/json';
+import { importV01 } from '@/src/services/import';
 import type { MapTree } from '@/src/graph/tree';
 
 let seq = 0;
@@ -79,6 +80,14 @@ describe('JSON export and import', () => {
       ['statement', 'A is invertible iff det A ≠ 0.', undefined],
       ['statement', 'Rank is the number of pivots.', undefined],
     ]);
+  });
+
+  it('a v0.1 import leaves out notes already on the map or repeated in the file', async () => {
+    const repo = setup('a');
+    const f = (latex: string) => ({ itemType: 'formula' as const, title: '', latex });
+    expect(await importV01(repo, [f('(AB)^T = B^T A^T'), f('(AB)^T=B^T  A^T'), f('\\det A^T = \\det A')], '导入的笔记')).toBe(2);
+    expect(await importV01(repo, [f('\\det A^T = \\det A')], '导入的笔记')).toBe(0);
+    expect(await repo.listItems()).toHaveLength(2);
   });
 
   it('rejects files that are not a valid export', async () => {

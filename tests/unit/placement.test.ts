@@ -4,7 +4,7 @@ import { Chat2KnowDB } from '@/src/db/schema';
 import { Hlc } from '@/src/db/hlc';
 import { Repository } from '@/src/db/repository';
 import { recordItem, type RecordRequest } from '@/src/services/record';
-import { placeItem } from '@/src/services/placement';
+import { placeItem, placeUnplaced } from '@/src/services/placement';
 import { parsePlacement } from '@/src/llm/prompts';
 import type { ChatMessage } from '@/src/llm/client';
 import { chatReply, mockEmbedding } from '../mock-llm/server';
@@ -121,5 +121,16 @@ describe('automatic placement', () => {
     expect(() => parsePlacement({ subject: '', path: ['a'], statement: '' }, 'formula')).toThrow('subject');
     expect(() => parsePlacement({ subject: 'x', path: ['a'], statement: '' }, 'statement')).toThrow('statement');
     expect(parsePlacement({ subject: 'x', path: ['a'], statement: 'ignored' }, 'formula').statement).toBe('');
+  });
+
+  it('Ctrl+Z passes over the placements the extension made on its own', async () => {
+    const { node: s } = await repo.addSubject('线性代数');
+    const { node: waiting } = await repo.addItem({ unplacedIn: s.id }, { itemType: 'formula', title: '', latex: '(AB)^T = B^T A^T' });
+    const { node: topic } = await repo.addSection(s.id, '行列式');
+    await placeUnplaced(repo, stubClient(), '', { untitled: labels.newSubject, unplaced: labels.unplaced });
+    expect((await repo.pathOf(waiting.id)).map((n) => n.title)).toEqual(['线性代数', '矩阵', '转置', '']);
+    await repo.undo(); // the user's last own write: adding 行列式
+    expect(await repo.find(topic.id)).toBeUndefined();
+    expect((await repo.pathOf(waiting.id)).map((n) => n.title)).toEqual(['线性代数', '矩阵', '转置', '']);
   });
 });

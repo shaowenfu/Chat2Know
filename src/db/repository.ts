@@ -8,6 +8,9 @@ import type { Ask, AskTag, Embedding, Gap, ItemSource, ItemType, MapNode, Origin
 
 const stripHash = (url: string) => url.replace(/#.*$/, '');
 
+/** The action of a placement the extension made on its own (items waiting in 待归位). */
+export const AUTO_PLACE = 'autoPlace';
+
 /** Subject + 3 levels of sections. */
 export const MAX_DEPTH = 4;
 
@@ -204,7 +207,8 @@ export class Repository {
   }
 
   /**
-   * Reverts a group (default: the latest one not undone yet). A node changed by a
+   * Reverts a group (default: the latest one not undone yet, passing over placements
+   * the extension made on its own, which the user never did). A node changed by a
    * later write keeps that change. Returns the undo's own group, or null when there
    * was nothing to undo.
    */
@@ -248,8 +252,9 @@ export class Repository {
     group?: string,
   ): Promise<MapNode[] | null> {
     let filed = false;
+    // Joined to a record, it is undone with that record; on its own it is the extension's, which Ctrl+Z passes over.
     await this.group(
-      'fileItem',
+      group ? 'fileItem' : AUTO_PLACE,
       async (w) => {
         const item = await this.db.nodes.get(itemId);
         if (!item || item.deletedAt || item.updatedAt !== seen) return;
@@ -455,7 +460,7 @@ export class Repository {
       .until(() => found !== null)
       .each((e) => {
         if (e.undoes) undone.add(e.undoes);
-        else if (!undone.has(e.group)) found = e.group;
+        else if (e.action !== AUTO_PLACE && !undone.has(e.group)) found = e.group;
       });
     return found;
   }
