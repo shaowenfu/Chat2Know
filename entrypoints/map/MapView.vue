@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
-import { i18n } from '#i18n';
+import { i18n } from '@/src/i18n';
 import { sendMessage, type SubjectSummary } from '@/src/messaging';
 import { errorText } from '@/src/errors';
 import type { ItemType, MapNode } from '@/src/db/types';

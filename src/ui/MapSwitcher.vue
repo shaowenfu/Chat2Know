@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { nextTick, ref } from 'vue';
-import { i18n } from '#i18n';
+import { i18n } from '@/src/i18n';
 import type { SubjectSummary } from '@/src/messaging';
 
 /**

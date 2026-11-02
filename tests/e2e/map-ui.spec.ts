@@ -141,6 +141,13 @@ test('full page: tabs, outline toggle, detail pane with sources, adding an item;
   // Saving the model placed the two items waiting in 待归位.
   await expect.poll(() => markdown(panel)).not.toContain('## Unplaced');
 
+  // The language follows the user's pick: open pages reload in it, prompts too.
+  await page.getByTestId('ui-lang').selectOption('zh_CN');
+  await expect(page.getByRole('link', { name: '导图' })).toBeVisible();
+  await expect(panel.getByRole('tree')).toContainText('条');
+  await page.getByTestId('ui-lang').selectOption('auto');
+  await expect(page.getByRole('link', { name: 'Map' })).toBeVisible();
+
   await page.getByRole('button', { name: 'Delete all data' }).click();
   await page.getByRole('button', { name: 'Click again to delete everything' }).click();
   await expect(page.getByRole('status')).toHaveText('All data deleted.');

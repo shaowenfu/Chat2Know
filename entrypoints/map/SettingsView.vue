@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
 import { browser } from 'wxt/browser';
-import { i18n } from '#i18n';
+import { i18n } from '@/src/i18n';
 import { sendMessage } from '@/src/messaging';
 import { UserError, errorText } from '@/src/errors';
 import SiteChecklist from '@/src/ui/SiteChecklist.vue';

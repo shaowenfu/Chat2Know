@@ -6,6 +6,7 @@
 import { UserError } from '@/src/errors';
 import type { Ask } from '@/src/db/types';
 import type { SiteSettings } from '@/src/sites/settings';
+import type { UiLang } from '@/src/i18n';
 import type { TextQuote } from '@/src/capture/text-quote';
 import type { ItemType } from '@/src/db/types';
 import type { RecordResult } from '@/src/services/record';
@@ -26,6 +27,10 @@ export interface MessageMap {
   /** Omitting apiKey keeps the stored key. */
   'settings/save': { req: { baseUrl: string; model: string; embeddingModel: string; apiKey?: string }; res: PublicSettings };
   'settings/test': { req: Record<string, never>; res: { reply: string } };
+
+  // The extension's language: the browser's, or the user's pick
+  'ui/getLang': { req: Record<string, never>; res: UiLang };
+  'ui/setLang': { req: { lang: UiLang }; res: null };
 
   // The AI sites the site script runs on
   'sites/get': { req: Record<string, never>; res: SiteSettings };

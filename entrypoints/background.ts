@@ -20,7 +20,7 @@ import { errorText } from '@/src/errors';
 import type { TextQuote } from '@/src/capture/text-quote';
 import { sendTabMessage } from '@/src/messaging';
 import { siteFor } from '@/src/capture/sites';
-import { i18n } from '#i18n';
+import { currentLang, i18n, initI18n, loadUiLang, saveUiLang } from '@/src/i18n';
 import { EXPORT_FORMAT, EXPORT_VERSION, parseImport, type ExportFile } from '@/src/export/json';
 import { loadOpenMap, saveOpenMap } from '@/src/sites/open-map';
 import type { PromptLang } from '@/src/llm/prompts';
@@ -138,6 +138,7 @@ function placeWaiting(): Promise<void> {
   placing = placing
     .catch(() => {}) // a failed run already surfaced (to its caller, or in the extension's error log); the next one still runs
     .then(async () => {
+      await ready();
       const settings = await loadSettings();
       if (!isConfigured(settings)) return;
       if (await placeUnplaced(await repo(), new LlmClient(settings), settings.embeddingModel, { unplaced: labels().unplaced, lang: promptLang() })) notifyChanged();
@@ -174,10 +175,14 @@ function analyzeGaps(): Promise<void> {
   return analyzing;
 }
 
+/** The user's language is read once at start and followed after; strings and prompts wait for it. */
+let i18nReady: Promise<void> | undefined;
+const ready = () => (i18nReady ??= initI18n());
+
 const labels = (): { unplaced: string; unnamed: string } => ({ unplaced: i18n.t('map.unplaced'), unnamed: i18n.t('map.unnamed') });
 
 /** Prompts are written in the user's language. */
-const promptLang = (): PromptLang => (browser.i18n.getUILanguage().toLowerCase().startsWith('zh') ? 'zh' : 'en');
+const promptLang = (): PromptLang => (currentLang() === 'zh_CN' ? 'zh' : 'en');
 
 export default defineBackground(() => {
   void browser.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
@@ -211,6 +216,11 @@ export default defineBackground(() => {
   onMessages({
     ping: ({ from }) => ({ from: 'background', echo: from, at: Date.now() }),
     'settings/get': async () => toPublic(await loadSettings()),
+    'ui/getLang': () => loadUiLang(),
+    'ui/setLang': async ({ lang }) => {
+      await saveUiLang(lang); // every open page follows the change (and reloads)
+      return null;
+    },
     'settings/save': async ({ baseUrl, model, embeddingModel, apiKey }) => {
       const current = await loadSettings();
       const url = new URL(baseUrl.trim()); // throws on an invalid URL
@@ -446,5 +456,5 @@ export default defineBackground(() => {
       notifyChanged();
       return next;
     },
-  });
+  }, ready);
 });

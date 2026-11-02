@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { browser } from 'wxt/browser';
-import { i18n } from '#i18n';
+import { i18n } from '@/src/i18n';
 import { isEnvelope, sendMessage, type SubjectSummary } from '@/src/messaging';
 import { errorText } from '@/src/errors';
 import MapView from './MapView.vue';
 import SettingsView from './SettingsView.vue';
+import LangSwitch from '@/src/ui/LangSwitch.vue';
 import { EXPORT_FORMATS, download, stamp, type ExportFormat } from './download';
 
 const GREY_KEY = 'chat2know.showGrey';
@@ -109,6 +110,7 @@ onUnmounted(() => {
         </template>
       </nav>
       <div class="grow" />
+      <LangSwitch v-if="isSettings" />
       <template v-if="!isSettings">
         <label class="toggle">
           <input type="checkbox" :checked="showGrey" data-testid="show-grey" @change="setShowGrey(($event.target as HTMLInputElement).checked)">

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue';
-import { i18n } from '#i18n';
+import { i18n } from '@/src/i18n';
 import { isGrey, itemCount, type MapTree } from '@/src/graph/tree';
 import type { MapNode } from '@/src/db/types';
 import { formulaHtml, textHtml } from './math';

@@ -1,6 +1,6 @@
 import { browser } from 'wxt/browser';
 import { defineContentScript } from 'wxt/utils/define-content-script';
-import { i18n } from '#i18n';
+import { i18n, initI18n } from '@/src/i18n';
 import { onMessages, sendMessage, type Req } from '@/src/messaging';
 import { errorText } from '@/src/errors';
 import { startRecorder } from '@/src/capture/recorder';
@@ -32,9 +32,10 @@ const ONE_FORMULA = /^\$\$\n([\s\S]+?)\n\$\$$/;
 export default defineContentScript({
   registration: 'runtime',
   matches: [],
-  main() {
+  async main() {
     if (window.__chat2knowSiteLoaded) return;
     window.__chat2knowSiteLoaded = true;
+    await initI18n();
 
     const ui = new PageUi(document, { add: i18n.t('site.add'), added: i18n.t('site.added') }, (block) => void recordFormula(block));
 

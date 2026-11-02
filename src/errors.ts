@@ -1,4 +1,4 @@
-import { i18n } from '#i18n';
+import { i18n } from '@/src/i18n';
 
 /**
  * An expected failure the user can act on (nothing selected, model not set

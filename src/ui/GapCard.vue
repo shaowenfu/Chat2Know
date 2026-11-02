@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
-import { i18n } from '#i18n';
+import { i18n } from '@/src/i18n';
 import { sendMessage } from '@/src/messaging';
 import { errorText } from '@/src/errors';
 import type { GapCard } from '@/src/services/gaps';

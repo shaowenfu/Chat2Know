@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
-import { i18n } from '#i18n';
+import { i18n } from '@/src/i18n';
 import { sendMessage, type SubjectSummary } from '@/src/messaging';
 import type { MapNode } from '@/src/db/types';
 import type { Place } from '@/src/services/relocate';
