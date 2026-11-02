@@ -11,6 +11,7 @@ import { Hlc } from '@/src/db/hlc';
 import { Repository } from '@/src/db/repository';
 import { recordItem } from '@/src/services/record';
 import { placeItem } from '@/src/services/placement';
+import { proposeOutline } from '@/src/services/outline';
 
 /**
  * Quality evals against a real model. Run with `npm run eval` after setting
@@ -67,7 +68,7 @@ describe('eval', () => {
   it('placement: the topic of each note in its map; an unnamed map gets its subject\'s name; statements become one short sentence', async () => {
     const { map, cases } = data('placement.json') as {
       map: Record<string, Record<string, string[]>>;
-      cases: { itemType: 'formula' | 'statement'; text: string; subject: string; topic: string[] }[];
+      cases: { itemType: 'formula' | 'statement'; text: string; subject: string; topic: string[]; term?: boolean }[];
     };
     const db = new Chat2KnowDB(`eval-placement-${Date.now()}`);
     const repo = new Repository(db, new Hlc('eval'));
@@ -86,6 +87,7 @@ describe('eval', () => {
     let named = 0;
     let unnamedCases = 0;
     const lengths: number[] = [];
+    const termsExplained: boolean[] = [];
     for (const [i, c] of cases.entries()) {
       // The user opened the map of the note's subject; a subject without a map gets a new, unnamed one.
       const mapId = maps.get(c.subject) ?? (await repo.addSubject('')).node.id;
@@ -99,7 +101,8 @@ describe('eval', () => {
         if (path[0]?.includes(c.subject)) named++;
       }
       if (c.topic.some((t) => path.slice(1).join(' ').toLowerCase().includes(t.toLowerCase()))) topics++;
-      if (c.itemType === 'statement') lengths.push(item.title.length);
+      if (c.itemType === 'statement' && !c.term) lengths.push(item.title.length);
+      if (c.term) termsExplained.push(/[：:]/.test(item.title) && item.title.length > c.text.length + 4);
       samples.push({ text: c.text, map: path[0] ?? '', path: path.slice(1), ...(c.itemType === 'statement' ? { statement: item.title } : {}) });
       await repo.undo(r.group);
     }
@@ -107,7 +110,35 @@ describe('eval', () => {
     results.placementTopicAccuracy = topics / cases.length;
     results.unnamedMapNamed = unnamedCases ? named / unnamedCases : null;
     results.statementMaxLength = Math.max(...lengths);
+    results.termsExplained = termsExplained.filter(Boolean).length / termsExplained.length;
     results.placementSamples = samples;
+    expect(samples).toHaveLength(cases.length);
+  });
+
+  it('outlines: real chapters of the subject, in its language, never a generic template', async () => {
+    const cases = data('outlines.json') as { subject: string; expected: string[] }[];
+    const db = new Chat2KnowDB(`eval-outline-${Date.now()}`);
+    const repo = new Repository(db, new Hlc('eval'));
+    const lang = (process.env.CHAT2KNOW_LANG ?? 'zh') as 'zh' | 'en';
+    const samples: { subject: string; chapters?: string[]; error?: string }[] = [];
+    let valid = 0;
+    let covered = 0;
+    for (const c of cases) {
+      const { node } = await repo.addSubject(c.subject);
+      try {
+        const outline = await proposeOutline(repo, client, node.id, lang);
+        valid++;
+        const titles = JSON.stringify(outline).toLowerCase();
+        covered += c.expected.filter((e) => titles.includes(e.toLowerCase())).length / c.expected.length;
+        samples.push({ subject: c.subject, chapters: outline.map((o) => o.title) });
+      } catch (err) {
+        samples.push({ subject: c.subject, error: String(err) });
+      }
+    }
+    await db.delete();
+    results.outlineValid = valid / cases.length;
+    results.outlineCoverage = covered / cases.length;
+    results.outlineSamples = samples;
     expect(samples).toHaveLength(cases.length);
   });
 });

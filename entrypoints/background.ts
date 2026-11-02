@@ -334,11 +334,13 @@ export default defineBackground(() => {
       // An unnamed map has no subject to outline yet.
       const offerable = !!tree.node.title.trim() && outlineOfferable(tree) && isConfigured(await loadSettings());
       const open = decision?.status !== 'laid' && decision?.status !== 'declined';
-      return { offer: offerable && open, ...(open && decision?.outline ? { outline: decision.outline } : {}) };
+      const fresh = decision?.outline && decision.forTitle === tree.node.title;
+      return { offer: offerable && open, ...(open && fresh ? { outline: decision.outline } : {}) };
     },
     'outline/propose': async ({ subjectId, toc }) => {
-      const outline = await proposeOutline(await repo(), new LlmClient(await loadSettings()), subjectId, toc);
-      await saveOutline(subjectId, { status: 'proposed', outline });
+      const r = await repo();
+      const outline = await proposeOutline(r, new LlmClient(await loadSettings()), subjectId, promptLang(), toc);
+      await saveOutline(subjectId, { status: 'proposed', outline, forTitle: (await r.node(subjectId)).title });
       return outline;
     },
     'outline/apply': async ({ subjectId }) => {

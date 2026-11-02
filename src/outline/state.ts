@@ -7,6 +7,8 @@ const KEY = 'outlines';
 export interface OutlineDecision {
   status: 'proposed' | 'laid' | 'declined';
   outline?: OutlineNode[];
+  /** The map's name the proposal was made for: a renamed map gets a new one. */
+  forTitle?: string;
 }
 
 export async function loadOutlines(): Promise<Record<string, OutlineDecision>> {

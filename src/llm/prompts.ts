@@ -219,24 +219,73 @@ export function parsePlacement(value: unknown, itemType: 'formula' | 'statement'
 export const OUTLINE_DEPTH = 3;
 const OUTLINE_MAX_NODES = 200;
 
-export function outlinePrompt(input: { subject: string; existing: string[]; toc?: string }): ChatMessage[] {
+/** One real outline per language: the model sees what a subject's own outline looks like, not a template. */
+const OUTLINE_EXAMPLE = {
+  zh: '{"outline": [{"title": "极限与连续", "children": [{"title": "数列极限", "children": []}, {"title": "函数极限", "children": []}, {"title": "连续性", "children": []}]}, {"title": "导数与微分", "children": [{"title": "导数的定义", "children": []}, {"title": "求导法则", "children": []}, {"title": "高阶导数", "children": []}]}, {"title": "不定积分", "children": [{"title": "换元积分法", "children": []}, {"title": "分部积分法", "children": []}]}]}（只示意前三章）',
+  en: '{"outline": [{"title": "Limits and continuity", "children": [{"title": "Limits of sequences", "children": []}, {"title": "Limits of functions", "children": []}, {"title": "Continuity", "children": []}]}, {"title": "Derivatives", "children": [{"title": "Definition of the derivative", "children": []}, {"title": "Differentiation rules", "children": []}, {"title": "Higher derivatives", "children": []}]}, {"title": "Integrals", "children": [{"title": "Substitution", "children": []}, {"title": "Integration by parts", "children": []}]}]} (first three chapters only)',
+} as const;
+
+const OUTLINE_TEXT = {
+  zh: {
+    task: (toc: boolean) =>
+      [
+        '你为学习者的一张知识导图铺出这门学科的大纲：章、章下的知识点，知识点下最多再分一层。标题是这门学科里真实的章节和知识点名称：简短的名词，不是问句，不编号，语言与导图名称一致。不要写"概述""简介""总结""应用""方法"这类放在任何学科都成立的空标题。大纲只有结构，不写公式、结论或解释。',
+        toc ? '按学习者粘贴的教材目录来：它的章和节就是大纲，顺序不变，标题缩成名词。' : '按这门学科的标准课程或教材来覆盖：大约 6–12 章，每章 2–8 个知识点。',
+        '学习者已有的知识点放得进去时，用它的原标题。',
+        `例如"高等数学"的大纲开头是：${OUTLINE_EXAMPLE.zh}。`,
+        '只返回 JSON：{"outline": [{"title": "...", "children": [{"title": "...", "children": []}]}]}。',
+      ].join(''),
+    labels: { subject: '导图名称', existing: '已有的知识点', toc: '教材目录', none: '（无）' },
+  },
+  en: {
+    task: (toc: boolean) =>
+      [
+        "You lay out a subject as the outline of a learner's knowledge map: chapters, their topics, and at most one level below a topic. Titles are the subject's real chapter and topic names: short nouns, never questions, no numbering, in the language of the map's name. Never use titles that would fit any subject, such as Overview, Introduction, Summary, Applications or Methods. The outline holds structure only: no formulas, statements or explanations.",
+        toc ? ' Follow the table of contents the learner pasted: its chapters and sections become the outline, in its order, titles shortened to nouns.' : ' Cover the subject as a standard course or textbook does: about 6–12 chapters with 2–8 topics each.',
+        " Where one of the learner's existing sections fits, use its exact title.",
+        ` For example, the outline of "Calculus" begins: ${OUTLINE_EXAMPLE.en}.`,
+        ' Return JSON only: {"outline": [{"title": "...", "children": [{"title": "...", "children": []}]}]}.',
+      ].join(''),
+    labels: { subject: 'Map', existing: 'Existing sections', toc: 'Table of contents', none: '(none)' },
+  },
+} as const;
+
+export function outlinePrompt(input: { lang: PromptLang; subject: string; existing: string[]; toc?: string }): ChatMessage[] {
+  const t = OUTLINE_TEXT[input.lang];
+  const l = t.labels;
   return [
-    system(
-      'outline',
-      `You lay out a subject as the outline of a learner's knowledge map: chapters, their topics, and at most one level below a topic. Titles are short nouns (never questions), no numbering, in the language of the subject's name. The outline holds structure only: no formulas, statements or explanations. ${
-        input.toc
-          ? 'Follow the table of contents the learner pasted: its chapters and sections become the outline, in its order, titles shortened to nouns.'
-          : 'Cover the subject as a standard course or textbook does: about 6–12 chapters with 2–8 topics each.'
-      } Where one of the learner's existing sections fits, use its exact title. Return JSON only: {"outline": [{"title": "...", "children": [{"title": "...", "children": []}]}]}.`,
-    ),
+    system('outline', t.task(!!input.toc)),
     {
       role: 'user',
-      content: [`Subject: ${input.subject}`, `Existing sections:\n${input.existing.map((e) => `- ${e}`).join('\n') || '(none)'}`, ...(input.toc ? [`Table of contents:\n${input.toc}`] : [])].join('\n\n'),
+      content: [`${l.subject}: ${input.subject}`, `${l.existing}:\n${input.existing.map((e) => `- ${e}`).join('\n') || l.none}`, ...(input.toc ? [`${l.toc}:\n${input.toc}`] : [])].join('\n\n'),
     },
   ];
 }
 
-export function parseOutline(value: unknown): OutlineNode[] {
+/** Titles that fit any subject: an outline made of them is a template, not this subject's. */
+const GENERIC_TITLES = new Set(
+  'overview introduction scope history terminology landscape foundations principles concepts models frameworks core topics structure processes relationships variations methods inquiry analysis design measurement applications cases practice summary conclusion basics advanced topics 概述 简介 引言 绪论 总结 小结 应用 方法 基础 概念 原理 框架 实践 案例 历史 术语'
+    .split(' ')
+    .concat(['core topics', 'advanced topics']),
+);
+const hasCjk = (s: string) => /[㐀-鿿]/.test(s);
+
+/**
+ * A usable outline: at most a quarter of its titles generic, and its titles in the
+ * script of the map's name (a Chinese name takes Chinese titles, a Latin one Latin).
+ */
+function checkOutline(outline: OutlineNode[], subject: string): void {
+  const titles: string[] = [];
+  const walk = (ns: OutlineNode[]) => ns.forEach((n) => (titles.push(n.title), walk(n.children)));
+  walk(outline);
+  const generic = titles.filter((t) => GENERIC_TITLES.has(t.trim().toLowerCase()));
+  if (generic.length * 4 > titles.length) throw new LlmError(`The outline is a generic template (${generic.slice(0, 4).join(', ')}), not this subject's`);
+  const cjk = titles.filter(hasCjk).length;
+  const wantCjk = hasCjk(subject);
+  if (wantCjk ? cjk * 2 < titles.length : cjk * 2 > titles.length) throw new LlmError(`The outline's titles are not in the language of "${subject}"`);
+}
+
+export function parseOutline(value: unknown, subject: string): OutlineNode[] {
   let count = 0;
   const nodes = (list: unknown, depth: number): OutlineNode[] => {
     if (!Array.isArray(list)) throw new LlmError('Expected a list of outline nodes');
@@ -249,5 +298,6 @@ export function parseOutline(value: unknown): OutlineNode[] {
   };
   const outline = nodes(obj(value).outline, 1);
   if (!outline.length) throw new LlmError('The outline is empty');
+  checkOutline(outline, subject);
   return outline;
 }

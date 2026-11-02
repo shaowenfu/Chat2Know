@@ -112,8 +112,8 @@ const MOCK_OUTLINE = [
 
 /** A pasted table of contents: each unindented line a chapter, indented lines its topics; else the standard outline. */
 function outlineReply(user: string): string {
-  const toc = user.split('Table of contents:\n')[1];
-  if (!toc && /^Subject: 深度学习$/m.test(user)) {
+  const toc = user.split(/(?:Table of contents|教材目录):\n/)[1];
+  if (!toc && /^(?:Map|导图名称): 深度学习$/m.test(user)) {
     return JSON.stringify({ outline: ['神经网络', '注意力机制', '优化', '正则化'].map((title) => ({ title, children: [] })) });
   }
   if (!toc) return JSON.stringify({ outline: MOCK_OUTLINE });

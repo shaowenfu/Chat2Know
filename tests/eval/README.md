@@ -19,6 +19,9 @@ npm run eval                      # prompts in Chinese; CHAT2KNOW_LANG=en for En
 | `tagAccuracy` | `data/tags.json` | A question is tagged with a topic of the seeded maps (`data/placement.json`) whose path names the expected keyword; non-knowledge questions get no topic. `tagSamples` shows the tags for a manual look |
 | `placementTopicAccuracy` | `data/placement.json` | Each note goes into the map of its subject (as if the user opened it); the path names the expected topic (any listed keyword) |
 | `unnamedMapNamed` | `data/placement.json` | A note whose subject has no map goes into a new unnamed map, which the model names after the expected subject |
+| `termsExplained` | `data/placement.json` | A bare term ("幂指函数") is recorded as "term: one-sentence explanation" |
+| `outlineValid` | `data/outlines.json` | The proposed outline passes validation: real titles, not a generic template, in the language of the map's name |
+| `outlineCoverage` | `data/outlines.json` | Share of each subject's expected chapters (keywords) the outline contains |
 | `statementMaxLength` | `data/placement.json` | The longest one-sentence statement placement made of a long selection (target: about 40 Chinese characters) |
 
 `placementSamples` lists every case's path and statement for a manual look.
