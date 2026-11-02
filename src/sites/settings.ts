@@ -6,13 +6,13 @@ export const SITES_KEY = 'sites';
 export interface SiteSettings {
   /** Origins the site script runs on, e.g. "https://chatgpt.com". */
   origins: string[];
-  /** "Also record the questions I send on these sites." Off by default. */
+  /** "Also record the questions I send on these sites." On by default (the owner's decision, 2026-11-02); the first screen and settings say so and turn it off. */
   recordAsks: boolean;
   /** Conversation URLs (without hash) the user excluded from recording. */
   excluded: string[];
 }
 
-const EMPTY: SiteSettings = { origins: [], recordAsks: false, excluded: [] };
+const EMPTY: SiteSettings = { origins: [], recordAsks: true, excluded: [] };
 
 export async function loadSites(): Promise<SiteSettings> {
   const stored = (await browser.storage.local.get(SITES_KEY))[SITES_KEY] as Partial<SiteSettings> | undefined;

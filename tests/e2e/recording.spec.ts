@@ -4,7 +4,7 @@ import { send, tabIdOf } from './helpers';
 
 const PAGE = 'synthetic-chat-input.html';
 
-test('records questions sent on a ticked site while asked to, and nothing when off, elsewhere or in a password field', async ({ context, extensionId, fixtureServer }) => {
+test('records questions sent on a ticked site (on by default), and nothing when off, elsewhere or in a password field', async ({ context, extensionId, fixtureServer }) => {
   const page = await context.newPage();
   await page.goto(`${fixtureServer}/${PAGE}`);
   const panel = await context.newPage();
@@ -19,8 +19,10 @@ test('records questions sent on a ticked site while asked to, and nothing when o
 
   // Not ticked yet: nothing is recorded (the recorder is not even on the page).
   await sendWithEnter('before enabling');
+  expect((await send<{ recordAsks: boolean }>(panel, 'sites/get', {})).data.recordAsks).toBe(true); // on by default
+  // Turned off, a ticked site records nothing.
+  await send(panel, 'sites/setRecordAsks', { on: false });
   expect((await send(panel, 'sites/setOrigins', { origins: [fixtureServer] })).ok).toBe(true);
-  // A ticked site alone does not record questions.
   await sendWithEnter('ticked, not recording');
   await page.waitForTimeout(300);
   expect(await panel.evaluate(() => chrome.action.getBadgeText({}))).toBe('');

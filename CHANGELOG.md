@@ -8,6 +8,8 @@ v2 rebuild: Chat2Know becomes a knowledge map you record into with one click (se
 
 ### Added
 
+- A new first screen: what Chat2Know does (with a short animation), then ① connect your model (the embedding model under "Advanced", and a note on why the browser asks for access) ② tick your sites ③ create your first map. Language switch (中文 / EN) at the top; question recording is on by default and can be turned off there or in settings.
+
 - You create and open maps (side panel switcher, name optional). Everything you record goes into the open map; Chat2Know never creates, switches or renames a map on its own, and names an unnamed map once from its first notes. With no map open, the page offers "create a map and add this".
 
 - On the AI sites you tick, a ＋ beside every display formula records it to the map in one click; the formula shows "Added" and a toast says where it went, with Undo. The same formula is not added twice unless you choose "Add anyway".

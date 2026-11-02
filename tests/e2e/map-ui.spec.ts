@@ -132,7 +132,7 @@ test('full page: tabs, outline toggle, detail pane with sources, adding an item;
   await page.getByTestId('model').fill('mock-model');
   await page.getByTestId('api-key').fill('test-key');
   await page.getByRole('button', { name: 'Save' }).click();
-  await expect(page.getByRole('status')).toHaveText('Saved.');
+  await expect(page.getByTestId('model-status')).toHaveText('Saved.');
   await expect(page.getByTestId('api-key')).toHaveValue('');
   await page.getByRole('button', { name: 'Test connection' }).click();
   await expect(page.getByTestId('model-settings')).toContainText('● Connected');
@@ -150,7 +150,7 @@ test('full page: tabs, outline toggle, detail pane with sources, adding an item;
 
   await page.getByRole('button', { name: 'Delete all data' }).click();
   await page.getByRole('button', { name: 'Click again to delete everything' }).click();
-  await expect(page.getByRole('status')).toHaveText('All data deleted.');
+  await expect(page.getByTestId('data-status')).toHaveText('All data deleted.');
   expect(await markdown(panel)).toBe('\n');
 });
 
@@ -183,13 +183,15 @@ test('outline: offered once per subject with a preview; laid as grey sections, o
 test.describe('screenshots in Chinese, compared with the artboards', () => {
   test.use({ uiLang: 'zh-CN' });
 
-  test('artboards 6, 7, 1, 2, 3', async ({ context, extensionId, fixtureServer, mockLlm }) => {
+  test('artboards 9, 7, 11, 5, 1, 2, 3', async ({ context, extensionId, fixtureServer, mockLlm }) => {
     mkdirSync(SHOTS, { recursive: true });
     const panel = await context.newPage();
     await panel.setViewportSize({ width: 380, height: 820 });
     await panel.goto(`chrome-extension://${extensionId}/sidepanel.html`);
     await expect(panel.getByTestId('empty')).toContainText('你的知识导图会长在这里');
-    await panel.screenshot({ path: `${SHOTS}/6-empty.png` });
+    await panel.setViewportSize({ width: 380, height: 1000 });
+    await panel.screenshot({ path: `${SHOTS}/9-first-screen.png` });
+    await panel.setViewportSize({ width: 380, height: 820 });
 
     await importSeed(panel);
     await expect(panel.getByTestId('no-model')).toContainText('还没配置模型');

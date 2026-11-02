@@ -8,11 +8,10 @@ import type { MapNode } from '@/src/db/types';
 import { itemCount, type MapTree } from '@/src/graph/tree';
 import MapBranch from '@/src/ui/MapBranch.vue';
 import ContextMenu from '@/src/ui/ContextMenu.vue';
-import SiteChecklist from '@/src/ui/SiteChecklist.vue';
 import { provideMap } from '@/src/ui/map-context';
-import { formulaHtml } from '@/src/ui/math';
 import OutlineOffer from '@/src/ui/OutlineOffer.vue';
 import MapSwitcher from '@/src/ui/MapSwitcher.vue';
+import FirstScreen from '@/src/ui/FirstScreen.vue';
 import type { OutlineNode } from '@/src/graph/tree';
 import type { GapCard } from '@/src/services/gaps';
 
@@ -26,7 +25,6 @@ const subjects = ref<SubjectSummary[]>([]);
 const currentId = ref<string>();
 const tree = ref<MapTree>();
 const configured = ref(true);
-const sites = ref<string[]>([]);
 const error = ref('');
 const notice = ref<{ text: string; group: string }>();
 const menu = ref<{ node: MapNode; x: number; y: number }>();
@@ -90,7 +88,6 @@ async function load() {
   loaded.value = true;
   if (!subs.length) {
     tree.value = undefined;
-    sites.value = (await sendMessage('sites/get', {})).origins;
     return;
   }
   currentId.value = subs.find((s) => s.open)?.id;
@@ -231,35 +228,7 @@ const subjectNode = computed(() => tree.value?.node);
 <template>
   <main class="panel" data-testid="panel">
     <template v-if="loaded && !subjects.length">
-      <header class="top">
-        <span class="brand">{{ i18n.t('extName') }}</span>
-        <a :href="settingsUrl" target="_blank" class="icon" :aria-label="i18n.t('panel.settings')" :title="i18n.t('panel.settings')">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" /></svg>
-        </a>
-      </header>
-      <div class="empty" data-testid="empty">
-        <div class="intro">
-          <h1>{{ i18n.t('empty.title') }}</h1>
-          <p>{{ i18n.t('empty.body') }}</p>
-        </div>
-        <div class="demo">
-          <div class="demo-formula">
-            <!-- eslint-disable-next-line vue/no-v-html -- KaTeX output -->
-            <span v-html="formulaHtml('\\det(AB) = \\det A \\cdot \\det B')" />
-            <span class="demo-plus" aria-hidden="true">＋</span>
-          </div>
-          <span class="demo-text">{{ i18n.t('empty.how') }}</span>
-        </div>
-        <fieldset class="sites">
-          <legend>{{ i18n.t('sites.legend') }}</legend>
-          <SiteChecklist v-model="sites" @error="error = $event" />
-          <span class="note">{{ i18n.t('sites.note') }}</span>
-        </fieldset>
-        <p v-if="error" class="error" role="alert">{{ error }}</p>
-      </div>
-      <footer class="foot">
-        <span class="muted">{{ i18n.t('empty.local') }}</span>
-      </footer>
+      <FirstScreen @created="run(load)" />
     </template>
 
     <template v-else-if="loaded && !current">

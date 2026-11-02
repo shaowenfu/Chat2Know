@@ -73,8 +73,7 @@
   },
   "empty": {
     "title": "Your knowledge map grows here",
-    "body": "When an AI answer has a formula or conclusion worth keeping, one click records it. Chat2Know decides where it goes.",
-    "how": "Formulas get a ＋ beside them. For other text, select it and press Alt S, or right-click \"Add to Chat2Know map\".",
+    "body": "While you chat with an AI, select what is worth keeping and one click puts it in the right place on your map. When your questions start going in circles, it nudges you here.",
     "imported": "Imported: $1",
     "local": "Your data stays in this browser"
   },
@@ -140,7 +139,10 @@
     "clearConfirm": "Click again to delete everything",
     "cleared": "All data deleted.",
     "language": "Language",
-    "languageAuto": "Same as the browser"
+    "languageAuto": "Same as the browser",
+    "advanced": "Advanced: embedding model (optional)",
+    "saveAndTest": "Save and test the connection",
+    "permissionNote": "When you save, the browser asks for access to this address; it is used only to call your model."
   },
   "outline": {
     "askFirst": "This is your first note in \"$1\". Shall I lay out the course's outline?",
@@ -169,5 +171,18 @@
     "check": "Check",
     "right": "Right.",
     "addAfterWrong": "Shall I add this part to your map?"
+  },
+  "onboard": {
+    "stepModel": "① Connect your model",
+    "stepSites": "② Use it on these sites",
+    "stepMap": "③ Create your first map",
+    "recordAsks": "Also record the questions I send on these sites, to notice when I get stuck. Kept in this browser; turn it off any time.",
+    "mapPlaceholder": "Map name (optional, named from its content)",
+    "create": "Create",
+    "animationLabel": "A formula selected in an answer flies into the map under its topic",
+    "demoMap": "Linear algebra",
+    "demoChapter": "Matrices",
+    "demoTopic": "Transpose",
+    "demoOther": "Determinants"
   }
 }

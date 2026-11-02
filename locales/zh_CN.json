@@ -73,8 +73,7 @@
   },
   "empty": {
     "title": "你的知识导图会长在这里",
-    "body": "在 AI 对话里看到值得记的公式或结论，点一下就行。放到哪里由插件来定。",
-    "how": "公式旁边会出现 ＋。普通文字选中后按 Alt S，或者右键「记到 Chat2Know 导图」。",
+    "body": "和 AI 聊天时，选中值得记的内容，点一下就记到导图里合适的位置。问着问着卡住了，它也会在这里提醒你。",
     "imported": "已导入 $1 条",
     "local": "数据只存在这个浏览器里"
   },
@@ -140,7 +139,10 @@
     "clearConfirm": "再点一次确认清空",
     "cleared": "已清空所有数据。",
     "language": "语言",
-    "languageAuto": "跟随浏览器"
+    "languageAuto": "跟随浏览器",
+    "advanced": "高级：嵌入模型（可选，让归位更准）",
+    "saveAndTest": "保存并测试连接",
+    "permissionNote": "保存时浏览器会请求访问这个地址，只用来调用你的模型。"
   },
   "outline": {
     "askFirst": "这是你在「$1」下记的第一条。要我铺上这门课的大纲吗？",
@@ -169,5 +171,18 @@
     "check": "提交",
     "right": "答对了。",
     "addAfterWrong": "要把这一块整理进来吗？"
+  },
+  "onboard": {
+    "stepModel": "① 连接你的模型",
+    "stepSites": "② 在这些网站上使用",
+    "stepMap": "③ 新建第一张导图",
+    "recordAsks": "也记录我在这些网站上的提问，用来发现卡住的地方。只存本地，随时可以关掉。",
+    "mapPlaceholder": "导图名称（可以不填，按内容自动命名）",
+    "create": "新建",
+    "animationLabel": "回答里选中的公式飞进导图，挂到对应的知识点下",
+    "demoMap": "线性代数",
+    "demoChapter": "矩阵",
+    "demoTopic": "转置",
+    "demoOther": "行列式"
   }
 }
