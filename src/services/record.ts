@@ -24,10 +24,14 @@ export interface RecordLabels {
 
 const stripHash = (url: string) => url.replace(/#.*$/, '');
 
-/** The same formula (normalized LaTeX) or statement (normalized text). */
+/** The same formula (normalized LaTeX), statement (normalized text) or quote (the exact words). */
 export const sameItem = (a: Pick<MapNode, 'itemType' | 'title' | 'latex'>, r: Pick<RecordRequest, 'itemType' | 'title' | 'latex'>) =>
   a.itemType === r.itemType &&
-  (r.itemType === 'formula' ? normalizeLatex(a.latex ?? '') === normalizeLatex(r.latex ?? '') : normalizeStatement(a.title) === normalizeStatement(r.title));
+  (r.itemType === 'formula'
+    ? normalizeLatex(a.latex ?? '') === normalizeLatex(r.latex ?? '')
+    : r.itemType === 'quote'
+      ? a.title === r.title
+      : normalizeStatement(a.title) === normalizeStatement(r.title));
 
 /** Titles from the subject down to the item's parent, as the toast shows them. */
 export async function placePath(repo: Repository, nodeId: string, labels: RecordLabels): Promise<string[]> {

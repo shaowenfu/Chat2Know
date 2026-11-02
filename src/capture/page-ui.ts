@@ -2,14 +2,23 @@ import { displayFormulas, type FormulaBlock } from './formulas';
 import { UI_ATTR } from './text-quote';
 
 /**
- * What the site script draws on an AI chat page: a ＋ beside every display formula
- * and the bottom toast. It lives in one shadow root over the page, positioned from
+ * What the site script draws on an AI chat page: a ＋ beside every display formula,
+ * the bar over a selection the user just made, and the bottom toast. It lives in one shadow root over the page, positioned from
  * the formulas' boxes, so the site's own DOM is never touched.
  */
 
 export interface PageUiText {
   add: string; // the ＋ button's label
   added: string; // the pill once recorded
+}
+
+/** One button of the selection bar (artboard 12). */
+export interface BarAction {
+  id: 'note' | 'quote' | 'ask';
+  label: string;
+  run: () => void;
+  disabled?: boolean;
+  title?: string;
 }
 
 export interface ToastAction {
@@ -52,8 +61,22 @@ const CSS = `
 .picker-secondary { border: 1px solid #D6D3CA; background: #FFFFFF; color: #1B1B19; }
 .picker-primary { border: 0; background: #1B1B19; color: #FFFFFF; font-weight: 500; }
 .picker-primary:disabled { opacity: 0.4; cursor: default; }
+.bar { position: fixed; display: flex; align-items: center; gap: 2px; padding: 4px; border-radius: 10px; background: #1B1B19; box-shadow: 0 8px 24px rgba(0,0,0,0.22); pointer-events: auto; }
+.bar button { height: 32px; padding: 0 12px; border: 0; border-radius: 7px; background: transparent; color: #FFFFFF; font: inherit; font-size: 13px; display: flex; align-items: center; gap: 6px; cursor: pointer; white-space: nowrap; }
+.bar button:hover:not(:disabled) { background: rgba(255,255,255,0.12); }
+.bar button:focus-visible { outline: 2px solid #A9C0FF; outline-offset: -2px; }
+.bar button[data-action="quote"] { color: #E2D3FF; }
+.bar button[data-action="ask"] { color: #A9C0FF; }
+.bar button:disabled { opacity: 0.4; cursor: default; }
 [hidden] { display: none !important; }
 `;
+
+const BAR_GAP = 8;
+const BAR_ICONS: Record<BarAction['id'], string> = {
+  note: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>',
+  quote: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7 3v6c0 4-3 7-7 9-4-2-7-5-7-9V6z"></path></svg>',
+  ask: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"></path></svg>',
+};
 
 const PLUS_SVG =
   '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>';
@@ -95,6 +118,7 @@ export class PageUi {
   private toastText: HTMLElement | undefined;
   private popoverEl: HTMLElement | undefined;
   private toastTimer: ReturnType<typeof setTimeout> | undefined;
+  private bar: { el: HTMLElement; range: Range } | undefined;
 
   constructor(
     private readonly doc: Document,
@@ -128,6 +152,49 @@ export class PageUi {
     clearTimeout(this.rescanTimer);
     cancelAnimationFrame(this.frame);
     this.host.remove();
+  }
+
+  /** Whether an event happened inside this UI (its shadow root). */
+  owns(e: Event): boolean {
+    return e.composedPath().includes(this.host);
+  }
+
+  /** The bar of actions above (or, near the top, below) the selected range; it follows the range on scroll. */
+  showBar(range: Range, label: string, actions: BarAction[]): void {
+    this.hideBar();
+    const el = this.doc.createElement('div');
+    el.className = 'bar';
+    el.setAttribute('role', 'toolbar');
+    el.setAttribute('aria-label', label);
+    for (const action of actions) {
+      const button = this.doc.createElement('button');
+      button.type = 'button';
+      button.dataset.action = action.id;
+      button.innerHTML = BAR_ICONS[action.id];
+      button.append(action.label);
+      button.disabled = action.disabled ?? false;
+      if (action.title) button.title = action.title;
+      // The page's selection must survive the click: it is what the action records.
+      button.addEventListener('mousedown', (e) => e.preventDefault());
+      button.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.hideBar();
+        action.run();
+      });
+      el.append(button);
+    }
+    this.layer.append(el);
+    this.bar = { el, range };
+    this.place();
+  }
+
+  hideBar(): void {
+    this.bar?.el.remove();
+    this.bar = undefined;
+  }
+
+  get barShown(): boolean {
+    return this.bar !== undefined;
   }
 
   /** The ＋ of this formula becomes the "已记下" pill, with an outline around the formula for a moment. */
@@ -280,6 +347,20 @@ export class PageUi {
         mark.button.style.top = `${Math.round(mid - 14)}px`;
         if (mark.outline) Object.assign(mark.outline.style, { left: `${r.left - 4}px`, top: `${r.top - 4}px`, width: `${r.width + 8}px`, height: `${r.height + 8}px` });
       }
+      if (this.bar) this.placeBar(this.bar.el, this.bar.range, view);
     });
   };
+
+  private placeBar(el: HTMLElement, range: Range, view: Window): void {
+    const r = range.getBoundingClientRect();
+    const visible = r.bottom > 0 && r.top < view.innerHeight;
+    el.hidden = !visible;
+    if (!visible) return;
+    const { offsetWidth: w, offsetHeight: h } = el;
+    const above = r.top - BAR_GAP - h;
+    const top = above >= BAR_GAP ? above : Math.min(r.bottom + BAR_GAP, view.innerHeight - h - BAR_GAP);
+    const left = Math.min(Math.max(BAR_GAP, r.left + r.width / 2 - w / 2), view.innerWidth - w - BAR_GAP);
+    el.style.left = `${Math.round(left)}px`;
+    el.style.top = `${Math.round(top)}px`;
+  }
 }

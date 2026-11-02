@@ -15,7 +15,7 @@ export interface ExportFile {
 
 const KINDS = ['subject', 'section', 'item'];
 const ORIGINS = ['user', 'plugin', 'outline'];
-const ITEM_TYPES = ['formula', 'statement'];
+const ITEM_TYPES = ['formula', 'statement', 'quote'];
 
 const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null;
 const isString = (v: unknown): v is string => typeof v === 'string';

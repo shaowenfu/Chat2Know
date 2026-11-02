@@ -52,6 +52,14 @@ describe('map exports', () => {
     expect(mapToMarkdown([map!], { ...opts, includeGrey: true })).toContain('## 特征值');
   });
 
+  it('Markdown keeps a protected quote word for word, as a quotation inside its bullet', () => {
+    const [quoted] = buildTree([
+      n('s', 'subject', undefined, 'a0', '写作'),
+      n('q', 'item', 's', 'a0', 'Stay hungry.\n\nStay *foolish*.', { itemType: 'quote' }),
+    ]);
+    expect(mapToMarkdown([quoted!], opts)).toBe('# 写作\n\n- > Stay hungry.\n  >\n  > Stay *foolish*.\n');
+  });
+
   it('OPML keeps the tree, escaped', () => {
     const opml = mapToOpml([map!], opts, new Date(0));
     expect(opml).toContain(

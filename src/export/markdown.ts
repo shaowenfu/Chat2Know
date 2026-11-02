@@ -23,7 +23,9 @@ export function mapToMarkdown(subjects: MapTree[], o: ExportOptions): string {
   const walk = (t: MapTree, depth: number) => {
     const n = t.node;
     if (n.kind === 'item') {
-      parts.push(`- ${itemText(n)}${n.source ? ` ([source](${n.source.url}))` : ''}`);
+      // A protected quote stays word for word, as a quotation.
+      const text = n.itemType === 'quote' ? n.title.split('\n').map((l) => `> ${l}`.trimEnd()).join('\n  ') : itemText(n);
+      parts.push(`- ${text}${n.source ? ` ([source](${n.source.url}))` : ''}`);
       return;
     }
     parts.push('', `${'#'.repeat(Math.min(depth, 6))} ${structureTitle(n, o)}`, '');

@@ -67,6 +67,16 @@ describe('recording an item', () => {
     expect(await repo.listItems()).toHaveLength(4);
   });
 
+  it('a protected quote is the same only word for word', async () => {
+    const quote: RecordRequest = { itemType: 'quote', title: '矩阵不是一张数表，而是线性变换。', source: at('https://chatgpt.com/c/1') };
+    recorded(await recordItem(repo, map, quote, labels));
+    expect((await recordItem(repo, map, quote, labels)).status).toBe('duplicate');
+    // A statement with the same words, or the quote with one character changed, is another item.
+    recorded(await recordItem(repo, map, { ...quote, itemType: 'statement' }, labels));
+    recorded(await recordItem(repo, map, { ...quote, title: '矩阵不是一张数表,而是线性变换。' }, labels));
+    expect(await repo.listItems()).toHaveLength(3);
+  });
+
   it('normalizes LaTeX spacing only', () => {
     expect(normalizeLatex('\\displaystyle \\left( a \\, b \\right) \\quad c')).toBe('(ab)c');
     expect(normalizeLatex('\\leftarrow')).toBe('\\leftarrow');

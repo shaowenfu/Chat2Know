@@ -129,6 +129,19 @@ describe('automatic placement', () => {
     expect(client.prompts[0]).toContain('导图: （未命名）');
   });
 
+  it('places a protected quote without rewriting it, even when the model offers a sentence', async () => {
+    const words = 'Stay hungry. Stay foolish.\nAnd never settle.';
+    const client = stubClient();
+    const rewriting = { ...client, json: <T>(m: ChatMessage[], parse: (v: unknown) => T) => client.json(m, (v) => parse({ ...(v as object), statement: 'Be curious.' })) };
+    const { r } = await recordAndPlace({ itemType: 'quote', title: words, source: source() }, rewriting);
+    expect(client.prompts[0]).toContain('Note (quote): Stay hungry.');
+    expect((await repo.node(r.itemId))!.title).toBe(words);
+    // The repository refuses to rewrite one too.
+    await repo.fileItem(r.itemId, (await repo.node(r.itemId))!.updatedAt, { path: ['其他'], statement: 'Be curious.' });
+    expect((await repo.node(r.itemId))!.title).toBe(words);
+    expect(parsePlacement({ path: ['a'], statement: 'Be curious.', mapName: '' }, 'quote', false)).toEqual({ path: ['a'], statement: '', mapName: '' });
+  });
+
   it('rejects malformed placements', () => {
     expect(() => parsePlacement({ path: ['a', 'b', 'c', 'd'], statement: '', mapName: '' }, 'formula', false)).toThrow('1–3');
     expect(() => parsePlacement({ path: ['a'], statement: '', mapName: '' }, 'formula', true)).toThrow('mapName');

@@ -79,7 +79,7 @@ export interface MessageMap {
   /** Undoes one write (a toast's "撤销"), or the latest one (Ctrl+Z). */
   'map/undo': { req: { group?: string }; res: { undone: boolean } };
   /** Background -> site script: record the page's selection (Alt+S, context menu). */
-  'site/recordSelection': { req: Record<string, never>; res: null };
+  'site/recordSelection': { req: { as?: 'quote' }; res: null };
   /** Background -> site script: automatic placement moved a recorded item (or failed, and it stays). */
   'site/placed': { req: { itemId: string; path?: string[]; error?: string }; res: null };
 

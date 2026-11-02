@@ -1,6 +1,7 @@
 /** subject › section (chapter, topic) › item. Subjects are roots; items are leaves. */
 export type NodeKind = 'subject' | 'section' | 'item';
-export type ItemType = 'formula' | 'statement';
+/** A formula (LaTeX), a statement (one sentence), or a protected quote (the user's selection word for word, only the user edits it). */
+export type ItemType = 'formula' | 'statement' | 'quote';
 /** Who put the node on the map: the user (solid), the extension with consent (light blue dashed), an outline (grey dashed). */
 export type Origin = 'user' | 'plugin' | 'outline';
 
@@ -116,7 +117,7 @@ export interface Gap {
   askedAt?: number;
   coolDownUntil?: number;
   /** What "整理进来" would add, drafted once when the card is shown. */
-  proposal?: { itemType: ItemType; text: string }[];
+  proposal?: { itemType: 'formula' | 'statement'; text: string }[];
   /** The question of "出道题试试", once asked. */
   quiz?: string;
 }

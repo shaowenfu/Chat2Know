@@ -8,6 +8,8 @@ v2 rebuild: Chat2Know becomes a knowledge map you record into with one click (se
 
 ### Added
 
+- Select text on a ticked AI site and a small bar appears above it: **Note** (as before, compressed to one sentence or a formula), **Keep words** (a protected quote: the exact words go into the open map; the model only chooses where; only you can edit it; it shows with a purple border and a serif face, and exports as a quotation) and **Ask** (coming next). The bar never appears in a text box. The right-click menu also has "Keep word for word in Chat2Know map".
+
 - Editing the map like a mind-map tool, in the side panel and the full page: double-click to edit, right-click for a new child, a formula or a statement, Enter for a new topic right after the selected one, Tab / Shift+Tab to change its level, Delete to delete (with undo). A click on an item only selects it; the small ↗ beside it goes back to the conversation.
 
 - A new first screen: what Chat2Know does (with a short animation), then ① connect your model (the embedding model under "Advanced", and a note on why the browser asks for access) ② tick your sites ③ create your first map. Language switch (中文 / EN) at the top; question recording is on by default and can be turned off there or in settings.

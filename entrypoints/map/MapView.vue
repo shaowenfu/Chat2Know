@@ -9,7 +9,7 @@ import MapBranch from '@/src/ui/MapBranch.vue';
 import ContextMenu from '@/src/ui/ContextMenu.vue';
 import { provideMap } from '@/src/ui/map-context';
 import { useMapEditing, type AddingItem } from '@/src/ui/map-editing';
-import { formulaHtml, textHtml } from '@/src/ui/math';
+import { itemHtml } from '@/src/ui/math';
 import GapCardView from '@/src/ui/GapCard.vue';
 import type { GapCard } from '@/src/services/gaps';
 
@@ -210,9 +210,9 @@ onUnmounted(() => window.removeEventListener('keydown', onKey));
         <span class="crumbs">{{ selected.path.map((n) => n.title).join(' › ') }}</span>
         <h2>{{ selected.t.node.role ? i18n.t('map.unplaced') : selected.t.node.title }}</h2>
         <ul class="items">
-          <li v-for="item in selectedItems" :key="item.id" class="entry" :class="{ plugin: item.origin === 'plugin' }">
+          <li v-for="item in selectedItems" :key="item.id" class="entry" :class="{ plugin: item.origin === 'plugin', quote: item.itemType === 'quote' }">
             <!-- eslint-disable-next-line vue/no-v-html -- KaTeX output; plain text is escaped (src/ui/math.ts) -->
-            <span class="entry-body" :class="{ formula: item.itemType === 'formula' }" v-html="item.itemType === 'formula' ? formulaHtml(item.latex ?? '') : textHtml(item.title)" />
+            <span class="entry-body" :class="{ formula: item.itemType === 'formula', quote: item.itemType === 'quote' }" v-html="itemHtml(item)" />
             <button v-if="item.source" type="button" class="link-button source" @click="run(() => sendMessage('map/openSource', { itemId: item.id }))">
               {{ i18n.t('mapPage.fromConversation', [dateOf(item.source.capturedAt)]) }}
             </button>

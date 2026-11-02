@@ -16,7 +16,12 @@
   },
   "site": {
     "add": "记到导图",
-    "added": "已记下"
+    "added": "已记下",
+    "barLabel": "对选中内容",
+    "barNote": "记下",
+    "barQuote": "保护原文",
+    "barAsk": "提问",
+    "barAskSoon": "下一版本推出"
   },
   "toast": {
     "relocate": "改位置",
@@ -28,13 +33,15 @@
     "createMapAndRecord": "新建导图并记下",
     "addAnyway": "仍然添加",
     "notPlaced": "先放在待归位：$1",
-    "noSelection": "请先选中文字。"
+    "noSelection": "请先选中文字。",
+    "recordedQuote": "已原样记到 $1"
   },
   "command": {
     "record": "把选中的内容记到导图"
   },
   "menu": {
-    "record": "记到 Chat2Know 导图"
+    "record": "记到 Chat2Know 导图",
+    "recordQuote": "保护原文记到 Chat2Know 导图"
   },
   "picker": {
     "title": "放到哪里？",
@@ -106,7 +113,8 @@
     "newChild": "新建子节点",
     "newChildTitle": "新知识点",
     "empty": "还没有导图。在 AI 对话里记下第一条，或在这里新建一张。",
-    "dateLocale": "zh-CN"
+    "dateLocale": "zh-CN",
+    "addPlaceholderQuote": "要原样保留的原文"
   },
   "settings": {
     "model": "模型",

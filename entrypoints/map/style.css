@@ -252,6 +252,13 @@
   max-width: 100%;
   overflow-x: auto;
 }
+.entry.quote {
+  border: 1.5px solid var(--quote);
+}
+.entry-body.quote {
+  font-family: var(--serif);
+  white-space: pre-wrap;
+}
 .entry-body.formula {
   font-family: var(--mono);
 }

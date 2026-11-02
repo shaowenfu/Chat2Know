@@ -17,6 +17,9 @@
   --orange-line: #e9b48f;
   --orange-soft: #fcebdd;
   --banner: #f1f0ec;
+  /* Protected quotes: a purple border and a serif face, nothing else (artboard 13). */
+  --quote: #7a4fb5;
+  --serif: 'Noto Serif SC', 'Songti SC', 'STSong', 'SimSun', Georgia, serif;
   --font: 'Noto Sans SC', system-ui, -apple-system, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
   --mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
   color-scheme: light;

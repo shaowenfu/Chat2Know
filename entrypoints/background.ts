@@ -30,6 +30,7 @@ import { mapToOpml } from '@/src/export/opml';
 const SITE_SCRIPT = '/content-scripts/site.js';
 const SITE_SCRIPT_ID = 'chat2know-site';
 const MENU_ID = 'chat2know-record';
+const QUOTE_MENU_ID = 'chat2know-record-quote';
 /** 0.1's question recorder; its script file is gone in 0.2. */
 const V01_RECORDER_ID = 'chat2know-recorder';
 
@@ -97,9 +98,9 @@ async function setSiteOrigins(origins: string[]): Promise<SiteSettings> {
 }
 
 /** Alt+S or the context menu: the tab was granted by the gesture; the site script records its selection. */
-async function recordSelection(tabId: number): Promise<void> {
+async function recordSelection(tabId: number, as?: 'quote'): Promise<void> {
   await inject(tabId); // a no-op where it already runs
-  await sendTabMessage(tabId, 'site/recordSelection', {});
+  await sendTabMessage(tabId, 'site/recordSelection', as ? { as } : {});
 }
 
 /**
@@ -177,7 +178,12 @@ function analyzeGaps(): Promise<void> {
 
 /** The user's language is read once at start and followed after; strings and prompts wait for it. */
 let i18nReady: Promise<void> | undefined;
-const ready = () => (i18nReady ??= initI18n());
+// The context menu speaks the chosen language too.
+const renameMenus = () => {
+  void browser.contextMenus.update(MENU_ID, { title: i18n.t('menu.record') });
+  void browser.contextMenus.update(QUOTE_MENU_ID, { title: i18n.t('menu.recordQuote') });
+};
+const ready = () => (i18nReady ??= initI18n(renameMenus));
 
 const labels = (): { unplaced: string; unnamed: string } => ({ unplaced: i18n.t('map.unplaced'), unnamed: i18n.t('map.unnamed') });
 
@@ -198,7 +204,12 @@ export default defineBackground(() => {
       await registerSiteScript(await loadSites());
     })();
     // onInstalled also fires when the browser updates, while the menu still exists.
-    void browser.contextMenus.removeAll().then(() => browser.contextMenus.create({ id: MENU_ID, title: i18n.t('menu.record'), contexts: ['selection'] }));
+    void ready()
+      .then(() => browser.contextMenus.removeAll())
+      .then(() => {
+        browser.contextMenus.create({ id: MENU_ID, title: i18n.t('menu.record'), contexts: ['selection'] });
+        browser.contextMenus.create({ id: QUOTE_MENU_ID, title: i18n.t('menu.recordQuote'), contexts: ['selection'] });
+      });
   });
   browser.commands.onCommand.addListener((command, tab) => {
     if (command === 'record-selection' && tab?.id !== undefined) void recordSelection(tab.id);
@@ -210,7 +221,9 @@ export default defineBackground(() => {
     if (askingTabs.delete(tabId)) void analyzeGaps();
   });
   browser.contextMenus.onClicked.addListener((info, tab) => {
-    if (info.menuItemId === MENU_ID && tab?.id !== undefined) void recordSelection(tab.id);
+    if (tab?.id === undefined) return;
+    if (info.menuItemId === MENU_ID) void recordSelection(tab.id);
+    if (info.menuItemId === QUOTE_MENU_ID) void recordSelection(tab.id, 'quote');
   });
 
   onMessages({

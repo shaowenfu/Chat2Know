@@ -3,6 +3,8 @@ import { buildTextIndex, quoteFromRange, type TextQuote } from './text-quote';
 
 export interface CapturedSelection {
   markdown: string;
+  /** The selection word for word, for a protected quote: its text as shown, with formulas and code as their Markdown source. */
+  words: string;
   quote: TextQuote;
   url: string;
   pageTitle: string;
@@ -32,7 +34,8 @@ function outermost(el: Element): Element {
   return top;
 }
 
-export function captureRange(range: Range, doc: Document, url: string): CapturedSelection | null {
+/** `shown` is the selection's text as the browser lays it out (Selection.toString keeps line breaks between blocks). */
+export function captureRange(range: Range, doc: Document, url: string, shown = range.toString()): CapturedSelection | null {
   const expanded = expandRange(range);
   const quote = quoteFromRange(expanded, doc.body, buildTextIndex(doc.body));
   if (!quote) return null;
@@ -45,11 +48,23 @@ export function captureRange(range: Range, doc: Document, url: string): Captured
     if (lang && !clone.hasAttribute('data-language')) clone.setAttribute('data-language', lang);
   });
   const markdown = htmlToMarkdown(container) || quote.exact;
-  return { markdown, quote, url, pageTitle: doc.title };
+  // A formula's rendered text is not its words (KaTeX doubles it), so a selection with one keeps the Markdown.
+  const words = container.querySelector(ATOMIC) ? markdown : plainWords(shown);
+  return { markdown, words: words || quote.exact, quote, url, pageTitle: doc.title };
+}
+
+/** The selected text as the page shows it: line breaks kept, runs of spaces and blank lines collapsed. */
+export function plainWords(text: string): string {
+  return text
+    .split('\n')
+    .map((line) => line.replace(/[ \t\u00a0]+/g, ' ').trim())
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
 }
 
 export function captureSelection(doc: Document, url: string): CapturedSelection | null {
   const sel = doc.getSelection();
   if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return null;
-  return captureRange(sel.getRangeAt(0), doc, url);
+  return captureRange(sel.getRangeAt(0), doc, url, sel.toString());
 }

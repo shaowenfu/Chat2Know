@@ -16,7 +16,12 @@
   },
   "site": {
     "add": "Add to map",
-    "added": "Added"
+    "added": "Added",
+    "barLabel": "For the selection",
+    "barNote": "Note",
+    "barQuote": "Keep words",
+    "barAsk": "Ask",
+    "barAskSoon": "Coming in the next version"
   },
   "toast": {
     "relocate": "Move",
@@ -28,13 +33,15 @@
     "createMapAndRecord": "create a map and add this",
     "addAnyway": "Add anyway",
     "notPlaced": "Kept in Unplaced: $1",
-    "noSelection": "Select some text first."
+    "noSelection": "Select some text first.",
+    "recordedQuote": "Kept word for word in $1"
   },
   "command": {
     "record": "Add the selection to the map"
   },
   "menu": {
-    "record": "Add to Chat2Know map"
+    "record": "Add to Chat2Know map",
+    "recordQuote": "Keep word for word in Chat2Know map"
   },
   "picker": {
     "title": "Where should it go?",
@@ -106,7 +113,8 @@
     "newChild": "New child",
     "newChildTitle": "New topic",
     "empty": "No maps yet. Record your first note in an AI chat, or start a map here.",
-    "dateLocale": "en"
+    "dateLocale": "en",
+    "addPlaceholderQuote": "The exact words to keep"
   },
   "settings": {
     "model": "Model",

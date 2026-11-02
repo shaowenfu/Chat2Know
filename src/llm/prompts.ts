@@ -2,6 +2,7 @@ import type { ChatMessage } from './client';
 import { LlmError } from './client';
 import { obj, str, strList } from './validate';
 import type { OutlineNode } from '@/src/graph/tree';
+import type { ItemType } from '@/src/db/types';
 
 /**
  * Every prompt starts its system message with a `[task:<name>]` tag. Real models
@@ -135,8 +136,8 @@ export type PromptLang = 'zh' | 'en';
 
 export interface PlacementInput {
   lang: PromptLang;
-  itemType: 'formula' | 'statement';
-  text: string; // LaTeX for a formula, the recorded text for a statement
+  itemType: ItemType;
+  text: string; // LaTeX for a formula, the recorded text for a statement, the exact words of a quote
   before: string; // the conversation just before it
   after: string;
   map: string; // the open map's name, '' when the user left it unnamed
@@ -148,7 +149,7 @@ export interface PlacementInput {
 
 export interface PlacementReply {
   path: string[]; // 1–3 chapter / topic titles below the map
-  statement: string; // the one-sentence statement; "" for a formula
+  statement: string; // the one-sentence statement; "" for a formula or a quote
   mapName: string; // a name for an unnamed map; "" otherwise
 }
 
@@ -156,30 +157,34 @@ export const MAX_PATH = 3;
 
 const PLACE_TEXT = {
   zh: {
-    task: (statement: boolean, unnamed: boolean) =>
+    task: (type: ItemType, unnamed: boolean) =>
       [
         '你负责把学习者的一条笔记放进他打开的这张知识导图。导图下面是章和知识点，标题都是简短的名词，不是问句。',
         '为这条笔记选出它在这张导图里的路径：1 到 3 层章 / 知识点标题。优先用已有位置（候选位置或导图结构里的原标题，一字不差）；都不合适时才新建知识点或章。新标题是简短的中文名词。学习者自己改过的位置说明了他的整理习惯，照着做。',
-        statement
+        type === 'statement'
           ? '再把笔记改写成一句保留原意的话（约 40 个汉字以内，公式写成 $...$）。如果笔记只是一个术语或名称，写成"术语：一句话解释"，解释根据上下文和你的知识。'
-          : '这条笔记是公式，"statement" 填 ""。',
+          : type === 'quote'
+            ? '这条笔记是学习者要原样保留的原文：只决定它放在哪里，不改写、不总结，"statement" 填 ""。'
+            : '这条笔记是公式，"statement" 填 ""。',
         unnamed ? '这张导图还没有名字：按这条笔记所属的学科或主题，起一个简短的中文名字填在 "mapName"。' : '"mapName" 填 ""。',
         '只返回 JSON：{"path": ["..."], "statement": "...", "mapName": "..."}。',
       ].join(''),
-    labels: { note: '笔记', formula: '公式', statement: '文字', context: '上下文', now: '现在在', candidates: '候选位置', map: '导图', unnamed: '（未命名）', outline: '导图结构', examples: '学习者改过的位置', none: '（无）' },
+    labels: { note: '笔记', formula: '公式', statement: '文字', quote: '原文', context: '上下文', now: '现在在', candidates: '候选位置', map: '导图', unnamed: '（未命名）', outline: '导图结构', examples: '学习者改过的位置', none: '（无）' },
   },
   en: {
-    task: (statement: boolean, unnamed: boolean) =>
+    task: (type: ItemType, unnamed: boolean) =>
       [
         "You file one of a learner's notes into the knowledge map they have open. Below the map are chapters and topics; their titles are short nouns, never questions.",
         ' Choose the note\'s path in this map: 1–3 chapter / topic titles. Prefer an existing place (a candidate or a path from the map\'s outline, with the exact titles); add a new topic or chapter only when nothing fits. New titles are short English nouns. The learner\'s own corrections show how they organize notes; follow them.',
-        statement
+        type === 'statement'
           ? ' Also rewrite the note as one plain sentence that keeps its claim (about 20 words at most, formulas as $...$). If the note is only a term or a name, write "term: a one-sentence explanation", drawn from the context and your knowledge.'
-          : ' The note is a formula: "statement" is "".',
+          : type === 'quote'
+            ? ' The note is a quote the learner keeps word for word: only choose its place, never rewrite or summarize it; "statement" is "".'
+            : ' The note is a formula: "statement" is "".',
         unnamed ? ' The map has no name yet: give it a short English name for the subject or topic this note belongs to, in "mapName".' : ' "mapName" is "".',
         ' Return JSON only: {"path": ["..."], "statement": "...", "mapName": "..."}.',
       ].join(''),
-    labels: { note: 'Note', formula: 'formula', statement: 'text', context: 'Context', now: 'Now in', candidates: 'Candidates', map: 'Map', unnamed: '(unnamed)', outline: "The map's outline", examples: "The learner's corrections", none: '(none)' },
+    labels: { note: 'Note', formula: 'formula', statement: 'text', quote: 'quote', context: 'Context', now: 'Now in', candidates: 'Candidates', map: 'Map', unnamed: '(unnamed)', outline: "The map's outline", examples: "The learner's corrections", none: '(none)' },
   },
 } as const;
 
@@ -188,11 +193,11 @@ export function placePrompt(input: PlacementInput): ChatMessage[] {
   const l = t.labels;
   const examples = input.examples.length ? input.examples.map((e) => `- ${e.text} → ${e.path.join(' › ')}`).join('\n') : l.none;
   return [
-    system('place', t.task(input.itemType === 'statement', !input.map)),
+    system('place', t.task(input.itemType, !input.map)),
     {
       role: 'user',
       content: [
-        `${l.note} (${input.itemType === 'formula' ? l.formula : l.statement}): ${input.text}`,
+        `${l.note} (${l[input.itemType]}): ${input.text}`,
         `${l.context}: …${input.before} [NOTE] ${input.after}…`,
         `${l.map}: ${input.map || l.unnamed}`,
         `${l.now}: ${input.now || l.none}`,
@@ -204,7 +209,8 @@ export function placePrompt(input: PlacementInput): ChatMessage[] {
   ];
 }
 
-export function parsePlacement(value: unknown, itemType: 'formula' | 'statement', unnamed: boolean): PlacementReply {
+/** Only a statement takes the model's sentence; a formula and a protected quote keep their own words. */
+export function parsePlacement(value: unknown, itemType: ItemType, unnamed: boolean): PlacementReply {
   const o = obj(value);
   const path = strList(o, 'path');
   if (path.length < 1 || path.length > MAX_PATH) throw new LlmError(`Expected 1–${MAX_PATH} titles in "path"`);

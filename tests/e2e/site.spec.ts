@@ -68,6 +68,82 @@ test('＋ beside formulas on ticked sites: record, toast, undo, duplicates; noth
   expect(await other.locator('chat2know-ui').count()).toBe(0);
 });
 
+test('the bar over a selection: 记下, 保护原文 word for word, 提问 not yet; never in a text box', async ({ context, extensionId, fixtureServer }) => {
+  const panel = await context.newPage();
+  await panel.setViewportSize({ width: 380, height: 820 });
+  await panel.goto(`chrome-extension://${extensionId}/sidepanel.html`);
+  await send(panel, 'sites/setOrigins', { origins: [fixtureServer] });
+  await send(panel, 'map/addSubject', { title: '注意力' });
+  const markdown = async () => (await send<string>(panel, 'map/export', { format: 'markdown' })).data;
+
+  const page = await context.newPage();
+  await page.setViewportSize({ width: 1100, height: 760 });
+  await page.goto(`${fixtureServer}/synthetic-chat-katex.html`);
+  await expect(page.locator('chat2know-ui button[data-state="add"]')).toHaveCount(1); // the script is in
+  const bar = page.locator('chat2know-ui [role="toolbar"]');
+  const toast = page.locator('chat2know-ui .toast');
+
+  // Nothing is drawn until the user selects; one stray character is not a selection.
+  await expect(bar).toHaveCount(0);
+  await selectText(page, '#outro', 'I');
+  await page.waitForTimeout(100);
+  await expect(bar).toHaveCount(0);
+
+  const words = 'attention is a learned, content-based lookup.';
+  await selectText(page, '#outro', words);
+  await expect(bar.getByRole('button')).toHaveText(['Note', 'Keep words', 'Ask']);
+  await expect(bar.getByRole('button', { name: 'Ask' })).toBeDisabled();
+  // The bar sits above the selection.
+  const [barBox, textBox] = [await bar.boundingBox(), await page.locator('#outro').boundingBox()];
+  expect(barBox!.y + barBox!.height).toBeLessThanOrEqual(textBox!.y);
+  mkdirSync('tests/e2e/screenshots', { recursive: true });
+  await page.screenshot({ path: 'tests/e2e/screenshots/page-selection-bar.png' });
+
+  // 保护原文: the words go in exactly as selected; the bar goes away.
+  await bar.getByRole('button', { name: 'Keep words' }).click();
+  await expect(toast).toContainText('Kept word for word in 注意力 › Unplaced');
+  await expect(bar).toHaveCount(0);
+  expect(await markdown()).toContain(`- > ${words} ([source]`);
+
+  // 记下: the same as Alt+S, a statement.
+  await selectText(page, 'p:has(strong)', 'keeps the softmax from saturating');
+  await bar.getByRole('button', { name: 'Note' }).click();
+  await expect(toast).toContainText('Added to 注意力 › Unplaced');
+  expect(await markdown()).toContain('- keeps the softmax from saturating');
+
+  // Esc puts the bar away; collapsing the selection does too.
+  await selectText(page, '#intro', 'Attention lets each token');
+  await expect(bar).toHaveCount(1);
+  await page.keyboard.press('Escape');
+  await expect(bar).toHaveCount(0);
+  await selectText(page, '#intro', 'Attention lets each token');
+  await page.evaluate(() => document.getSelection()!.removeAllRanges());
+  await expect(bar).toHaveCount(0);
+
+  // Text the user selects while typing a question is theirs: no bar.
+  await page.evaluate(() => {
+    const box = document.createElement('textarea');
+    box.id = 'composer';
+    box.value = 'how does scaling help?';
+    document.querySelector('#outro')!.after(box);
+    box.focus();
+    box.select();
+    box.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+  });
+  await page.waitForTimeout(100);
+  await expect(bar).toHaveCount(0);
+
+  // In the side panel the quote has its own border and a serif face (artboard 13).
+  await panel.reload();
+  const quote = panel.locator('.item.quote');
+  await expect(quote.locator('.item-body')).toHaveText(words);
+  expect(await quote.evaluate((el) => [getComputedStyle(el).borderTopColor, getComputedStyle(el.querySelector('.item-body')!).fontFamily])).toEqual([
+    'rgb(122, 79, 181)',
+    expect.stringContaining('Noto Serif SC'),
+  ]);
+  await panel.screenshot({ path: 'tests/e2e/screenshots/panel-quote.png' });
+});
+
 test('＋ on the saved pages of the six AI sites', async ({ context, extensionId, fixtureServer }) => {
   test.setTimeout(90_000); // large saved pages whose external assets are blocked
   const panel = await context.newPage();

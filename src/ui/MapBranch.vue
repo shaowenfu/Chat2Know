@@ -3,7 +3,7 @@ import { computed, nextTick, ref, watch } from 'vue';
 import { i18n } from '@/src/i18n';
 import { isGrey, itemCount, type MapTree } from '@/src/graph/tree';
 import type { MapNode } from '@/src/db/types';
-import { formulaHtml, textHtml } from './math';
+import { itemHtml } from './math';
 import { useMap } from './map-context';
 import GapCard from './GapCard.vue';
 
@@ -83,6 +83,7 @@ function finishEdit(node: MapNode, save: boolean) {
           :class="{
             newest: t.node.id === map.newestId.value,
             formula: t.node.itemType === 'formula',
+            quote: t.node.itemType === 'quote',
             dragging: map.dragging.value === t.node.id,
             selected: map.selectedId.value === t.node.id,
           }"
@@ -109,7 +110,7 @@ function finishEdit(node: MapNode, save: boolean) {
             class="item-body"
             @click="map.select(t.node)"
             @dblclick="map.dblclick(t.node)"
-            v-html="t.node.itemType === 'formula' ? formulaHtml(t.node.latex ?? '') : textHtml(t.node.title)"
+            v-html="itemHtml(t.node)"
           />
           <!-- eslint-enable vue/no-v-html -->
           <span v-if="t.node.id === map.newestId.value" class="badge">{{ i18n.t('panel.justAdded') }}</span>
@@ -192,7 +193,7 @@ function finishEdit(node: MapNode, save: boolean) {
         class="edit"
         :class="{ mono: adding.itemType === 'formula' }"
         data-testid="add-item"
-        :placeholder="adding.itemType === 'formula' ? i18n.t('mapPage.addPlaceholderFormula') : i18n.t('mapPage.addPlaceholderStatement')"
+        :placeholder="i18n.t(adding.itemType === 'formula' ? 'mapPage.addPlaceholderFormula' : adding.itemType === 'quote' ? 'mapPage.addPlaceholderQuote' : 'mapPage.addPlaceholderStatement')"
         @keydown.enter.prevent="finishAdd(true)"
         @keydown.esc.prevent="finishAdd(false)"
         @blur="finishAdd(true)"
@@ -320,6 +321,13 @@ li {
   cursor: pointer;
   overflow-x: auto;
   overflow-y: hidden;
+}
+.item.quote {
+  border: 1.5px solid var(--quote);
+}
+.item.quote .item-body {
+  font-family: var(--serif);
+  white-space: pre-wrap;
 }
 .item.formula .item-body {
   font-family: var(--mono);
