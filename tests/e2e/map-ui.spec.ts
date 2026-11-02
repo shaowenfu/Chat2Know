@@ -49,8 +49,10 @@ function seedMap() {
   ];
 }
 
+/** The seed map, imported and opened (as the user would open it). */
 async function importSeed(panel: Page) {
   await send(panel, 'map/import', { json: JSON.stringify({ format: 'chat2know', version: 2, exportedAt: 0, nodes: seedMap() }) });
+  await send(panel, 'maps/open', { id: 's' });
 }
 const markdown = async (panel: Page) => (await send<string>(panel, 'map/export', { format: 'markdown', includeGrey: true })).data;
 
@@ -187,10 +189,17 @@ test.describe('screenshots in Chinese, compared with the artboards', () => {
     await panel.getByRole('tree').getByRole('button', { name: '矩阵', exact: true }).click();
     await panel.screenshot({ path: `${SHOTS}/7-no-model.png` });
 
-    // Record a formula on a page with the model set up: it lands in the map, marked 刚记下.
+    // The user creates a second map from the switcher (artboard 11); it opens.
     await send(panel, 'sites/setOrigins', { origins: [fixtureServer] });
     await configureModel(panel, mockLlm.url);
     await expect.poll(() => markdown(panel)).not.toContain('待归位');
+    await panel.getByTestId('map-switcher').click();
+    await panel.getByTestId('new-map-title').fill('深度学习');
+    await panel.screenshot({ path: `${SHOTS}/11-map-switcher.png` });
+    await panel.getByRole('button', { name: '＋ 新建' }).click();
+    await expect(panel.getByTestId('map-switcher')).toHaveText('深度学习');
+
+    // Record a formula on a page: it goes into the open map, marked 刚记下.
     const page = await context.newPage();
     await page.goto(`${fixtureServer}/synthetic-chat-katex.html`);
     await page.locator('chat2know-ui button[data-state="add"]').click();

@@ -3,7 +3,7 @@ import type { MapNode } from '@/src/db/types';
 import type { MapTree } from '@/src/graph/tree';
 import { cosine } from '@/src/graph/cosine';
 import type { LlmClient } from '@/src/llm/client';
-import { parsePlacement, placePrompt } from '@/src/llm/prompts';
+import { parsePlacement, placePrompt, type PromptLang } from '@/src/llm/prompts';
 import { embedAll } from './vectors';
 
 export const CANDIDATES = 8;
@@ -19,7 +19,7 @@ export interface PlaceRequest {
   group?: string;
   before: string;
   after: string;
-  untitled: string;
+  lang: PromptLang;
   unplaced: string;
 }
 
@@ -29,12 +29,12 @@ const itemText = (n: MapNode) => n.latex ?? n.title;
 
 export interface Section {
   node: MapNode;
-  path: string[]; // titles from the subject down to this section
+  path: string[]; // titles below the map down to this section
   items: string[]; // the texts of the items right below it
 }
 
-/** Every section of every subject with its title path; the 待归位 groups are no place. */
-export async function sections(repo: Repository): Promise<Section[]> {
+/** Every section of a map (or of every map) with its title path below the map; the 待归位 groups are no place. */
+export async function sections(repo: Repository, mapId?: string): Promise<Section[]> {
   const out: Section[] = [];
   const walk = (t: MapTree, path: string[]) => {
     for (const c of t.children) {
@@ -44,7 +44,7 @@ export async function sections(repo: Repository): Promise<Section[]> {
       walk(c, p);
     }
   };
-  for (const s of await repo.listSubjects()) walk(await repo.subjectTree(s.id), [s.title]);
+  for (const s of await repo.listSubjects()) if (mapId === undefined || s.id === mapId) walk(await repo.subjectTree(s.id), []);
   return out;
 }
 
@@ -78,8 +78,8 @@ export async function closestSections(repo: Repository, client: Pick<LlmClient, 
     .map((c) => c.s);
 }
 
-/** Places every item waiting in a 待归位 group, one model call each (after the model is set up, or an import). */
-export async function placeUnplaced(repo: Repository, client: Client, embeddingModel: string, labels: { untitled: string; unplaced: string }): Promise<number> {
+/** Places every item waiting in a 待归位 group, one model call each, each within its own map (after a model is set up). */
+export async function placeUnplaced(repo: Repository, client: Client, embeddingModel: string, labels: { lang: PromptLang; unplaced: string }): Promise<number> {
   let placed = 0;
   for (const item of await repo.listItems()) {
     const parent = await repo.node(item.parentId!);
@@ -91,32 +91,38 @@ export async function placeUnplaced(repo: Repository, client: Client, embeddingM
 }
 
 /**
- * Moves a just-recorded item to where it belongs: one model call picks the subject
- * and the topic (or a new one) and compresses a statement to one sentence. Returns
- * the new path's titles, or null when the item changed meanwhile (undone, moved or
- * edited by the user), which is left as it is.
+ * Moves a just-recorded item to where it belongs in its own map: one model call
+ * picks the topic (or a new one), compresses a statement to one sentence and names
+ * an unnamed map. Returns the new path's titles from the map down, or null when the
+ * item changed meanwhile (undone, moved or edited by the user), which is left as it is.
  */
 export async function placeItem(repo: Repository, client: Client, embeddingModel: string, req: PlaceRequest): Promise<string[] | null> {
   const item = await repo.find(req.itemId);
   if (!item || item.deletedAt) return null;
-  const now = await repo.pathOf(item.id);
+  const map = await repo.node(item.subjectId);
+  const here = await sections(repo, map.id);
+  const now = (await repo.pathOf(item.id)).slice(1, -1);
+  // The user's corrections in this map, as paths below the map.
+  const examples = (await repo.placementExamples(EXAMPLES, map.id)).map((e) => ({ text: e.text, path: e.path.slice(1) }));
+  const unnamed = !map.title.trim();
   const reply = await client.json(
     placePrompt({
+      lang: req.lang,
       itemType: item.itemType!,
       text: itemText(item),
       before: req.before,
       after: req.after,
-      now: now.slice(0, -1).map((n) => (n.role ? req.unplaced : n.title)).join(SEP),
-      candidates: embeddingModel ? (await closestSections(repo, client, embeddingModel, item, await sections(repo))).slice(0, CANDIDATES).map((c) => c.path.join(SEP)) : [],
-      subjects: outline(await Promise.all((await repo.listSubjects()).map((s) => repo.subjectTree(s.id)))),
-      examples: await repo.placementExamples(EXAMPLES),
+      map: map.title,
+      now: now.map((n) => (n.role ? req.unplaced : n.title)).join(SEP),
+      candidates: embeddingModel ? (await closestSections(repo, client, embeddingModel, item, here)).slice(0, CANDIDATES).map((c) => c.path.join(SEP)) : [],
+      outline: outline([await repo.subjectTree(map.id)].flatMap((t) => t.children)),
+      examples,
     }),
-    (v) => parsePlacement(v, item.itemType!),
+    (v) => parsePlacement(v, item.itemType!, unnamed),
   );
-  const path = await repo.fileItem(item.id, item.updatedAt, { subject: reply.subject, path: reply.path, statement: reply.statement, untitled: req.untitled }, req.group);
+  const path = await repo.fileItem(item.id, item.updatedAt, { path: reply.path, statement: reply.statement, ...(unnamed ? { mapName: reply.mapName } : {}) }, req.group);
   if (!path) return null;
   const titles = path.slice(0, -1).map((n) => n.title);
   await repo.notePlacement(item.id, titles);
   return titles;
 }
-

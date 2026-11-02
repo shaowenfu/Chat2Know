@@ -89,13 +89,16 @@ const MOCK_PLACES: [RegExp, string, string[]][] = [
   [/\\det|determinant|行列式/i, '线性代数', ['行列式']],
 ];
 
+/** The prompt in either language: "Note (formula): …" or "笔记 (公式): …", and "Map: …" / "导图: …". */
 function placeReply(user: string): string {
-  const m = /^Note \((formula|statement)\): (.*)$/m.exec(user);
+  const m = /^(?:Note|笔记) \((formula|text|公式|文字)\): (.*)$/m.exec(user);
   const [type, text] = [m?.[1] ?? 'formula', m?.[2] ?? ''];
-  const [, subject, path] = MOCK_PLACES.find(([re]) => re.test(text)) ?? [null, '线性代数', ['其他']];
+  const unnamed = /^(?:Map|导图): (?:\(unnamed\)|（未命名）)$/m.test(user);
+  // The mock's place for the note: the map name it would give, and the path below the map.
+  const [, mapName, path] = MOCK_PLACES.find(([re]) => re.test(text)) ?? [null, '线性代数', ['其他']];
   // A statement keeps its first sentence.
-  const statement = type === 'statement' ? (text.split(/(?<=[.。])\s*/)[0] ?? text) : '';
-  return JSON.stringify({ subject, path, statement });
+  const statement = type === 'text' || type === '文字' ? (text.split(/(?<=[.。])\s*/)[0] ?? text) : '';
+  return JSON.stringify({ path, statement, mapName: unnamed ? mapName : '' });
 }
 
 const MOCK_OUTLINE = [

@@ -4,7 +4,6 @@ import { Chat2KnowDB } from '@/src/db/schema';
 import { Hlc } from '@/src/db/hlc';
 import { Repository } from '@/src/db/repository';
 import { EXPORT_FORMAT, EXPORT_VERSION, parseImport } from '@/src/export/json';
-import { importV01 } from '@/src/services/import';
 import type { MapTree } from '@/src/graph/tree';
 
 let seq = 0;
@@ -40,54 +39,13 @@ describe('JSON export and import', () => {
 
     const b = setup('b');
     const parsed = parseImport(await exportText(a));
-    if (parsed.version !== 2) throw new Error('expected v2');
-    expect(parsed.nodes).toHaveLength(6);
-    await b.importNodes(parsed.nodes);
+    expect(parsed).toHaveLength(6);
+    await b.importNodes(parsed);
     expect(shape(await b.subjectTree(subject.id))).toEqual(shape(await a.subjectTree(subject.id)));
 
     // One undoable write.
     await b.undo();
     expect(await b.listSubjects()).toEqual([]);
-  });
-
-  it('turns v0.1 knowledge cards into items in a new subject’s unplaced group', async () => {
-    const v01 = {
-      format: 'chat2know',
-      version: 1,
-      exportedAt: 0,
-      nodes: [
-        { id: 'k1', type: 'knowledge', title: 'Why is (AB)ᵀ = BᵀAᵀ?', body: 'Because\n\n$$\n(AB)^T = B^T A^T\n$$\n\nand $$\\det A^T = \\det A$$', summary: 'x' },
-        { id: 'k2', type: 'knowledge', title: 'When is A invertible?', body: 'Long answer…', summary: 'A is invertible iff det A ≠ 0.' },
-        { id: 'k3', type: 'knowledge', title: 'Rank?', body: '**Rank** is the number of pivots.' },
-        { id: 'i1', type: 'idea', title: 'an idea', body: 'skip me' },
-        { id: 'k4', type: 'knowledge', title: 'deleted', body: 'gone', deletedAt: 5 },
-      ],
-      edges: [],
-      sources: [{ id: 's1', nodeId: 'k1', ...source }],
-      reviews: [],
-    };
-    const parsed = parseImport(JSON.stringify(v01));
-    if (parsed.version !== 1) throw new Error('expected v0.1');
-    const repo = setup('a');
-    const { node: subject } = await repo.importItems('导入的笔记', parsed.items);
-    const tree = await repo.subjectTree(subject.id);
-    expect(tree.node.title).toBe('导入的笔记');
-    const [group] = tree.children;
-    expect(group!.node.role).toBe('unplaced');
-    expect(group!.children.map(({ node: n }) => [n.itemType, n.latex ?? n.title, n.source?.url])).toEqual([
-      ['formula', '(AB)^T = B^T A^T', source.url],
-      ['formula', '\\det A^T = \\det A', source.url],
-      ['statement', 'A is invertible iff det A ≠ 0.', undefined],
-      ['statement', 'Rank is the number of pivots.', undefined],
-    ]);
-  });
-
-  it('a v0.1 import leaves out notes already on the map or repeated in the file', async () => {
-    const repo = setup('a');
-    const f = (latex: string) => ({ itemType: 'formula' as const, title: '', latex });
-    expect(await importV01(repo, [f('(AB)^T = B^T A^T'), f('(AB)^T=B^T  A^T'), f('\\det A^T = \\det A')], '导入的笔记')).toBe(2);
-    expect(await importV01(repo, [f('\\det A^T = \\det A')], '导入的笔记')).toBe(0);
-    expect(await repo.listItems()).toHaveLength(2);
   });
 
   it('rejects files that are not a valid export', async () => {
@@ -100,6 +58,6 @@ describe('JSON export and import', () => {
     expect(() => parseImport(file([{ ...node, order: 'a00' }]))).toThrow('error.invalidExport');
     expect(() => parseImport(file([node, { ...node, id: 'i', kind: 'item', parentId: 'missing', itemType: 'formula' }]))).toThrow('error.invalidExport');
     expect(() => parseImport(file([node, { ...node, id: 'i', kind: 'section', parentId: 's', itemType: 'formula' }]))).toThrow('error.invalidExport');
-    expect(parseImport(file([node]))).toEqual({ version: 2, nodes: [node] });
+    expect(parseImport(file([node]))).toEqual([node]);
   });
 });

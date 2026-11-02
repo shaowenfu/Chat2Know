@@ -7,6 +7,7 @@ import { moveByUser, parentPath, placeOptions, searchPlaces } from '@/src/servic
 import { mockEmbedding } from '../mock-llm/server';
 
 let seq = 0;
+const L = { unplaced: '待归位', unnamed: '未命名导图' };
 
 describe('改位置', () => {
   let db: Chat2KnowDB;
@@ -30,32 +31,32 @@ describe('改位置', () => {
   afterEach(() => db.delete());
 
   it('offers the topics recorded into last without vectors, the closest ones with them', async () => {
-    expect((await placeOptions(repo, null, '', ids.item!)).map((p) => p.path)).toEqual([
+    expect((await placeOptions(repo, null, '', ids.item!, '未命名导图')).map((p) => p.path)).toEqual([
       ['线性代数', '行列式'],
       ['线性代数', '矩阵', '迹'],
     ]);
     const client = { embed: async (texts: string[]) => texts.map(mockEmbedding) };
-    const places = await placeOptions(repo, client, 'mock-embed', ids.item!);
+    const places = await placeOptions(repo, client, 'mock-embed', ids.item!, '未命名导图');
     expect(places).toHaveLength(3);
     expect(places[0]!.path).toEqual(['线性代数', '行列式']);
   });
 
   it('searches topics by title', async () => {
-    expect((await searchPlaces(repo, '转')).map((p) => p.path)).toEqual([['线性代数', '矩阵', '转置']]);
-    expect(await searchPlaces(repo, '  ')).toEqual([]);
+    expect((await searchPlaces(repo, '转', '未命名导图')).map((p) => p.path)).toEqual([['线性代数', '矩阵', '转置']]);
+    expect(await searchPlaces(repo, '  ', '未命名导图')).toEqual([]);
   });
 
   it('moves where the user says, into a new topic beside a topic or under a chapter, as examples once placed', async () => {
     await repo.notePlacement(ids.item!, ['线性代数', '待归位']);
-    expect((await moveByUser(repo, ids.item!, { placeId: ids.det! }, '待归位')).path).toEqual(['线性代数', '行列式']);
-    expect(await repo.placementExamples(20)).toEqual([{ text: '\\det A^T = \\det A', path: ['线性代数', '行列式'] }]);
+    expect((await moveByUser(repo, ids.item!, { placeId: ids.det! }, L)).path).toEqual(['线性代数', '行列式']);
+    expect(await repo.placementExamples(20, ids.la!)).toEqual([{ text: '\\det A^T = \\det A', path: ['线性代数', '行列式'] }]);
 
-    expect((await moveByUser(repo, ids.item!, { placeId: ids.trace!, newTopic: '转置的性质' }, '待归位')).path).toEqual(['线性代数', '矩阵', '转置的性质']);
-    expect((await moveByUser(repo, ids.item!, { placeId: ids.matrix!, newTopic: '行列式与转置' }, '待归位')).path).toEqual(['线性代数', '矩阵', '行列式与转置']);
-    const { group } = await moveByUser(repo, ids.item!, { placeId: ids.det!, newTopic: '性质' }, '待归位');
-    expect(await parentPath(repo, ids.item!, '待归位')).toEqual(['线性代数', '行列式', '性质']);
+    expect((await moveByUser(repo, ids.item!, { placeId: ids.trace!, newTopic: '转置的性质' }, L)).path).toEqual(['线性代数', '矩阵', '转置的性质']);
+    expect((await moveByUser(repo, ids.item!, { placeId: ids.matrix!, newTopic: '行列式与转置' }, L)).path).toEqual(['线性代数', '矩阵', '行列式与转置']);
+    const { group } = await moveByUser(repo, ids.item!, { placeId: ids.det!, newTopic: '性质' }, L);
+    expect(await parentPath(repo, ids.item!, L)).toEqual(['线性代数', '行列式', '性质']);
     await repo.undo(group);
-    expect(await parentPath(repo, ids.item!, '待归位')).toEqual(['线性代数', '矩阵', '行列式与转置']);
-    expect(await searchPlaces(repo, '性质')).toEqual([{ id: expect.any(String), path: ['线性代数', '矩阵', '转置的性质'] }]);
+    expect(await parentPath(repo, ids.item!, L)).toEqual(['线性代数', '矩阵', '行列式与转置']);
+    expect(await searchPlaces(repo, '性质', '未命名导图')).toEqual([{ id: expect.any(String), path: ['线性代数', '矩阵', '转置的性质'] }]);
   });
 });

@@ -64,7 +64,7 @@ describe('eval', () => {
     expect(tags).toHaveLength(cases.length);
   });
 
-  it('placement: subject and topic of each note on a seeded map; statements become one short sentence', async () => {
+  it('placement: the topic of each note in its map; an unnamed map gets its subject\'s name; statements become one short sentence', async () => {
     const { map, cases } = data('placement.json') as {
       map: Record<string, Record<string, string[]>>;
       cases: { itemType: 'formula' | 'statement'; text: string; subject: string; topic: string[] }[];
@@ -78,27 +78,34 @@ describe('eval', () => {
         for (const topic of topics) await repo.addSection(c.id, topic);
       }
     }
-    const labels = { unplaced: '待归位', newSubject: '未命名学科' };
-    const samples: { text: string; path: string[]; statement?: string }[] = [];
-    let subjects = 0;
+    const labels = { unplaced: '待归位', unnamed: '未命名导图' };
+    const maps = new Map((await repo.listSubjects()).map((m) => [m.title, m.id]));
+    const lang = (process.env.CHAT2KNOW_LANG ?? 'zh') as 'zh' | 'en';
+    const samples: { text: string; map: string; path: string[]; statement?: string }[] = [];
     let topics = 0;
+    let named = 0;
+    let unnamedCases = 0;
     const lengths: number[] = [];
     for (const [i, c] of cases.entries()) {
-      // Each note comes from its own conversation and is undone afterwards, so every case sees the same map.
+      // The user opened the map of the note's subject; a subject without a map gets a new, unnamed one.
+      const mapId = maps.get(c.subject) ?? (await repo.addSubject('')).node.id;
       const source = { url: `https://chat.example/c/${i}`, pageTitle: '', quoteExact: c.text, quotePrefix: '', quoteSuffix: '', capturedAt: 0 };
-      const r = await recordItem(repo, { itemType: c.itemType, title: c.itemType === 'statement' ? c.text : '', ...(c.itemType === 'formula' ? { latex: c.text } : {}), source }, labels);
+      const r = await recordItem(repo, mapId, { itemType: c.itemType, title: c.itemType === 'statement' ? c.text : '', ...(c.itemType === 'formula' ? { latex: c.text } : {}), source }, labels);
       if (r.status !== 'recorded') throw new Error(`Duplicate case ${c.text}`);
-      const path = await placeItem(repo, client, settings.embeddingModel, { itemId: r.itemId, group: r.group, before: '', after: '', untitled: labels.newSubject, unplaced: labels.unplaced });
+      const path = (await placeItem(repo, client, settings.embeddingModel, { itemId: r.itemId, group: r.group, before: '', after: '', lang, unplaced: labels.unplaced })) ?? [];
       const item = await repo.node(r.itemId);
-      if (path?.[0] === c.subject) subjects++;
-      if (path?.[0] === c.subject && c.topic.some((t) => path.slice(1).join(' ').toLowerCase().includes(t.toLowerCase()))) topics++;
+      if (!maps.has(c.subject)) {
+        unnamedCases++;
+        if (path[0]?.includes(c.subject)) named++;
+      }
+      if (c.topic.some((t) => path.slice(1).join(' ').toLowerCase().includes(t.toLowerCase()))) topics++;
       if (c.itemType === 'statement') lengths.push(item.title.length);
-      samples.push({ text: c.text, path: path ?? [], ...(c.itemType === 'statement' ? { statement: item.title } : {}) });
+      samples.push({ text: c.text, map: path[0] ?? '', path: path.slice(1), ...(c.itemType === 'statement' ? { statement: item.title } : {}) });
       await repo.undo(r.group);
     }
     await db.delete();
-    results.placementSubjectAccuracy = subjects / cases.length;
     results.placementTopicAccuracy = topics / cases.length;
+    results.unnamedMapNamed = unnamedCases ? named / unnamedCases : null;
     results.statementMaxLength = Math.max(...lengths);
     results.placementSamples = samples;
     expect(samples).toHaveLength(cases.length);

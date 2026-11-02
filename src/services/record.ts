@@ -13,11 +13,13 @@ export interface RecordRequest {
 
 export type RecordResult =
   | { status: 'recorded'; group: string; itemId: string; path: string[] }
-  | { status: 'duplicate'; itemId: string; path: string[] };
+  | { status: 'duplicate'; itemId: string; path: string[] }
+  /** No map is open: nothing was stored; the user creates or opens one. */
+  | { status: 'noMap' };
 
 export interface RecordLabels {
   unplaced: string;
-  newSubject: string;
+  unnamed: string;
 }
 
 const stripHash = (url: string) => url.replace(/#.*$/, '');
@@ -30,17 +32,19 @@ export const sameItem = (a: Pick<MapNode, 'itemType' | 'title' | 'latex'>, r: Pi
 /** Titles from the subject down to the item's parent, as the toast shows them. */
 export async function placePath(repo: Repository, nodeId: string, labels: RecordLabels): Promise<string[]> {
   const path = await repo.pathOf(nodeId);
-  return path.filter((n) => n.kind !== 'item').map((n) => (n.role === 'unplaced' ? labels.unplaced : n.title));
+  return path.filter((n) => n.kind !== 'item').map((n) => (n.role === 'unplaced' ? labels.unplaced : n.title || labels.unnamed));
 }
 
 /**
- * Stores a recorded item at once, without any model: where the previous item of
- * this conversation went, else in the "待归位" group of the subject last recorded
- * into (a new subject when there is none). The same formula or statement already
- * on the map is not added again unless forced.
+ * Stores a recorded item at once, without any model, in the map the user opened:
+ * where the previous item of this conversation went in that map, else in its
+ * "待归位" group. The same formula or statement already in that map is not added
+ * again unless forced. With no map open nothing is stored.
  */
-export async function recordItem(repo: Repository, req: RecordRequest, labels: RecordLabels): Promise<RecordResult> {
-  const items = await repo.listItems();
+export async function recordItem(repo: Repository, mapId: string | undefined, req: RecordRequest, labels: RecordLabels): Promise<RecordResult> {
+  const map = mapId === undefined ? undefined : await repo.find(mapId);
+  if (!map || map.deletedAt || map.kind !== 'subject') return { status: 'noMap' };
+  const items = (await repo.listItems()).filter((i) => i.subjectId === map.id);
   const duplicate = req.force ? undefined : items.find((i) => sameItem(i, req));
   // Recording what the extension had added makes it the user's own (solid black).
   if (duplicate?.origin === 'plugin') {
@@ -49,16 +53,9 @@ export async function recordItem(repo: Repository, req: RecordRequest, labels: R
   }
   if (duplicate) return { status: 'duplicate', itemId: duplicate.id, path: await placePath(repo, duplicate.id, labels) };
 
-  const newestFirst = [...items].sort((a, b) => b.createdAt - a.createdAt);
   const conversation = stripHash(req.source.url);
-  const previous = newestFirst.find((i) => i.source && stripHash(i.source.url) === conversation);
+  const previous = [...items].sort((a, b) => b.createdAt - a.createdAt).find((i) => i.source && stripHash(i.source.url) === conversation);
   const input = { itemType: req.itemType, title: req.title, ...(req.latex === undefined ? {} : { latex: req.latex }), source: req.source };
-  let written;
-  if (previous) {
-    written = await repo.addItem({ parentId: previous.parentId! }, input);
-  } else {
-    const subjectId = newestFirst[0]?.subjectId ?? (await repo.listSubjects()).at(-1)?.id;
-    written = await repo.addItem(subjectId ? { unplacedIn: subjectId } : { newSubject: labels.newSubject }, input);
-  }
+  const written = await repo.addItem(previous ? { parentId: previous.parentId! } : { unplacedIn: map.id }, input);
   return { status: 'recorded', group: written.group, itemId: written.node.id, path: await placePath(repo, written.node.id, labels) };
 }

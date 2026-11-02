@@ -43,7 +43,10 @@ export interface MessageMap {
 
   // Recording onto the map
   /** From the site script: a formula or a selection the user just recorded on the sender's page. */
-  'map/record': { req: { itemType: ItemType; title: string; latex?: string; quote: TextQuote; pageTitle: string; force?: boolean }; res: RecordResult };
+  'map/record': {
+    req: { itemType: ItemType; title: string; latex?: string; quote: TextQuote; pageTitle: string; force?: boolean; createMap?: boolean };
+    res: RecordResult;
+  };
   /** Subjects in map order, with how many items each holds and when the newest was recorded. */
   'map/subjects': { req: Record<string, never>; res: SubjectSummary[] };
   'map/tree': { req: { subjectId: string }; res: MapTree };
@@ -52,12 +55,13 @@ export interface MessageMap {
   'map/edit': { req: { id: string; title?: string; latex?: string }; res: { group: string } };
   /** Soft delete; a section's contents move up a level. */
   'map/remove': { req: { id: string }; res: { group: string } };
+  /** The user creates a map (title may be empty: named from its content once) and it opens. */
   'map/addSubject': { req: { title: string }; res: { id: string } };
+  /** The user opens a map: everything recorded goes into it. */
+  'maps/open': { req: { id: string }; res: null };
   'map/addSection': { req: { parentId: string; title: string }; res: { id: string } };
   /** An item the user types in on the full page (a formula's LaTeX, or a statement). */
   'map/addItem': { req: { parentId: string; itemType: ItemType; text: string }; res: { id: string } };
-  /** "导入旧版数据": the v0.1 database in this browser, if there is one (`found` false otherwise). */
-  'map/importV01': { req: Record<string, never>; res: { found: boolean; nodes: number } };
   /** "清空所有数据". */
   'map/clear': { req: Record<string, never>; res: null };
   /** Opens the item's conversation in a new tab, scrolled to the quote. */
@@ -104,7 +108,7 @@ export interface MessageMap {
   // The map's data
   /** The whole map as a file's text; Markdown and OPML leave grey outline nodes out unless asked. */
   'map/export': { req: { format: 'json' | 'markdown' | 'opml'; includeGrey?: boolean }; res: string };
-  /** A v2 export merges into the map; a v0.1 export becomes one subject with its knowledge in "待归位". */
+  /** An export merges into the maps (nodes with the same id are replaced). */
   'map/import': { req: { json: string }; res: { nodes: number } };
 
   // Background -> extension pages (broadcast)
@@ -117,6 +121,7 @@ export interface SubjectSummary {
   title: string;
   items: number;
   latest: number; // createdAt of its newest item, 0 when it has none
+  open: boolean; // the map the user opened
 }
 
 export type MessageType = keyof MessageMap;

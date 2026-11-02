@@ -8,6 +8,8 @@ v2 rebuild: Chat2Know becomes a knowledge map you record into with one click (se
 
 ### Added
 
+- You create and open maps (side panel switcher, name optional). Everything you record goes into the open map; Chat2Know never creates, switches or renames a map on its own, and names an unnamed map once from its first notes. With no map open, the page offers "create a map and add this".
+
 - On the AI sites you tick, a ＋ beside every display formula records it to the map in one click; the formula shows "Added" and a toast says where it went, with Undo. The same formula is not added twice unless you choose "Add anyway".
 - Alt+S or the "Add to Chat2Know map" menu records the selection on any page (one formula selected becomes a formula item).
 - A recorded item goes where the previous item of the same conversation went, else into the subject's "Unplaced" group; it never waits for a model.
@@ -19,8 +21,9 @@ v2 rebuild: Chat2Know becomes a knowledge map you record into with one click (se
 - After the first note in a new subject, Chat2Know offers once to lay out the course's outline (or your textbook's table of contents) as grey topics, with a preview; your own topics are kept and slotted in.
 - Gaps: with question recording on, the questions you send are matched to your map's topics; a topic you keep coming back to is outlined in orange, and once a day at most the side panel asks about one: add its core formulas and statements (light blue, untick what you don't want), try one question, or say no for 30 days. Recording one of the added items makes it yours.
 - Saving a model, or importing, files the notes waiting in "Unplaced".
+- Placement prompts are written in your language (Chinese or English). A bare term is recorded as "term: one-sentence explanation".
 - New map database: every change can be undone; a deleted chapter's contents move up a level; deleted nodes can be restored.
-- Export the map as JSON (lossless), Markdown or OPML; import a v2 JSON export, or a v0.1 export whose knowledge cards become items to place.
+- Export the map as JSON (lossless), Markdown or OPML; import a JSON export. 0.1 data is not imported.
 
 ### Removed
 

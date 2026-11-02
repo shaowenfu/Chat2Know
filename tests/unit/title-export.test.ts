@@ -42,7 +42,7 @@ const [map] = buildTree([
   n('u', 'section', 's', 'a2', '', { role: 'unplaced' }),
   n('x', 'item', 'u', 'a0', '可逆当且仅当 det A ≠ 0', { itemType: 'statement' }),
 ]);
-const opts = { unplacedTitle: '待归位' };
+const opts = { unplacedTitle: '待归位', unnamedTitle: '未命名导图' };
 
 describe('map exports', () => {
   it('Markdown has a heading per structure node and a bullet per item, grey nodes left out', () => {

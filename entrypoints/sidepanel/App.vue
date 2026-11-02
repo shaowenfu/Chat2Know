@@ -12,6 +12,7 @@ import SiteChecklist from '@/src/ui/SiteChecklist.vue';
 import { provideMap } from '@/src/ui/map-context';
 import { formulaHtml } from '@/src/ui/math';
 import OutlineOffer from '@/src/ui/OutlineOffer.vue';
+import MapSwitcher from '@/src/ui/MapSwitcher.vue';
 import type { OutlineNode } from '@/src/graph/tree';
 import type { GapCard } from '@/src/services/gaps';
 
@@ -21,16 +22,14 @@ const NOTICE_MS = 4000;
 const EXPANDED_KEY = 'chat2know.expanded';
 
 const subjects = ref<SubjectSummary[]>([]);
+/** The map the user opened; the panel always shows it. */
 const currentId = ref<string>();
-/** Until the user picks a subject here, the panel follows the subject recorded into last. */
-const picked = ref(false);
 const tree = ref<MapTree>();
 const configured = ref(true);
 const sites = ref<string[]>([]);
 const error = ref('');
 const notice = ref<{ text: string; group: string }>();
 const menu = ref<{ node: MapNode; x: number; y: number }>();
-const switching = ref(false);
 const loaded = ref(false);
 const outlineOffer = ref<{ outline?: OutlineNode[] }>();
 const gapMarks = ref(new Set<string>());
@@ -94,8 +93,11 @@ async function load() {
     sites.value = (await sendMessage('sites/get', {})).origins;
     return;
   }
-  const latest = [...subs].sort((a, b) => b.latest - a.latest)[0]!;
-  if (!subs.some((s) => s.id === currentId.value) || !picked.value) currentId.value = latest.id;
+  currentId.value = subs.find((s) => s.open)?.id;
+  if (!currentId.value) {
+    tree.value = undefined;
+    return;
+  }
   tree.value = await sendMessage('map/tree', { subjectId: currentId.value! });
   const offer = await sendMessage('outline/state', { subjectId: currentId.value! });
   outlineOffer.value = offer.offer ? { ...(offer.outline ? { outline: offer.outline } : {}) } : undefined;
@@ -120,12 +122,8 @@ function ancestorsOf(t: MapTree, id: string, path: string[] = []): string[] | un
   return undefined;
 }
 
-function pick(id: string) {
-  currentId.value = id;
-  picked.value = true;
-  switching.value = false;
-  void run(load);
-}
+const openMap = (id: string) => run(() => sendMessage('maps/open', { id }));
+const createMap = (title: string) => run(() => sendMessage('map/addSubject', { title }));
 
 function showNotice(text: string, group: string) {
   notice.value = { text, group };
@@ -208,28 +206,6 @@ function onKey(e: KeyboardEvent) {
   }
 }
 
-const oldFile = ref<HTMLInputElement>();
-
-/** v0.1's data in this browser comes over directly; without it, the user picks a v0.1 export file. */
-async function importOld() {
-  await run(async () => {
-    const { found, nodes } = await sendMessage('map/importV01', {});
-    if (found) showNotice(i18n.t('empty.imported', [String(nodes)]), '');
-    else oldFile.value!.click();
-  });
-}
-
-async function importOldFile(event: Event) {
-  const input = event.target as HTMLInputElement;
-  const file = input.files?.[0];
-  if (!file) return;
-  await run(async () => {
-    const { nodes } = await sendMessage('map/import', { json: await file.text() });
-    showNotice(i18n.t('empty.imported', [String(nodes)]), '');
-  });
-  input.value = '';
-}
-
 function onMessage(message: unknown) {
   if (isEnvelope(message) && message.type === 'event/dataChanged') void run(load);
 }
@@ -281,28 +257,21 @@ const subjectNode = computed(() => tree.value?.node);
         </fieldset>
         <p v-if="error" class="error" role="alert">{{ error }}</p>
       </div>
-      <footer class="foot split">
-        <button type="button" class="link-button" @click="importOld">{{ i18n.t('empty.importOld') }}</button>
-        <input ref="oldFile" type="file" accept="application/json,.json" hidden data-testid="import-old" @change="importOldFile">
-        <span class="muted">{{ notice?.text ?? i18n.t('empty.local') }}</span>
+      <footer class="foot">
+        <span class="muted">{{ i18n.t('empty.local') }}</span>
       </footer>
+    </template>
+
+    <template v-else-if="loaded && !current">
+      <header class="top">
+        <MapSwitcher :subjects="subjects" start-open @open="openMap" @create="createMap" />
+      </header>
+      <p class="pick-map" data-testid="pick-map">{{ i18n.t('panel.pickMap') }}</p>
     </template>
 
     <template v-else-if="tree && current">
       <header class="top">
-        <div class="switcher">
-          <button type="button" class="subject" :aria-label="i18n.t('panel.pickSubject')" :aria-expanded="switching" @click="switching = !switching">
-            {{ current.title }}
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg>
-          </button>
-          <ul v-if="switching" class="subjects" role="listbox">
-            <li v-for="s in subjects" :key="s.id" role="option" :aria-selected="s.id === currentId">
-              <button type="button" @click="pick(s.id)">
-                <span>{{ s.title }}</span><span class="muted">{{ s.items }}</span>
-              </button>
-            </li>
-          </ul>
-        </div>
+        <MapSwitcher :subjects="subjects" @open="openMap" @create="createMap" />
         <a :href="mapUrl" target="_blank" class="expand">{{ i18n.t('panel.expand') }}</a>
       </header>
 
@@ -313,7 +282,7 @@ const subjectNode = computed(() => tree.value?.node);
       <p v-if="error" class="error" role="alert">{{ error }}</p>
 
       <OutlineOffer v-if="outlineOffer" :key="current.id" :tree="tree" :outline="outlineOffer.outline" @done="run(load)" />
-      <section v-else class="map" role="tree" :aria-label="current.title">
+      <section v-else class="map" role="tree" :aria-label="current.title || i18n.t('map.unnamed')">
         <div
           class="chip-row"
           :class="{ target: dropTarget === subjectNode!.id }"
@@ -330,8 +299,8 @@ const subjectNode = computed(() => tree.value?.node);
             @keydown.esc.prevent="editingId = undefined"
             @blur="renameSubject(($event.target as HTMLInputElement).value)"
           >
-          <span v-else class="chip">{{ subjectNode!.title }}</span>
-          <span class="muted small">{{ i18n.t('panel.itemCount', [String(itemCount(tree))]) }}</span>
+          <span v-else class="chip" :class="{ unnamed: !subjectNode!.title }">{{ subjectNode!.title || i18n.t('map.unnamed') }}</span>
+          <span class="muted small">{{ itemCount(tree) === 1 ? i18n.t('panel.itemCountOne') : i18n.t('panel.itemCount', [String(itemCount(tree))]) }}</span>
         </div>
         <MapBranch v-if="tree.children.length" :trees="tree.children" />
       </section>

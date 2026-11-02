@@ -91,7 +91,7 @@ onUnmounted(() => {
       <span class="brand">{{ i18n.t('extName') }}</span>
       <nav class="tabs">
         <template v-if="!isSettings">
-          <a v-for="s in subjects" :key="s.id" :href="`#${s.id}`" :class="{ on: s.id === currentId }" data-testid="subject-tab">{{ s.title }}</a>
+          <a v-for="s in subjects" :key="s.id" :href="`#${s.id}`" :class="{ on: s.id === currentId }" data-testid="subject-tab">{{ s.title || i18n.t('map.unnamed') }}</a>
           <input
             v-if="adding"
             v-model="newTitle"

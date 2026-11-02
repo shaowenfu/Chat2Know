@@ -94,8 +94,8 @@ describe('gaps', () => {
     ]);
     expect(await gapMarks(repo, ids.subject!)).toEqual([]);
     const source = { url: 'https://chatgpt.com/c/9', pageTitle: '', quoteExact: '', quotePrefix: '', quoteSuffix: '', capturedAt: 0 };
-    const r = await recordItem(repo, { itemType: 'formula', title: '', latex: '(A^T)^T=A', source }, { unplaced: '', newSubject: '' });
-    expect(r.status).toBe('recorded');
+    const r = await recordItem(repo, ids.subject!, { itemType: 'formula', title: '', latex: '(A^T)^T=A', source }, { unplaced: '', unnamed: '' });
+    if (r.status !== 'recorded') throw new Error(`expected recorded, got ${r.status}`);
     expect(await repo.node(r.itemId)).toMatchObject({ origin: 'user', source });
   });
 

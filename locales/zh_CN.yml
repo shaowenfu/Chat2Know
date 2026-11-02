@@ -10,8 +10,7 @@ error:
   invalidExport: "导出文件中的\"$1\"无效。"
 map:
   unplaced: 待归位
-  importedSubject: 导入的笔记
-  newSubject: 未命名学科
+  unnamed: 未命名导图
 site:
   add: 记到导图
   added: 已记下
@@ -21,6 +20,8 @@ toast:
   recorded: "已记到 $1"
   duplicate: "已在 $1 中"
   undo: 撤销
+  noMap: 还没有打开的导图。可以在侧栏里打开一张，或者
+  createMapAndRecord: 新建导图并记下
   addAnyway: 仍然添加
   notPlaced: "先放在待归位：$1"
   noSelection: 请先选中文字。
@@ -44,6 +45,11 @@ panel:
   settings: 设置
   noModel: 还没配置模型。记录照常可用，但新内容会先放进「待归位」，需要你拖到合适的位置。
   setUpModel: 去设置模型
+  itemCountOne: 1 条
+  noMapOpen: 打开一张导图
+  mapsHint: 我的导图（插件只往打开的那张里记）
+  createMap: ＋ 新建
+  pickMap: 在上面打开一张导图，或者新建一张。之后记下的内容都会放进你打开的导图。
   itemCount: "$1 条"
   notLearned: 还没学
   justAdded: 刚记下
@@ -60,7 +66,6 @@ empty:
   title: 你的知识导图会长在这里
   body: 在 AI 对话里看到值得记的公式或结论，点一下就行。放到哪里由插件来定。
   how: 公式旁边会出现 ＋。普通文字选中后按 Alt S，或者右键「记到 Chat2Know 导图」。
-  importOld: 导入旧版数据
   imported: "已导入 $1 条"
   local: 数据只存在这个浏览器里
 sites:
@@ -70,7 +75,7 @@ mapPage:
   mapTab: 导图
   settingsTab: 设置
   newSubject: ＋ 新导图
-  newSubjectPlaceholder: 学科名称
+  newSubjectPlaceholder: 导图名称（可以不填）
   showOutline: 显示大纲（灰色）
   export: 导出
   legendUser: 你记下的

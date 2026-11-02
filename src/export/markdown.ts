@@ -4,11 +4,13 @@ import type { MapNode } from '@/src/db/types';
 export interface ExportOptions {
   /** The "待归位" group's title in the user's language. */
   unplacedTitle: string;
+  /** What an unnamed map is called. */
+  unnamedTitle: string;
   /** Grey (not yet learned) outline nodes are left out unless asked for. */
   includeGrey?: boolean;
 }
 
-export const structureTitle = (n: MapNode, o: ExportOptions) => (n.role === 'unplaced' ? o.unplacedTitle : n.title);
+export const structureTitle = (n: MapNode, o: ExportOptions) => (n.role === 'unplaced' ? o.unplacedTitle : n.title || o.unnamedTitle);
 
 /** Keeps the trees' structure, without grey nodes unless asked for. */
 export const visible = (trees: MapTree[], o: ExportOptions): MapTree[] => (o.includeGrey ? trees : withoutGrey(trees));

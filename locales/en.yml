@@ -10,8 +10,7 @@ error:
   invalidExport: "Invalid \"$1\" in the export file."
 map:
   unplaced: Unplaced
-  importedSubject: Imported notes
-  newSubject: Untitled subject
+  unnamed: Unnamed map
 site:
   add: Add to map
   added: Added
@@ -21,6 +20,8 @@ toast:
   recorded: "Added to $1"
   duplicate: "Already in $1"
   undo: Undo
+  noMap: No map is open. Open one in the side panel, or
+  createMapAndRecord: create a map and add this
   addAnyway: Add anyway
   notPlaced: "Kept in Unplaced: $1"
   noSelection: Select some text first.
@@ -44,6 +45,11 @@ panel:
   settings: Settings
   noModel: No model set up yet. Recording still works, but new notes wait in "Unplaced" until you drag them into place.
   setUpModel: Set up a model
+  itemCountOne: 1 item
+  noMapOpen: Open a map
+  mapsHint: Your maps (notes go into the open one)
+  createMap: ＋ New
+  pickMap: Open a map above, or create one. What you record goes into the map you open.
   itemCount: "$1 items"
   notLearned: not yet
   justAdded: just added
@@ -60,7 +66,6 @@ empty:
   title: Your knowledge map grows here
   body: When an AI answer has a formula or conclusion worth keeping, one click records it. Chat2Know decides where it goes.
   how: Formulas get a ＋ beside them. For other text, select it and press Alt S, or right-click "Add to Chat2Know map".
-  importOld: Import v0.1 data
   imported: "Imported $1 items"
   local: Your data stays in this browser
 sites:
@@ -70,7 +75,7 @@ mapPage:
   mapTab: Map
   settingsTab: Settings
   newSubject: ＋ New map
-  newSubjectPlaceholder: Subject name
+  newSubjectPlaceholder: Map name (optional)
   showOutline: Show outline (grey)
   export: Export
   legendUser: Recorded by you

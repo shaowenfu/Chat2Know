@@ -21,10 +21,9 @@ import type { TextQuote } from '@/src/capture/text-quote';
 import { sendTabMessage } from '@/src/messaging';
 import { siteFor } from '@/src/capture/sites';
 import { i18n } from '#i18n';
-import { EXPORT_FORMAT, EXPORT_VERSION, parseImport, v01Items, type ExportFile } from '@/src/export/json';
-import { readV01 } from '@/src/db/legacy';
-import { importV01 } from '@/src/services/import';
-import type { ItemInput } from '@/src/db/repository';
+import { EXPORT_FORMAT, EXPORT_VERSION, parseImport, type ExportFile } from '@/src/export/json';
+import { loadOpenMap, saveOpenMap } from '@/src/sites/open-map';
+import type { PromptLang } from '@/src/llm/prompts';
 import { mapToMarkdown } from '@/src/export/markdown';
 import { mapToOpml } from '@/src/export/opml';
 
@@ -113,13 +112,13 @@ async function placeAfterRecord(result: Extract<RecordResult, { status: 'recorde
   if (!isConfigured(settings)) return;
   let reply: { itemId: string; path?: string[]; error?: string };
   try {
-    const { unplaced, newSubject } = labels();
+    const { unplaced } = labels();
     const path = await placeItem(await repo(), new LlmClient(settings), settings.embeddingModel, {
       itemId: result.itemId,
       group: result.group,
       before: quote.prefix,
       after: quote.suffix,
-      untitled: newSubject,
+      lang: promptLang(),
       unplaced,
     });
     if (!path) return;
@@ -141,8 +140,7 @@ function placeWaiting(): Promise<void> {
     .then(async () => {
       const settings = await loadSettings();
       if (!isConfigured(settings)) return;
-      const { unplaced, newSubject } = labels();
-      if (await placeUnplaced(await repo(), new LlmClient(settings), settings.embeddingModel, { unplaced, untitled: newSubject })) notifyChanged();
+      if (await placeUnplaced(await repo(), new LlmClient(settings), settings.embeddingModel, { unplaced: labels().unplaced, lang: promptLang() })) notifyChanged();
     });
   return placing;
 }
@@ -176,17 +174,10 @@ function analyzeGaps(): Promise<void> {
   return analyzing;
 }
 
-/** v0.1 notes join the map; with a model they then find their places. */
-async function importV01Items(items: ItemInput[]): Promise<number> {
-  const count = await importV01(await repo(), items, i18n.t('map.importedSubject'));
-  if (count) {
-    notifyChanged();
-    void placeWaiting();
-  }
-  return count;
-}
+const labels = (): { unplaced: string; unnamed: string } => ({ unplaced: i18n.t('map.unplaced'), unnamed: i18n.t('map.unnamed') });
 
-const labels = (): { unplaced: string; newSubject: string } => ({ unplaced: i18n.t('map.unplaced'), newSubject: i18n.t('map.newSubject') });
+/** Prompts are written in the user's language. */
+const promptLang = (): PromptLang => (browser.i18n.getUILanguage().toLowerCase().startsWith('zh') ? 'zh' : 'en');
 
 export default defineBackground(() => {
   void browser.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
@@ -249,30 +240,40 @@ export default defineBackground(() => {
       notifyChanged();
       return next;
     },
-    'map/record': async ({ itemType, title, latex, quote, pageTitle, force }, sender) => {
+    'map/record': async ({ itemType, title, latex, quote, pageTitle, force, createMap }, sender) => {
       // The source is the page the message came from, never a URL the page could claim.
       const url = sender.url;
       if (!url || sender.id !== browser.runtime.id || sender.tab === undefined) throw new Error('map/record comes only from a page');
       const source = { url, pageTitle, quoteExact: quote.exact, quotePrefix: quote.prefix, quoteSuffix: quote.suffix, capturedAt: Date.now() };
-      const result = await recordItem(await repo(), { itemType, title, ...(latex === undefined ? {} : { latex }), source, ...(force ? { force } : {}) }, labels());
+      const r = await repo();
+      // "新建导图并记下": the user asked for a new, unnamed map; it opens and takes this note.
+      if (createMap) await saveOpenMap((await r.addSubject('')).node.id);
+      const result = await recordItem(r, await loadOpenMap(), { itemType, title, ...(latex === undefined ? {} : { latex }), source, ...(force ? { force } : {}) }, labels());
       notifyChanged();
       if (result.status === 'recorded') void placeAfterRecord(result, quote, sender.tab.id!);
       return result;
     },
     'map/subjects': async () => {
       const r = await repo();
+      const open = await loadOpenMap();
       return Promise.all(
         (await r.listSubjects()).map(async (s) => {
           const items = (await r.subjectNodes(s.id)).filter((n) => n.kind === 'item');
-          return { id: s.id, title: s.title, items: items.length, latest: Math.max(0, ...items.map((n) => n.createdAt)) };
+          return { id: s.id, title: s.title, items: items.length, latest: Math.max(0, ...items.map((n) => n.createdAt)), open: s.id === open };
         }),
       );
+    },
+    'maps/open': async ({ id }) => {
+      if ((await (await repo()).node(id)).kind !== 'subject') throw new Error(`${id} is not a map`);
+      await saveOpenMap(id);
+      notifyChanged();
+      return null;
     },
     'map/tree': async ({ subjectId }) => (await repo()).subjectTree(subjectId),
     'map/moveNode': async ({ id, parentId, beforeId }) => {
       const r = await repo();
       const group = await r.move(id, parentId, beforeId);
-      if ((await r.node(id)).kind === 'item') await r.notePlacementChange(id, await parentPath(r, id, labels().unplaced));
+      if ((await r.node(id)).kind === 'item') await r.notePlacementChange(id, await parentPath(r, id, labels()));
       notifyChanged();
       return { group };
     },
@@ -283,11 +284,15 @@ export default defineBackground(() => {
     },
     'map/remove': async ({ id }) => {
       const group = await (await repo()).remove(id);
+      // A deleted map is no longer open; the user opens another.
+      if (id === (await loadOpenMap())) await saveOpenMap(null);
       notifyChanged();
       return { group };
     },
     'map/addSubject': async ({ title }) => {
+      // A map the user creates opens at once.
       const { node } = await (await repo()).addSubject(title);
+      await saveOpenMap(node.id);
       notifyChanged();
       return { id: node.id };
     },
@@ -315,7 +320,9 @@ export default defineBackground(() => {
     },
     'outline/state': async ({ subjectId }) => {
       const decision = (await loadOutlines())[subjectId];
-      const offerable = outlineOfferable(await (await repo()).subjectTree(subjectId)) && isConfigured(await loadSettings());
+      const tree = await (await repo()).subjectTree(subjectId);
+      // An unnamed map has no subject to outline yet.
+      const offerable = !!tree.node.title.trim() && outlineOfferable(tree) && isConfigured(await loadSettings());
       const open = decision?.status !== 'laid' && decision?.status !== 'declined';
       return { offer: offerable && open, ...(open && decision?.outline ? { outline: decision.outline } : {}) };
     },
@@ -378,11 +385,11 @@ export default defineBackground(() => {
       const r = await repo();
       const settings = await loadSettings();
       const client = isConfigured(settings) ? new LlmClient(settings) : null;
-      return { now: await parentPath(r, itemId, labels().unplaced), places: await placeOptions(r, client, settings.embeddingModel, itemId) };
+      return { now: await parentPath(r, itemId, labels()), places: await placeOptions(r, client, settings.embeddingModel, itemId, labels().unnamed) };
     },
-    'map/searchPlaces': async ({ query }) => searchPlaces(await repo(), query),
+    'map/searchPlaces': async ({ query }) => searchPlaces(await repo(), query, labels().unnamed),
     'map/moveItem': async ({ itemId, placeId, newTopic }) => {
-      const result = await moveByUser(await repo(), itemId, { placeId, ...(newTopic ? { newTopic } : {}) }, labels().unplaced);
+      const result = await moveByUser(await repo(), itemId, { placeId, ...(newTopic ? { newTopic } : {}) }, labels());
       notifyChanged();
       return result;
     },
@@ -409,20 +416,15 @@ export default defineBackground(() => {
         return JSON.stringify(file, null, 2);
       }
       const trees = await Promise.all((await r.listSubjects()).map((s) => r.subjectTree(s.id)));
-      const options = { unplacedTitle: i18n.t('map.unplaced'), includeGrey: includeGrey ?? false };
+      const options = { unplacedTitle: i18n.t('map.unplaced'), unnamedTitle: i18n.t('map.unnamed'), includeGrey: includeGrey ?? false };
       return format === 'markdown' ? mapToMarkdown(trees, options) : mapToOpml(trees, options, new Date());
     },
     'map/import': async ({ json }) => {
-      const file = parseImport(json);
-      if (file.version === 1) return { nodes: await importV01Items(file.items) };
-      await (await repo()).importNodes(file.nodes);
+      const nodes = parseImport(json);
+      await (await repo()).importNodes(nodes);
       notifyChanged();
       void placeWaiting();
-      return { nodes: file.nodes.length };
-    },
-    'map/importV01': async () => {
-      const old = await readV01();
-      return old ? { found: true, nodes: await importV01Items(v01Items(old)) } : { found: false, nodes: 0 };
+      return { nodes: nodes.length };
     },
     'asks/list': async () => (await repo()).listAsks(),
     'asks/delete': async ({ id }) => {

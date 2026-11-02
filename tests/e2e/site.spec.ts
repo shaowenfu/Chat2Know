@@ -26,25 +26,30 @@ test('＋ beside formulas on ticked sites: record, toast, undo, duplicates; noth
   // The open tab gets the script at once: one ＋ per display formula.
   const plus = page.locator('chat2know-ui button[data-state="add"]');
   await expect(plus).toHaveCount(1);
+  // No map is open: nothing is stored until the user creates one for this note.
   await plus.first().click();
   const toast = page.locator('chat2know-ui .toast');
-  await expect(toast).toContainText('Added to Untitled subject › Unplaced');
+  await expect(toast).toContainText('No map is open');
+  expect(await markdown()).toBe('\n');
+  await toast.getByRole('button', { name: 'create a map and add this' }).click();
+  await expect(toast).toContainText('Added to Unnamed map › Unplaced');
   await expect(page.locator('chat2know-ui button[data-state="added"]')).toHaveText('Added');
   mkdirSync('tests/e2e/screenshots', { recursive: true });
   await page.screenshot({ path: 'tests/e2e/screenshots/page-recorded.png' });
   expect(await markdown()).toContain('- $\\mathrm{Attention}(Q, K, V) = \\mathrm{softmax}\\left(\\frac{QK^\\top}{\\sqrt{d_k}}\\right)V$ ([source]');
 
-  // 撤销 takes the item and the subject it started away again.
+  // 撤销 takes the item away; the map the user created stays (empty, so the export leaves it out).
   await toast.getByRole('button', { name: 'Undo' }).click();
   await expect(plus).toHaveCount(1);
   expect(await markdown()).toBe('\n');
+  expect((await send<{ title: string }[]>(panel, 'map/subjects', {})).data.map((m) => m.title)).toEqual(['']);
 
   await plus.first().click();
   await expect(toast).toContainText('Added to');
   // Recorded once already: after a reload the same formula is not added again, unless asked.
   await page.reload();
   await page.locator('chat2know-ui button[data-state="add"]').first().click();
-  await expect(toast).toContainText('Already in Untitled subject › Unplaced');
+  await expect(toast).toContainText('Already in Unnamed map › Unplaced');
   await toast.getByRole('button', { name: 'Add anyway' }).click();
   await expect(toast).toContainText('Added to');
   expect((await markdown()).match(/\\mathrm\{Attention\}/g)).toHaveLength(2);
@@ -53,7 +58,7 @@ test('＋ beside formulas on ticked sites: record, toast, undo, duplicates; noth
   await selectText(page, 'p:has(strong)', 'keeps the softmax from saturating');
   const tabId = await tabIdOf(panel, page.url());
   await serviceWorker.evaluate((id) => chrome.tabs.sendMessage(id, { type: 'site/recordSelection', payload: {} }), tabId);
-  await expect(toast).toContainText('Added to Untitled subject › Unplaced');
+  await expect(toast).toContainText('Added to Unnamed map › Unplaced');
   expect(await markdown()).toContain('- keeps the softmax from saturating');
 
   // Another origin is not ticked: no script there.
@@ -79,6 +84,7 @@ test('with a model, the recorded formula moves to its topic and the toast follow
   const panel = await context.newPage();
   await panel.goto(`chrome-extension://${extensionId}/sidepanel.html`);
   await send(panel, 'sites/setOrigins', { origins: [fixtureServer] });
+  await send(panel, 'map/addSubject', { title: '' }); // the user creates a map without a name; it opens
   await configureModel(panel, mockLlm.url, 'wrong-key');
   const page = await context.newPage();
   await page.goto(`${fixtureServer}/synthetic-chat-katex.html`);
@@ -93,7 +99,7 @@ test('with a model, the recorded formula moves to its topic and the toast follow
   await expect(toast).toContainText('Added to 深度学习 › 注意力机制');
   const md = (await send<string>(panel, 'map/export', { format: 'markdown' })).data;
   expect(md).toMatch(/^# 深度学习\n\n## 注意力机制\n\n- \$\\mathrm\{Attention\}/);
-  // 撤销 takes back the record and the placement together.
+  // 撤销 takes back the record and the placement together, with the name it gave the map.
   await toast.getByRole('button', { name: 'Undo' }).click();
   await expect.poll(async () => (await send<string>(panel, 'map/export', { format: 'markdown' })).data).toBe('\n');
 });
@@ -122,6 +128,7 @@ test('改位置: the picker offers places, searches, and moves the item; the toa
     node('7', 'section', '5', '5', '优化'),
   ];
   await send(panel, 'map/import', { json: JSON.stringify({ format: 'chat2know', version: 2, exportedAt: 0, nodes: map }) });
+  await send(panel, 'maps/open', { id: '5' });
   await send(panel, 'sites/setOrigins', { origins: [fixtureServer] });
   await configureModel(panel, mockLlm.url);
 
@@ -136,7 +143,8 @@ test('改位置: the picker offers places, searches, and moves the item; the toa
   const picker = page.locator('chat2know-ui .picker');
   await expect(picker).toContainText('Where should it go?');
   await expect(picker).toContainText('Now in: 注意力机制');
-  await expect(picker.locator('.picker-option')).toHaveCount(3);
+  // Other places in this map; search reaches every map.
+  await expect(picker.locator('.picker-option')).toHaveText(['深度学习 › 优化']);
   await page.screenshot({ path: 'tests/e2e/screenshots/page-relocate.png' });
 
   await picker.getByPlaceholder('Type a topic name').fill('迹');

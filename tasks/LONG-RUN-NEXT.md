@@ -1,0 +1,42 @@
+---
+id: LR4
+status: doing
+branch: v2
+owner: main engineer (cloud)
+---
+
+# LR4: the next stage, S0 → S5, released together as 0.2.0
+
+Single source of truth for this run. If context is lost, re-read this file, `CLAUDE.md`, the plan doc
+"Chat2Know 第一轮测试整理与下一阶段开发计划" (https://claude.ai/artifact/3tixrATXtJbfZbixUCucfR) and the design
+canvas (https://claude.ai/artifact/YbcpyaNR6aWbC2EvmAAsjr, artboards 9–16 for this stage), then continue from the
+first unchecked box.
+
+Decided by the owner (2026-11-02): one release at the end (0.2.0); ＋ beside formulas stays but is not
+introduced on the first screen; floating-window answers are not kept; question recording is on by default;
+stuck guidance only in the side panel; the 5-question check replaces the gap flow (orange marks stay);
+reports are Markdown text analysis, no ability map; first-screen animation direction A; protected quotes
+differ only by a purple border (#7A4FB5) and a serif font; v0.1 import is removed; maps are created and
+opened by the user only.
+
+Each step: `npm run check` green, screenshots compared with the artboards, one commit on `v2` with this file
+updated, pushed.
+
+## S0: groundwork and polish
+
+- [x] S0.1 Maps created and opened by the user (need F): the open map in settings; recording goes into it; placement only inside it (an unnamed map is named once from its content); no map open → the toast offers "新建导图并记下"; the side panel's switcher creates (name optional) and opens maps. Remove v0.1 import, automatic subjects and cross-subject placement.
+- [ ] S0.2 Language: a switch (follow the browser / 中文 / English) in the first screen and settings; UI strings from bundled locale files; placement and outline prompts in both languages; singular / plural counts.
+- [ ] S0.3 Outline quality: prompt with a real example per language, validation (language of the titles, no generic titles), eval cases; a bare term is recorded as "term: one-sentence explanation".
+- [ ] S0.4 First screen (artboard 9) with animation A, the permission note before saving a model, question recording on by default.
+- [ ] S0.5 Map editing in the side panel and the full page: double-click to edit, new child, add item, Delete, Enter (new sibling), Tab / Shift+Tab; items jump back to the conversation only through a ↗ button.
+
+## S1–S5
+
+- [ ] S1 Selection layer (记下 / 保护原文 / 提问 greyed) and protected quotes.
+- [ ] S2 Floating question window.
+- [ ] S3 Question recording per open map and the stuck check every 5 questions (replaces the gap flow).
+- [ ] S4 Question log page and Markdown reports.
+- [ ] S5 README, privacy, store listing, install guide; owner's one-week trial; merge into `main`, release 0.2.0.
+
+## Log
+- S0.1: The open map is `openMap` in `chrome.storage.local` (`src/sites/open-map.ts`), set only by the user (switcher, creating a map, or "新建导图并记下" on the page toast). `recordItem` takes the open map and returns `noMap` without one; dedupe is per map. Placement sees only the item's map (outline, candidates, the user's corrections in that map) and answers `{path, statement, mapName}`; `fileItem` never leaves the map and renames it only when its title is empty (an undo of that record takes the name back too). The 改位置 picker offers places in the item's map; search reaches every map (a user's move). Removed: v0.1 import (IndexedDB and file), the "Untitled subject" logic, cross-subject placement, `importItems`. The placement prompt already exists in both languages (`lang` from the browser's UI language until S0.2 adds the switch) and asks for "term: explanation" for a bare term (part of S0.3). The placement eval now measures topic accuracy within the right map and whether an unnamed map gets its subject's name. An empty map counts as grey, so the Markdown / OPML export leaves it out. Screenshot `11-map-switcher.png` matches artboard 11.

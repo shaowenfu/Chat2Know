@@ -22,8 +22,8 @@ export interface ItemInput {
   origin?: Origin;
 }
 
-/** Where a new item goes: under a structure node, or in the "待归位" group (created when missing) of a subject or of a new subject. */
-export type ItemPlace = { parentId: string } | { unplacedIn: string } | { newSubject: string };
+/** Where a new item goes: under a structure node, or in a map's "待归位" group (created when missing). */
+export type ItemPlace = { parentId: string } | { unplacedIn: string };
 
 /** A map write: its oplog group (to undo exactly this) and the node it is about. */
 export interface Written {
@@ -118,10 +118,7 @@ export class Repository {
 
   async addItem(place: ItemPlace, input: ItemInput): Promise<Written> {
     return this.write('addItem', async (w) => {
-      const parent =
-        'parentId' in place
-          ? await this.structure(place.parentId)
-          : await this.unplacedGroup(w, 'unplacedIn' in place ? place.unplacedIn : (await this.createSubject(w, place.newSubject, 'user')).id);
+      const parent = 'parentId' in place ? await this.structure(place.parentId) : await this.unplacedGroup(w, place.unplacedIn);
       return w.create(this.newItem(parent, input, await this.orderAt(parent.id)));
     });
   }
@@ -238,19 +235,15 @@ export class Repository {
   }
 
   /**
-   * Files an item under `subject › path` by titles, creating the subject and sections
-   * that are missing (an untouched "untitled" subject the item is in takes the new
-   * subject's name instead). A statement takes the one-sentence form unless the user
-   * edited it. Emptied 待归位 groups and untitled subjects go. Joins `group` when given.
-   * Returns the item's new path, or null (nothing written) when the item is gone or
-   * was written since `seen` (its updatedAt then): the user's later action wins.
+   * Files an item under `path` (titles below its map) in its own map, creating the
+   * sections that are missing; the extension never moves an item to another map.
+   * An unnamed map (empty title) takes `mapName`, once. A statement takes the
+   * one-sentence form unless the user edited it. An emptied 待归位 group goes. Joins
+   * `group` when given. Returns the item's new path, or null (nothing written) when
+   * the item is gone or was written since `seen` (its updatedAt then): the user's
+   * later action wins.
    */
-  async fileItem(
-    itemId: string,
-    seen: string,
-    place: { subject: string; path: string[]; statement?: string; untitled: string },
-    group?: string,
-  ): Promise<MapNode[] | null> {
+  async fileItem(itemId: string, seen: string, place: { path: string[]; statement?: string; mapName?: string }, group?: string): Promise<MapNode[] | null> {
     let filed = false;
     // Joined to a record, it is undone with that record; on its own it is the extension's, which Ctrl+Z passes over.
     await this.group(
@@ -261,17 +254,14 @@ export class Repository {
         if (item.kind !== 'item') throw new Error(`${itemId} is not an item`);
         filed = true;
         const key = (t: string) => t.trim().toLowerCase();
-        const current = await this.node(item.subjectId);
-        const isUntitled = (n: MapNode) => n.title === place.untitled && !n.editedByUser;
-        let subject = (await this.listSubjects()).find((s) => key(s.title) === key(place.subject));
-        if (!subject && isUntitled(current)) subject = await w.put({ ...current, title: place.subject.trim() });
-        subject ??= await this.createSubject(w, place.subject, 'user');
-        let parent = subject;
+        let map = await this.node(item.subjectId);
+        if (!map.title.trim() && place.mapName?.trim()) map = await w.put({ ...map, title: place.mapName.trim() });
+        let parent = map;
         for (const title of place.path) {
           const found = (await this.children(parent.id)).find((c) => c.kind === 'section' && !c.role && key(c.title) === key(title));
           parent =
             found ??
-            (await w.create({ subjectId: subject.id, kind: 'section', parentId: parent.id, order: await this.orderAt(parent.id), title: title.trim(), origin: 'user' }));
+            (await w.create({ subjectId: map.id, kind: 'section', parentId: parent.id, order: await this.orderAt(parent.id), title: title.trim(), origin: 'user' }));
         }
         const oldParent = await this.node(item.parentId!);
         let next = item;
@@ -283,10 +273,6 @@ export class Repository {
           await w.put({ ...next, title: place.statement.trim() });
         }
         if (oldParent.role === 'unplaced' && !(await this.children(oldParent.id)).length) await w.put({ ...oldParent, deletedAt: this.now() });
-        const old = await this.node(current.id);
-        if (old.id !== subject.id && isUntitled(old) && !(await this.subjectNodes(old.id)).some((n) => n.kind === 'item')) {
-          for (const n of await this.subjectNodes(old.id)) await w.put({ ...n, deletedAt: this.now() });
-        }
       },
       undefined,
       group,
@@ -338,13 +324,13 @@ export class Repository {
     if (await this.db.placements.get(itemId)) await this.db.placements.update(itemId, { finalPath, changedByUser: true, at: this.now() });
   }
 
-  /** The latest placements the user corrected, with the items' text, newest first. */
-  async placementExamples(limit: number): Promise<{ text: string; path: string[] }[]> {
+  /** The latest placements the user corrected in a map, with the items' text, newest first. */
+  async placementExamples(limit: number, mapId: string): Promise<{ text: string; path: string[] }[]> {
     const rows = (await this.db.placements.orderBy('at').reverse().toArray()).filter((p) => p.changedByUser);
     const out: { text: string; path: string[] }[] = [];
     for (const p of rows) {
       const n = await this.db.nodes.get(p.id);
-      if (n && !n.deletedAt) out.push({ text: n.latex ?? n.title, path: p.finalPath });
+      if (n && !n.deletedAt && n.subjectId === mapId) out.push({ text: n.latex ?? n.title, path: p.finalPath });
       if (out.length === limit) break;
     }
     return out;
@@ -371,17 +357,6 @@ export class Repository {
     for (const n of nodes) this.clock.receive(n.updatedAt);
     return this.group('import', async (w) => {
       for (const n of nodes) await w.put(n);
-    });
-  }
-
-  /** A new subject with the items in its "待归位" group, as one undoable write. */
-  async importItems(subjectTitle: string, items: ItemInput[]): Promise<Written> {
-    return this.write('importItems', async (w) => {
-      const subject = await this.createSubject(w, subjectTitle, 'user');
-      const group = await this.unplacedGroup(w, subject.id);
-      const keys = generateNKeysBetween(null, null, items.length);
-      for (const [i, input] of items.entries()) await w.create(this.newItem(group, input, keys[i]!));
-      return subject;
     });
   }
 

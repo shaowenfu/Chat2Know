@@ -41,6 +41,11 @@ export default defineContentScript({
     async function record(req: RecordReq, onRecorded: (recorded: boolean) => void): Promise<void> {
       try {
         const result = await sendMessage('map/record', req);
+        if (result.status === 'noMap') {
+          // Nothing was stored: the user opens a map in the side panel, or creates one for this note here.
+          ui.toast(i18n.t('toast.noMap'), '', [{ label: i18n.t('toast.createMapAndRecord'), run: () => record({ ...req, createMap: true }, onRecorded) }]);
+          return;
+        }
         const path = result.path.join(PATH_SEPARATOR);
         if (result.status === 'duplicate') {
           ui.toast(i18n.t('toast.duplicate', ['\uE000']), path, [{ label: i18n.t('toast.addAnyway'), run: () => record({ ...req, force: true }, onRecorded) }]);
