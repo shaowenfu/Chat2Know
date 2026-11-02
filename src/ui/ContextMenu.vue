@@ -6,8 +6,8 @@ import type { MapNode } from '@/src/db/types';
 import type { Place } from '@/src/services/relocate';
 
 /** Right-click menu of a map row: 移到… (search a place inline), 编辑, 删除. No dialogs. */
-const props = defineProps<{ node: MapNode; x: number; y: number; subjects: SubjectSummary[]; canAddChild?: boolean }>();
-const emit = defineEmits<{ close: []; move: [targetId: string]; edit: []; remove: []; addChild: [] }>();
+const props = defineProps<{ node: MapNode; x: number; y: number; subjects: SubjectSummary[] }>();
+const emit = defineEmits<{ close: []; move: [targetId: string]; edit: []; remove: []; addChild: []; addItem: [itemType: 'formula' | 'statement'] }>();
 
 const root = ref<HTMLElement>();
 const moving = ref(false);
@@ -16,7 +16,7 @@ const places = ref<Place[]>([]);
 const input = ref<HTMLInputElement>();
 
 /** With no query: the subjects themselves (a chapter's top level). */
-const subjectPlaces = () => props.subjects.map((s) => ({ id: s.id, path: [s.title] }));
+const subjectPlaces = () => props.subjects.map((s) => ({ id: s.id, path: [s.title || i18n.t('map.unnamed')] }));
 
 async function startMove() {
   moving.value = true;
@@ -52,7 +52,11 @@ onUnmounted(() => {
   <div ref="root" class="menu" role="menu" :style="{ left: `${x}px`, top: `${y}px` }" data-testid="context-menu">
     <template v-if="!moving">
       <button v-if="node.kind !== 'subject'" type="button" role="menuitem" @click="startMove">{{ i18n.t('panel.moveTo') }}</button>
-      <button v-if="canAddChild && node.kind !== 'item'" type="button" role="menuitem" @click="emit('addChild')">{{ i18n.t('mapPage.newChild') }}</button>
+      <template v-if="node.kind !== 'item' && !node.role">
+        <button type="button" role="menuitem" @click="emit('addChild')">{{ i18n.t('mapPage.newChild') }}</button>
+        <button type="button" role="menuitem" @click="emit('addItem', 'formula')">{{ i18n.t('panel.addFormula') }}</button>
+        <button type="button" role="menuitem" @click="emit('addItem', 'statement')">{{ i18n.t('panel.addStatement') }}</button>
+      </template>
       <button type="button" role="menuitem" @click="emit('edit')">{{ i18n.t('panel.edit') }}</button>
       <button type="button" role="menuitem" class="danger" @click="emit('remove')">{{ i18n.t('panel.remove') }}</button>
     </template>

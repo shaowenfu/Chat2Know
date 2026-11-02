@@ -1,5 +1,6 @@
 import { inject, provide, type InjectionKey, type Ref } from 'vue';
 import type { MapNode } from '@/src/db/types';
+import type { AddingItem } from './map-editing';
 import type { GapCard } from '@/src/services/gaps';
 
 /** What every row of the map tree shares: fold state, the drag in progress, the row being edited, and the actions. */
@@ -14,15 +15,20 @@ export interface MapContext {
   /** The side panel's one gap card, shown under its section. */
   gapCard?: Ref<GapCard | undefined>;
   gapDone?(): void;
-  /** The full page's selected section (its detail pane); the side panel has none. */
-  selectedId?: Ref<string | undefined>;
+  /** The selected node: keys act on it; on the full page its section fills the detail pane. */
+  selectedId: Ref<string | undefined>;
+  /** A formula or statement being typed in under a section. */
+  addingTo: Ref<AddingItem | undefined>;
   toggle(id: string): void;
+  select(node: MapNode): void;
+  /** Back to the conversation, only through the item's ↗ button. */
   openItem(node: MapNode): void;
+  saveAdd(text: string): void;
   openMenu(event: MouseEvent, node: MapNode): void;
   drop(targetId: string): void;
   saveEdit(node: MapNode, text: string): void;
-  /** Double-click: the full page edits in place. */
-  dblclick?(node: MapNode): void;
+  /** Double-click edits in place. */
+  dblclick(node: MapNode): void;
 }
 
 const KEY: InjectionKey<MapContext> = Symbol('map');

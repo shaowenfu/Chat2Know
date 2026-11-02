@@ -105,6 +105,68 @@ test('side panel: empty state, the map without a model, folding, drag, edit, del
   await expect.poll(() => markdown(panel)).toContain('## 行列式\n\n- $\\det(AB) = \\det A \\det B$\n- $\\mathrm{tr}(AB) = \\mathrm{tr}(BA)$');
 });
 
+test('editing the map: ↗ jumps back, a click only selects, double-click edits, add items and sections, keys', async ({ context, extensionId }) => {
+  const panel = await context.newPage();
+  await panel.goto(`chrome-extension://${extensionId}/sidepanel.html`);
+  await importSeed(panel);
+  const tree = panel.getByRole('tree');
+  await tree.getByRole('button', { name: '矩阵', exact: true }).click();
+  await tree.getByRole('button', { name: '转置', exact: true }).click();
+
+  // A click on an item selects it; only ↗ goes back to the conversation.
+  const sourced = panel.getByTestId('map-item').filter({ hasText: 'B^T A^T' }).first();
+  const pages = context.pages().length;
+  await sourced.locator('.item-body').click();
+  await panel.waitForTimeout(300);
+  expect(context.pages()).toHaveLength(pages);
+  await expect(sourced).toHaveClass(/selected/);
+  const opened = context.waitForEvent('page');
+  await sourced.getByTestId('jump').click();
+  expect((await opened).url()).toContain('chatgpt.com/c/demo');
+  await panel.bringToFront();
+
+  // Double-click edits.
+  await panel.getByTestId('map-item').filter({ hasText: '(A + B)' }).locator('.item-body').dblclick();
+  await panel.keyboard.press('End');
+  await panel.keyboard.type(' \\quad');
+  await panel.keyboard.press('Enter');
+  await expect.poll(() => markdown(panel)).toContain('(A + B)^T = A^T + B^T \\quad');
+
+  // Right-click a topic: add a statement in place.
+  await tree.getByRole('button', { name: '逆矩阵', exact: true }).click({ button: 'right' });
+  await panel.getByRole('menuitem', { name: 'Add a statement' }).click();
+  await panel.getByTestId('add-item').fill('可逆矩阵的行列式不为零');
+  await panel.getByTestId('add-item').press('Enter');
+  await expect.poll(() => markdown(panel)).toContain('### 逆矩阵\n\n- $(AB)^{-1} = B^{-1}A^{-1}$\n- 可逆矩阵的行列式不为零');
+
+  // Keys on the selected node: Enter adds a sibling right after it, Tab nests it under the one before.
+  await tree.getByRole('button', { name: '逆矩阵', exact: true }).click();
+  await panel.keyboard.press('Enter');
+  await expect(panel.locator('input.edit')).toBeFocused();
+  await panel.keyboard.press('Control+a');
+  await panel.keyboard.type('伴随矩阵');
+  await panel.keyboard.press('Enter');
+  await expect.poll(() => markdown(panel)).toMatch(/### 逆矩阵[\s\S]*### 伴随矩阵[\s\S]*### 秩/);
+  await tree.getByRole('button', { name: '伴随矩阵', exact: true }).click();
+  await panel.keyboard.press('Tab');
+  await expect.poll(() => markdown(panel)).toContain('#### 伴随矩阵');
+  // The panel shows the new nesting (one branch deeper) before the next key.
+  const depth = () =>
+    panel.evaluate(() => {
+      const row = [...document.querySelectorAll('[data-testid=map-section]')].find((r) => r.textContent?.includes('伴随矩阵'));
+      let n = 0;
+      for (let e = row?.parentElement; e; e = e.parentElement) if (e.classList.contains('branch')) n++;
+      return n;
+    });
+  await expect.poll(depth).toBe(3);
+  await panel.keyboard.press('Shift+Tab');
+  await expect.poll(() => markdown(panel)).toMatch(/\n### 伴随矩阵/);
+  await expect.poll(depth).toBe(2);
+  await panel.keyboard.press('Delete');
+  await expect(panel.locator('.foot')).toContainText('Deleted "伴随矩阵"');
+  expect(await markdown(panel)).not.toContain('伴随矩阵');
+});
+
 test('full page: tabs, outline toggle, detail pane with sources, adding an item; settings saves and tests the model', async ({ context, extensionId, mockLlm }) => {
   const panel = await context.newPage();
   await panel.goto(`chrome-extension://${extensionId}/sidepanel.html`);

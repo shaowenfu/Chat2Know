@@ -69,7 +69,9 @@
     "removed": "已删除「$1」",
     "hint": "在回答里点公式旁的 ＋，或选中文字按 Alt S，就会记到导图里合适的位置。",
     "hintNoModel": "拖住条目右侧的 ⋮⋮ 放到任意知识点上。配置模型后，待归位的内容会自动归位。",
-    "pickSubject": "切换学科"
+    "pickSubject": "切换学科",
+    "addFormula": "添加公式",
+    "addStatement": "添加结论"
   },
   "empty": {
     "title": "你的知识导图会长在这里",

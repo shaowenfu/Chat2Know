@@ -306,8 +306,8 @@ export default defineBackground(() => {
       notifyChanged();
       return { id: node.id };
     },
-    'map/addSection': async ({ parentId, title }) => {
-      const { node } = await (await repo()).addSection(parentId, title);
+    'map/addSection': async ({ parentId, title, beforeId }) => {
+      const { node } = await (await repo()).addSection(parentId, title, 'user', beforeId);
       notifyChanged();
       return { id: node.id };
     },

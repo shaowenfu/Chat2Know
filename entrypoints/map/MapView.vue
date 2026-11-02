@@ -8,6 +8,7 @@ import { withoutGrey, type MapTree } from '@/src/graph/tree';
 import MapBranch from '@/src/ui/MapBranch.vue';
 import ContextMenu from '@/src/ui/ContextMenu.vue';
 import { provideMap } from '@/src/ui/map-context';
+import { useMapEditing, type AddingItem } from '@/src/ui/map-editing';
 import { formulaHtml, textHtml } from '@/src/ui/math';
 import GapCardView from '@/src/ui/GapCard.vue';
 import type { GapCard } from '@/src/services/gaps';
@@ -27,6 +28,9 @@ const addType = ref<ItemType>('formula');
 const addText = ref('');
 const gapMarks = ref(new Set<string>());
 const sectionGap = ref<GapCard | null>(null);
+const addingTo = ref<AddingItem>();
+
+const editing = useMapEditing({ tree, selectedId, editingId, addingTo, expanded, run, reload: () => load() });
 
 async function run(action: () => Promise<unknown>) {
   try {
@@ -54,7 +58,7 @@ async function load() {
 
 /** The detail pane shows the selected section's open gap, if it has one. */
 async function loadGap() {
-  const id = selectedId.value;
+  const id = selected.value?.t.node.id;
   sectionGap.value = id && gapMarks.value.has(id) ? await sendMessage('gaps/forSection', { sectionId: id }) : null;
 }
 watch(selectedId, () => void run(loadGap));
@@ -71,7 +75,11 @@ function find(t: MapTree | undefined, id: string | undefined, path: MapNode[] = 
   }
   return undefined;
 }
-const selected = computed(() => find(tree.value, selectedId.value));
+/** The detail pane's section: the selected one, or the selected item's. */
+const selected = computed(() => {
+  const hit = find(tree.value, selectedId.value);
+  return hit?.t.node.kind === 'item' ? find(tree.value, hit.t.node.parentId) : hit;
+});
 const selectedItems = computed(() => selected.value?.t.children.filter((c) => c.node.kind === 'item').map((c) => c.node) ?? []);
 
 const dateOf = (at: number) => new Date(at).toLocaleDateString(i18n.t('mapPage.dateLocale'), { month: 'short', day: 'numeric' });
@@ -84,13 +92,17 @@ provideMap({
   dragging,
   dropTarget,
   selectedId,
+  addingTo,
   toggle(id) {
     if (selectedId.value === id && expanded.value.has(id)) expanded.value.delete(id);
     else expanded.value.add(id);
-    selectedId.value = id;
   },
+  select(node) {
+    selectedId.value = node.id;
+  },
+  saveAdd: (text) => void editing.saveAdd(text),
   openItem(node) {
-    selectedId.value = node.parentId;
+    if (node.source) void run(() => sendMessage('map/openSource', { itemId: node.id }));
   },
   openMenu(event, node) {
     menu.value = { node, x: Math.min(event.clientX, window.innerWidth - 220), y: Math.min(event.clientY, window.innerHeight - 180) };
@@ -129,12 +141,12 @@ function menuRemove() {
 function menuAddChild() {
   const parent = menu.value!.node;
   menu.value = undefined;
-  void run(async () => {
-    const { id } = await sendMessage('map/addSection', { parentId: parent.id, title: i18n.t('mapPage.newChildTitle') });
-    expanded.value.add(parent.id);
-    await load();
-    editingId.value = id;
-  });
+  void editing.newChild(parent);
+}
+function menuAddItem(itemType: 'formula' | 'statement') {
+  const node = menu.value!.node;
+  menu.value = undefined;
+  editing.startAdd(node.id, itemType);
 }
 
 function saveSubject(title: string) {
@@ -156,12 +168,9 @@ function onKey(e: KeyboardEvent) {
   if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'z') {
     e.preventDefault();
     void run(() => sendMessage('map/undo', {}));
+    return;
   }
-  if (e.key === 'Delete' && selected.value && selected.value.t.node.kind === 'section') {
-    const id = selected.value.t.node.id;
-    selectedId.value = undefined;
-    void run(() => sendMessage('map/remove', { id }));
-  }
+  editing.onKey(e);
 }
 onMounted(() => window.addEventListener('keydown', onKey));
 onUnmounted(() => window.removeEventListener('keydown', onKey));
@@ -191,7 +200,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey));
           >
           <span v-else class="chip" @dblclick="editingId = tree.node.id">{{ tree.node.title }}</span>
         </div>
-        <MapBranch v-if="shown.length" :trees="shown" />
+        <MapBranch v-if="shown.length || addingTo?.parentId === tree.node.id" :trees="shown" :parent-id="tree.node.id" />
       </section>
       <p v-else class="empty">{{ i18n.t('mapPage.empty') }}</p>
     </main>
@@ -237,12 +246,12 @@ onUnmounted(() => window.removeEventListener('keydown', onKey));
       :x="menu.x"
       :y="menu.y"
       :subjects="subjects"
-      can-add-child
       @close="menu = undefined"
       @move="menuMove"
       @edit="menuEdit"
       @remove="menuRemove"
       @add-child="menuAddChild"
+      @add-item="menuAddItem"
     />
   </div>
 </template>

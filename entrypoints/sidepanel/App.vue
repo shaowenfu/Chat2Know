@@ -9,6 +9,7 @@ import { itemCount, type MapTree } from '@/src/graph/tree';
 import MapBranch from '@/src/ui/MapBranch.vue';
 import ContextMenu from '@/src/ui/ContextMenu.vue';
 import { provideMap } from '@/src/ui/map-context';
+import { useMapEditing, type AddingItem } from '@/src/ui/map-editing';
 import OutlineOffer from '@/src/ui/OutlineOffer.vue';
 import MapSwitcher from '@/src/ui/MapSwitcher.vue';
 import FirstScreen from '@/src/ui/FirstScreen.vue';
@@ -38,6 +39,19 @@ const newestId = ref<string>();
 const editingId = ref<string>();
 const dragging = ref<string>();
 const dropTarget = ref<string>();
+const selectedId = ref<string>();
+const addingTo = ref<AddingItem>();
+
+const editing = useMapEditing({
+  tree,
+  selectedId,
+  editingId,
+  addingTo,
+  expanded,
+  run,
+  reload: () => load(),
+  removed: (node, group) => showNotice(i18n.t('panel.removed', [node.latex ?? (node.title || i18n.t('map.unnamed'))]), group),
+});
 
 function readExpanded(): string[] {
   try {
@@ -141,11 +155,20 @@ provideMap({
   editingId,
   dragging,
   dropTarget,
+  selectedId,
+  addingTo,
   toggle(id) {
     if (expanded.value.has(id)) expanded.value.delete(id);
     else expanded.value.add(id);
     saveExpanded();
   },
+  select(node) {
+    selectedId.value = node.id;
+  },
+  dblclick(node) {
+    editingId.value = node.id;
+  },
+  saveAdd: (text) => void editing.saveAdd(text),
   openItem(node) {
     if (node.source) void run(() => sendMessage('map/openSource', { itemId: node.id }));
   },
@@ -178,10 +201,17 @@ function menuEdit() {
 function menuRemove() {
   const node = menu.value!.node;
   menu.value = undefined;
-  void run(async () => {
-    const { group } = await sendMessage('map/remove', { id: node.id });
-    showNotice(i18n.t('panel.removed', [node.latex ?? node.title]), group);
-  });
+  void editing.remove(node);
+}
+function menuAddChild() {
+  const node = menu.value!.node;
+  menu.value = undefined;
+  void editing.newChild(node);
+}
+function menuAddItem(itemType: 'formula' | 'statement') {
+  const node = menu.value!.node;
+  menu.value = undefined;
+  editing.startAdd(node.id, itemType);
 }
 function undo(group?: string) {
   notice.value = undefined;
@@ -200,7 +230,9 @@ function onKey(e: KeyboardEvent) {
   if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'z' && !typing) {
     e.preventDefault();
     undo();
+    return;
   }
+  editing.onKey(e);
 }
 
 function onMessage(message: unknown) {
@@ -268,10 +300,10 @@ const subjectNode = computed(() => tree.value?.node);
             @keydown.esc.prevent="editingId = undefined"
             @blur="renameSubject(($event.target as HTMLInputElement).value)"
           >
-          <span v-else class="chip" :class="{ unnamed: !subjectNode!.title }">{{ subjectNode!.title || i18n.t('map.unnamed') }}</span>
+          <span v-else class="chip" :class="{ unnamed: !subjectNode!.title }" @dblclick="editingId = subjectNode!.id">{{ subjectNode!.title || i18n.t('map.unnamed') }}</span>
           <span class="muted small">{{ itemCount(tree) === 1 ? i18n.t('panel.itemCountOne') : i18n.t('panel.itemCount', [String(itemCount(tree))]) }}</span>
         </div>
-        <MapBranch v-if="tree.children.length" :trees="tree.children" />
+        <MapBranch v-if="tree.children.length || addingTo?.parentId === tree.node.id" :trees="tree.children" :parent-id="tree.node.id" />
       </section>
 
       <footer class="foot">
@@ -293,6 +325,8 @@ const subjectNode = computed(() => tree.value?.node);
       @move="menuMove"
       @edit="menuEdit"
       @remove="menuRemove"
+      @add-child="menuAddChild"
+      @add-item="menuAddItem"
     />
   </main>
 </template>

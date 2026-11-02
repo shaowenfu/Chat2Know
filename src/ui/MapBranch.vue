@@ -8,19 +8,40 @@ import { useMap } from './map-context';
 import GapCard from './GapCard.vue';
 
 defineOptions({ name: 'MapBranch' });
-const props = defineProps<{ trees: MapTree[]; unplaced?: boolean }>();
+const props = defineProps<{ trees: MapTree[]; parentId: string; unplaced?: boolean }>();
 const map = useMap();
+
+const addText = ref('');
+const adder = ref<HTMLInputElement>();
+const adding = computed(() => map.addingTo.value?.parentId === props.parentId ? map.addingTo.value : undefined);
+watch(adding, async (a) => {
+  if (!a) return;
+  addText.value = '';
+  await nextTick();
+  adder.value?.focus();
+});
+function finishAdd(save: boolean) {
+  if (!adding.value) return;
+  if (save) map.saveAdd(addText.value);
+  else map.addingTo.value = undefined;
+}
+const showChildren = (t: MapTree) => isOpen(t) && (t.children.length > 0 || map.addingTo.value?.parentId === t.node.id);
 
 const editText = ref('');
 const editor = ref<HTMLInputElement[]>([]);
-watch(map.editingId, async (id) => {
-  const node = props.trees.find((t) => t.node.id === id)?.node;
-  if (!node) return;
-  editText.value = node.kind === 'item' && node.itemType === 'formula' ? (node.latex ?? '') : node.title;
-  await nextTick();
-  editor.value[0]?.focus();
-  editor.value[0]?.select();
-});
+// After render: a node created just before (a new section) is only in this branch's props then.
+watch(
+  map.editingId,
+  async (id) => {
+    const node = props.trees.find((t) => t.node.id === id)?.node;
+    if (!node) return;
+    editText.value = node.kind === 'item' && node.itemType === 'formula' ? (node.latex ?? '') : node.title;
+    await nextTick();
+    editor.value[0]?.focus();
+    editor.value[0]?.select();
+  },
+  { flush: 'post' },
+);
 
 const sorted = computed(() => props.trees);
 const isOpen = (t: MapTree) => map.expanded.value.has(t.node.id);
@@ -59,7 +80,12 @@ function finishEdit(node: MapNode, save: boolean) {
       <template v-if="t.node.kind === 'item'">
         <div
           class="item"
-          :class="{ newest: t.node.id === map.newestId.value, formula: t.node.itemType === 'formula', dragging: map.dragging.value === t.node.id }"
+          :class="{
+            newest: t.node.id === map.newestId.value,
+            formula: t.node.itemType === 'formula',
+            dragging: map.dragging.value === t.node.id,
+            selected: map.selectedId.value === t.node.id,
+          }"
           data-testid="map-item"
           draggable="true"
           @dragstart="dragStart($event, t.node)"
@@ -81,12 +107,23 @@ function finishEdit(node: MapNode, save: boolean) {
             v-else
             type="button"
             class="item-body"
-            :title="t.node.source ? i18n.t('panel.openSource') : undefined"
-            @click="map.openItem(t.node)"
-            @dblclick="map.dblclick?.(t.node)"
+            @click="map.select(t.node)"
+            @dblclick="map.dblclick(t.node)"
             v-html="t.node.itemType === 'formula' ? formulaHtml(t.node.latex ?? '') : textHtml(t.node.title)"
           />
+          <!-- eslint-enable vue/no-v-html -->
           <span v-if="t.node.id === map.newestId.value" class="badge">{{ i18n.t('panel.justAdded') }}</span>
+          <button
+            v-if="t.node.source"
+            type="button"
+            class="jump"
+            data-testid="jump"
+            :title="i18n.t('panel.openSource')"
+            :aria-label="i18n.t('panel.openSource')"
+            @click.stop="map.openItem(t.node)"
+          >
+            ↗
+          </button>
           <span class="handle" aria-hidden="true">⋮⋮</span>
         </div>
       </template>
@@ -98,7 +135,7 @@ function finishEdit(node: MapNode, save: boolean) {
             chapter: !unplaced && t.node.kind === 'section',
             'is-unplaced': t.node.role === 'unplaced',
             target: map.dropTarget.value === t.node.id,
-            selected: map.selectedId?.value === t.node.id,
+            selected: map.selectedId.value === t.node.id,
             gap: map.gapMarks.value.has(t.node.id),
           }"
           data-testid="map-section"
@@ -124,8 +161,11 @@ function finishEdit(node: MapNode, save: boolean) {
             type="button"
             class="title"
             :class="{ bold: isOpen(t) && t.children.length }"
-            @click="map.toggle(t.node.id)"
-            @dblclick="t.node.role ? undefined : map.dblclick?.(t.node)"
+            @click="
+              map.toggle(t.node.id);
+              map.select(t.node);
+            "
+            @dblclick="t.node.role ? undefined : map.dblclick(t.node)"
           >
             {{ t.node.role === 'unplaced' ? i18n.t('map.unplaced') : t.node.title }}
           </button>
@@ -142,8 +182,21 @@ function finishEdit(node: MapNode, save: boolean) {
           }}</span>
         </div>
         <GapCard v-if="map.gapCard?.value?.gap.sectionId === t.node.id" :key="map.gapCard.value.gap.id" :card="map.gapCard.value" @done="map.gapDone?.()" />
-        <MapBranch v-if="isOpen(t) && t.children.length" :trees="t.children" :unplaced="t.node.role === 'unplaced'" />
+        <MapBranch v-if="showChildren(t)" :trees="t.children" :parent-id="t.node.id" :unplaced="t.node.role === 'unplaced'" />
       </template>
+    </li>
+    <li v-if="adding" class="adding">
+      <input
+        ref="adder"
+        v-model="addText"
+        class="edit"
+        :class="{ mono: adding.itemType === 'formula' }"
+        data-testid="add-item"
+        :placeholder="adding.itemType === 'formula' ? i18n.t('mapPage.addPlaceholderFormula') : i18n.t('mapPage.addPlaceholderStatement')"
+        @keydown.enter.prevent="finishAdd(true)"
+        @keydown.esc.prevent="finishAdd(false)"
+        @blur="finishAdd(true)"
+      >
     </li>
   </ul>
 </template>
@@ -177,6 +230,24 @@ li {
 }
 .row.selected {
   background: var(--bg-soft);
+}
+.item.selected {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.jump {
+  border: 0;
+  padding: 0 4px;
+  background: none;
+  color: var(--accent);
+  font-size: 13px;
+  cursor: pointer;
+  visibility: hidden;
+}
+.item:hover .jump,
+.item.selected .jump,
+.jump:focus-visible {
+  visibility: visible;
 }
 .row.gap {
   outline: 2px solid #b4480f;

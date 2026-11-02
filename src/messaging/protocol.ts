@@ -64,7 +64,7 @@ export interface MessageMap {
   'map/addSubject': { req: { title: string }; res: { id: string } };
   /** The user opens a map: everything recorded goes into it. */
   'maps/open': { req: { id: string }; res: null };
-  'map/addSection': { req: { parentId: string; title: string }; res: { id: string } };
+  'map/addSection': { req: { parentId: string; title: string; beforeId?: string }; res: { id: string } };
   /** An item the user types in on the full page (a formula's LaTeX, or a statement). */
   'map/addItem': { req: { parentId: string; itemType: ItemType; text: string }; res: { id: string } };
   /** "清空所有数据". */

@@ -69,7 +69,9 @@
     "removed": "Deleted \"$1\"",
     "hint": "Click ＋ beside a formula in an answer, or select text and press Alt S, and it goes to the right place on your map.",
     "hintNoModel": "Drag an item by ⋮⋮ onto any topic. Once a model is set up, unplaced notes find their places.",
-    "pickSubject": "Switch subject"
+    "pickSubject": "Switch subject",
+    "addFormula": "Add a formula",
+    "addStatement": "Add a statement"
   },
   "empty": {
     "title": "Your knowledge map grows here",
