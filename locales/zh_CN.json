@@ -113,7 +113,8 @@
     "newChildTitle": "新知识点",
     "empty": "还没有导图。在 AI 对话里记下第一条，或在这里新建一张。",
     "dateLocale": "zh-CN",
-    "addPlaceholderQuote": "要原样保留的原文"
+    "addPlaceholderQuote": "要原样保留的原文",
+    "questionsTab": "提问"
   },
   "settings": {
     "model": "模型",
@@ -210,5 +211,31 @@
     "hideAsks": "收起我问过的",
     "no": "不用",
     "footer": "每 5 个新问题看一次；只出现在侧栏，不打断聊天。点\"不用\"，这张导图今天不再提。"
+  },
+  "questions": {
+    "search": "搜索提问",
+    "filter": "导图",
+    "allMaps": "全部导图",
+    "noMap": "未归入导图",
+    "count": "$1 个提问",
+    "countOne": "1 个提问",
+    "conversations": "来自 $1 段对话",
+    "conversationsOne": "来自 1 段对话",
+    "window": "浮窗",
+    "delete": "删除这条提问",
+    "noMatch": "没有符合的提问。",
+    "empty": "还没有提问记录。你在勾选的网站上和浮窗里发出的提问会出现在这里。",
+    "reportTitle": "$1 · 分析报告",
+    "versions": "之前的报告",
+    "madeAt": "$1 生成",
+    "generate": "生成新报告",
+    "generating": "正在生成…",
+    "noReport": "还没有报告。点\"生成新报告\"，模型会根据这张导图里的 $1 个提问写一份分析。",
+    "noAsksInMap": "这张导图里还没有提问，报告根据提问来写。",
+    "noModel": "在设置里配置模型后才能生成报告。",
+    "reportNote": "报告由模型根据你的提问写成，只在你点\"生成新报告\"时生成；旧报告可以在日期菜单里查看。不打分。",
+    "pickMap": "选一张导图，查看它的分析报告。",
+    "notes": "$1 条笔记",
+    "noteOne": "1 条笔记"
   }
 }

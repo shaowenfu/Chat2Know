@@ -13,6 +13,7 @@ import { placeItem, placeUnplaced } from '@/src/services/placement';
 import { textFragmentUrl } from '@/src/capture/text-fragment';
 import { outlineOfferable, proposeOutline } from '@/src/services/outline';
 import { checkDue, checkStuck, stuckView } from '@/src/services/stuck';
+import { generateReport } from '@/src/services/report';
 import { loadOutlines, saveOutline } from '@/src/outline/state';
 import { moveByUser, parentPath, placeOptions, searchPlaces } from '@/src/services/relocate';
 import { isConfigured } from '@/src/llm/settings';
@@ -442,6 +443,13 @@ export default defineBackground(() => {
       return { nodes: nodes.length };
     },
     'asks/list': async () => (await repo()).listAsks(),
+    'reports/list': async ({ mapId }) => (await repo()).reports(mapId),
+    'reports/generate': async ({ mapId }) => {
+      const reportLabels = { window: i18n.t('questions.window'), notes: (n: number) => (n === 1 ? i18n.t('questions.noteOne') : i18n.t('questions.notes', [String(n)])) };
+      const report = await generateReport(await repo(), await client(), mapId, promptLang(), reportLabels, Date.now());
+      notifyChanged();
+      return report;
+    },
     'asks/delete': async ({ id }) => {
       await (await repo()).deleteAsk(id);
       notifyChanged();

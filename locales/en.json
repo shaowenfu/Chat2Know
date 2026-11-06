@@ -113,7 +113,8 @@
     "newChildTitle": "New topic",
     "empty": "No maps yet. Record your first note in an AI chat, or start a map here.",
     "dateLocale": "en",
-    "addPlaceholderQuote": "The exact words to keep"
+    "addPlaceholderQuote": "The exact words to keep",
+    "questionsTab": "Questions"
   },
   "settings": {
     "model": "Model",
@@ -210,5 +211,31 @@
     "hideAsks": "Hide my questions",
     "no": "Not now",
     "footer": "Looked at every 5 new questions, only here in the side panel. \"Not now\" keeps this map quiet for today."
+  },
+  "questions": {
+    "search": "Search questions",
+    "filter": "Map",
+    "allMaps": "All maps",
+    "noMap": "No map open",
+    "count": "$1 questions",
+    "countOne": "1 question",
+    "conversations": "from $1 conversations",
+    "conversationsOne": "from 1 conversation",
+    "window": "Ask window",
+    "delete": "Delete this question",
+    "noMatch": "No question matches.",
+    "empty": "No questions recorded yet. The questions you send on the ticked sites, and in the Ask window, appear here.",
+    "reportTitle": "$1 · Report",
+    "versions": "Earlier reports",
+    "madeAt": "Made $1",
+    "generate": "New report",
+    "generating": "Writing…",
+    "noReport": "No report yet. \"New report\" has the model write an analysis of the $1 questions in this map.",
+    "noAsksInMap": "No questions in this map yet. A report is written from them.",
+    "noModel": "Set up a model in settings to write a report.",
+    "reportNote": "Written by the model from your questions, only when you click \"New report\"; earlier reports stay in the date menu. No scores.",
+    "pickMap": "Choose a map to see its report.",
+    "notes": "$1 notes",
+    "noteOne": "1 note"
   }
 }

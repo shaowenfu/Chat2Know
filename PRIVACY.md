@@ -15,9 +15,9 @@ Everything is stored **in your browser only** (IndexedDB and `chrome.storage.loc
 - Embedding vectors of your topics and items, if you set an embedding model.
 - Model settings, **including your API key**. The key is read only by the extension's background script and is never written to logs or exports.
 - The sites you ticked, and outlines Chat2Know proposed for your subjects.
-- Unless you turn off **Also record the questions I send on these sites**: the questions you send on the ticked sites and in the floating question window, with the map that was open, and what each look at them found (whether you seemed stuck, where, and a suggested question).
+- Unless you turn off **Also record the questions I send on these sites**: the questions you send on the ticked sites and in the floating question window, with the map that was open, and what each look at them found (whether you seemed stuck, where, and a suggested question), and the reports you asked for.
 
-所有数据**只存在你的浏览器里**（IndexedDB 和 `chrome.storage.local`）：你的导图（学科、章、知识点，以及你记下的公式 LaTeX 或一句话结论和它们的出处：网址、页面标题、前后引用的文字）；导图的修改历史（用于撤销）和归位记录（插件放在哪里、你改到哪里，用作以后归位的示例）；配置了嵌入模型时，知识点和条目的向量；模型设置（**包括 API Key**，只有插件后台读取，不写入日志和导出）；勾选的网站和插件为学科提出的大纲；除非你关掉"也记录我在这些网站上发出的提问"：你在勾选网站上和浮窗里发出的提问、发问时打开的导图，以及每次检查的结果（是否像是卡住、卡在哪、建议的问法）。
+所有数据**只存在你的浏览器里**（IndexedDB 和 `chrome.storage.local`）：你的导图（学科、章、知识点，以及你记下的公式 LaTeX 或一句话结论和它们的出处：网址、页面标题、前后引用的文字）；导图的修改历史（用于撤销）和归位记录（插件放在哪里、你改到哪里，用作以后归位的示例）；配置了嵌入模型时，知识点和条目的向量；模型设置（**包括 API Key**，只有插件后台读取，不写入日志和导出）；勾选的网站和插件为学科提出的大纲；除非你关掉"也记录我在这些网站上发出的提问"：你在勾选网站上和浮窗里发出的提问、发问时打开的导图，以及每次检查的结果（是否像是卡住、卡在哪、建议的问法）和你生成的报告。
 
 ## What leaves your browser · 什么会离开你的浏览器
 
@@ -31,11 +31,12 @@ Only requests to **the model provider you configure yourself** (any OpenAI-compa
 | You open "Move" on a recorded item, with an embedding model | The item's text |
 | You ask in the floating window | The selected text, a few sentences around it, the page title, your question and the earlier questions and answers in that window |
 | Question recording is on, every 5 new questions in a map | That map's latest 30 questions (with which conversation each came from), its name and its topic titles |
+| You click "New report" on the Questions tab | That map's latest 200 questions (with when, where and in which conversation each was asked), its name, its topic titles with how many notes each holds, and what the stuck checks noticed |
 | You click "Test connection" | A fixed test message |
 
 Nothing is sent to the Chat2Know project or any third party.
 
-只有发往**你自己配置的模型服务商**的请求（任意兼容 OpenAI 格式的接口，用你自己的 Key）。没有配置模型时，什么都不会离开浏览器。配置之后：记下条目时（自动归位）发送该条目、它前后的几个字、各学科的章和知识点标题、你最近改过的归位；配置了嵌入模型时发送条目文字、知识点标题及其下几条条目；新学科第一条之后提议大纲时发送学科名、已有知识点标题和你粘贴的目录；打开"改位置"且配置了嵌入模型时发送条目文字；在浮窗里提问时发送选中的文字、前后几句、页面标题、你的问题和这个浮窗里之前的问答；提问记录开着时，一张导图每满 5 条新提问，发送它最近 30 条提问（标明来自哪段对话）、导图名称和知识点标题；"测试连接"发送一条固定的测试消息。不会向 Chat2Know 项目或任何第三方发送数据。
+只有发往**你自己配置的模型服务商**的请求（任意兼容 OpenAI 格式的接口，用你自己的 Key）。没有配置模型时，什么都不会离开浏览器。配置之后：记下条目时（自动归位）发送该条目、它前后的几个字、各学科的章和知识点标题、你最近改过的归位；配置了嵌入模型时发送条目文字、知识点标题及其下几条条目；新学科第一条之后提议大纲时发送学科名、已有知识点标题和你粘贴的目录；打开"改位置"且配置了嵌入模型时发送条目文字；在浮窗里提问时发送选中的文字、前后几句、页面标题、你的问题和这个浮窗里之前的问答；提问记录开着时，一张导图每满 5 条新提问，发送它最近 30 条提问（标明来自哪段对话）、导图名称和知识点标题；在"提问"页点"生成新报告"时，发送这张导图最近 200 条提问（含时间、网站和所属对话）、导图名称、知识点标题及其笔记数，以及卡住检查的结果；"测试连接"发送一条固定的测试消息。不会向 Chat2Know 项目或任何第三方发送数据。
 
 ## Permissions · 权限
 

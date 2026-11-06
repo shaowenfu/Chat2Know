@@ -4,7 +4,7 @@ import { UserError } from '@/src/errors';
 import { buildTree, byOrder, type MapTree, type OutlineNode } from '@/src/graph/tree';
 import type { Hlc } from './hlc';
 import type { Chat2KnowDB } from './schema';
-import type { Ask, Embedding, ItemSource, ItemType, MapNode, Origin, StuckCheck } from './types';
+import type { Ask, Embedding, ItemSource, ItemType, MapNode, Origin, Report, StuckCheck } from './types';
 
 const stripHash = (url: string) => url.replace(/#.*$/, '');
 
@@ -542,8 +542,11 @@ export class Repository {
     await this.deleteAsks([id]);
   }
 
+  /** All recorded questions, and everything read from them: the stuck checks and the reports. */
   async clearAsks(): Promise<void> {
-    await this.deleteAsks(await this.db.asks.toCollection().primaryKeys());
+    await this.db.transaction('rw', this.db.asks, this.db.stuckChecks, this.db.reports, async () => {
+      await Promise.all([this.db.asks.clear(), this.db.stuckChecks.clear(), this.db.reports.clear()]);
+    });
   }
 
   async deleteConversationAsks(conversationUrl: string): Promise<void> {
@@ -571,5 +574,18 @@ export class Repository {
 
   async dismissStuck(id: string, at: number): Promise<void> {
     await this.db.stuckChecks.update(id, { dismissedAt: at });
+  }
+
+  // ------------------------------------------------------------ reports (local only, not logged)
+
+  async addReport(report: Omit<Report, 'id'>): Promise<Report> {
+    const row = { ...report, id: this.ulid(report.createdAt) };
+    await this.db.reports.add(row);
+    return row;
+  }
+
+  /** A map's reports, newest first. */
+  async reports(mapId: string): Promise<Report[]> {
+    return (await this.db.reports.where('mapId').equals(mapId).sortBy('createdAt')).reverse();
   }
 }

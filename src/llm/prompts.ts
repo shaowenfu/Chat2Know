@@ -255,7 +255,7 @@ const STUCK_TEXT = {
     task: [
       '你在旁边看一位学习者向 AI 提问，帮他发现自己是不是卡住了。下面是他在一张知识导图里最近的提问（按时间编号，按对话分段，“浮窗”是他针对页面上选中内容问的），后面是这张导图里的知识点（编号）。',
       '判断这些提问是否显出下面一种情况：circling（同一个点换着说法反复问，一直没弄懂）；stuck（被前面某个没弄懂的知识点挡住，后面的问题都绕不过去）；offTarget（问的和他真正不懂的地方不是一回事，问不到点子上）；phrasing（不会组织问题，问得含糊、宽泛，得不到有用的回答）。一步步往下学、每个问题都有进展，就是没有卡住；拿不准时也算没有卡住。',
-      '卡住时："kind" 是上面四个词之一；"section" 是最相关的知识点编号，没有合适的填 0；"explanation" 用两三句话温和地说：看到了什么、可能卡在哪里、先弄清什么（不评判，不打分）；"question" 是一个他可以直接发给 AI 的更好的问法，具体、能回答，用他的语言；"evidence" 是体现这一点的提问编号。',
+      '卡住时："kind" 是上面四个词之一（提问里没有具体内容、只有“这个”“还是不懂”时是 phrasing）；"section" 是提问里真正提到的知识点编号，提问没提到任何知识点时填 0，不要猜；"explanation" 最多三句短句（共约 80 字），温和地说：这些问题显出了什么、可能卡在哪一步、先弄清什么；只说问题，不评价他本人（不说“你没懂”“没吃透”），不写提问编号，不打分；"question" 是一个他可以直接发给 AI 的更好的问法，具体、能回答，只用他问过的内容，不编造他没提过的主题；看不出具体主题时，写成带〔…〕空位的句式让他自己填；"evidence" 是体现这一点的提问编号。',
       '只返回 JSON：卡住时 {"stuck": true, "kind": "...", "section": 0, "explanation": "...", "question": "...", "evidence": [1]}，没有卡住时 {"stuck": false}。用中文写。',
     ].join(''),
     map: '导图',
@@ -270,7 +270,7 @@ const STUCK_TEXT = {
     task: [
       "You watch over a learner's questions to an AI and help them notice when they are stuck. Below are their latest questions in one knowledge map (numbered in order, grouped by conversation; \"window\" marks a question about something they selected on the page), then the map's topics (numbered).",
       ' Decide whether the questions show one of these: circling (asking about the same point again and again in other words, never getting it); stuck (held up by an earlier topic they have not understood, so the later questions cannot get past it); offTarget (asking about something other than what they actually do not understand); phrasing (questions too vague or broad to get a useful answer). Moving on step by step with each question making progress is not stuck; when unsure, it is not stuck.',
-      ' When stuck: "kind" is one of the four words above; "section" is the number of the most relevant topic, 0 if none fits; "explanation" says gently, in two or three sentences, what you noticed, where they may be stuck and what to get clear first (no judging, no scores); "question" is a better question they can send to the AI as it is, concrete and answerable, in their language; "evidence" lists the numbers of the questions that show it.',
+      ' When stuck: "kind" is one of the four words above (questions with no content, only "this" or "still don\'t get it", are phrasing); "section" is the number of a topic the questions actually mention, 0 when they mention none; never guess; "explanation" is at most three short sentences (about 50 words in all) saying gently what the questions show, which step may be holding them up and what to get clear first; talk about the questions, never about the person ("you don\'t understand"), no question numbers, no scores; "question" is a better question they can send to the AI as it is, concrete and answerable, built only from what they asked and never inventing a topic they did not mention; when no topic is clear, write it as a pattern with [...] blanks for them to fill in; "evidence" lists the numbers of the questions that show it.',
       ' Return JSON only: when stuck {"stuck": true, "kind": "...", "section": 0, "explanation": "...", "question": "...", "evidence": [1]}, otherwise {"stuck": false}. Write in English.',
     ].join(''),
     map: 'Map',
@@ -321,4 +321,85 @@ export function parseStuck(value: unknown, askCount: number, sectionCount: numbe
     question: str(o, 'question'),
     evidence: [...new Set(evidence.map((e) => number(e, 1, askCount, 'question number') - 1))].sort((x, y) => x - y),
   };
+}
+
+// ---------------------------------------------------------------- a written report on a map's questions (only when asked)
+
+export interface ReportInput {
+  lang: PromptLang;
+  map: string;
+  today: string; // "2026-11-06"
+  outline: string[]; // "chapter › topic (3 notes)", in map order
+  asks: { when: string; where: string; text: string; conversation: string }[]; // oldest first
+  stuck: { when: string; kind: StuckKind; topic: string }[]; // what the checks noticed, oldest first
+}
+
+const REPORT_TEXT = {
+  zh: {
+    task: [
+      '你根据一位学习者在一张知识导图里提过的问题，为他写一份分析报告。用 Markdown（可以用少量简单 HTML），以文字分析为主，300–600 字：最多四个小节，每节一两段，宁短勿长；用“你”称呼他，语气温和、直接。页面已经显示了标题，开头不要写标题，小标题用 ### 。',
+      '可以写这些方面，按材料取舍，不必每项都写，也不必用固定标题：他最近在问什么、从问题里看出哪些已经理解了、哪些还没落地（引用一两个他的原话作依据）；他的提问习惯，以及每个习惯的一个具体改法；接下来先学什么、怎么安排。',
+      '只写问题里看得出来的结论，材料少就直说看不出来。评价的是问题，不是人：不说“你笨”“没吃透”“基础差”这类话。不打分，不写百分比或掌握程度，不画能力地图，不做表格评级，不出题。公式写成 $...$。只返回报告正文。',
+    ].join(''),
+    map: '导图',
+    unnamed: '（未命名）',
+    today: '今天',
+    outline: '导图结构',
+    asks: '提问（按时间，按对话分段）',
+    conversation: (n: number) => `对话 ${n}`,
+    stuck: '之前的检查注意到',
+    kinds: { circling: '绕圈子', stuck: '被前面的知识点挡住', offTarget: '问不到点子上', phrasing: '问题不好组织' },
+    none: '（无）',
+  },
+  en: {
+    task: [
+      "Write an analysis report for a learner, based on the questions they asked in one knowledge map. Use Markdown (a little simple HTML is fine), mostly prose, 200–400 words: at most four short sections of one or two paragraphs each, shorter rather than longer; address them as \"you\", warm and direct. The page already shows a title: do not start with one; use ### for any subheadings.",
+      ' You may cover, as the material allows and without fixed headings: what they have been asking about lately; what the questions show they already understand and what has not landed yet (quote one or two of their own questions as evidence); their questioning habits, each with one concrete way to improve; what to learn next and how to go about it.',
+      ' Only state what the questions show; when there is too little to tell, say so. Judge the questions, never the person (no "you are slow", "weak basics"). No scores, no percentages or mastery levels, no ability maps, no rating tables, no quiz questions. Write formulas as $...$. Return the report text only.',
+    ].join(''),
+    map: 'Map',
+    unnamed: '(unnamed)',
+    today: 'Today',
+    outline: "The map's outline",
+    asks: 'Questions (in order, grouped by conversation)',
+    conversation: (n: number) => `Conversation ${n}`,
+    stuck: 'Earlier checks noticed',
+    kinds: { circling: 'going in circles', stuck: 'held up by an earlier topic', offTarget: 'asking off target', phrasing: 'struggling to phrase the question' },
+    none: '(none)',
+  },
+} as const;
+
+export function reportPrompt(input: ReportInput): ChatMessage[] {
+  const t = REPORT_TEXT[input.lang];
+  const lines: string[] = [];
+  let conversation: string | undefined;
+  let n = 0;
+  for (const a of input.asks) {
+    if (a.conversation !== conversation) {
+      conversation = a.conversation;
+      lines.push(t.conversation(++n));
+    }
+    lines.push(`- [${a.when} · ${a.where}] ${a.text.replace(/\s+/g, ' ').trim()}`);
+  }
+  const stuck = input.stuck.map((x) => `- ${x.when}: ${t.kinds[x.kind]}${x.topic ? ` (${x.topic})` : ''}`).join('\n') || t.none;
+  return [
+    system('report', t.task),
+    {
+      role: 'user',
+      content: [
+        `${t.map}: ${input.map || t.unnamed}`,
+        `${t.today}: ${input.today}`,
+        `${t.outline}:\n${input.outline.join('\n') || t.none}`,
+        `${t.asks}:\n${lines.join('\n')}`,
+        `${t.stuck}:\n${stuck}`,
+      ].join('\n\n'),
+    },
+  ];
+}
+
+/** The report as written; a reply wrapped in a code fence is unwrapped. An empty one is an error. */
+export function parseReport(reply: string): string {
+  const text = reply.replace(/^```(?:markdown|md)?\s*\n([\s\S]*?)\n```\s*$/i, '$1').trim();
+  if (!text) throw new LlmError('The model returned an empty report');
+  return text;
 }

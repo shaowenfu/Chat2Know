@@ -1,5 +1,5 @@
 import Dexie, { type EntityTable, type Table } from 'dexie';
-import type { Ask, Embedding, MapNode, OpLogEntry, Placement, StuckCheck } from './types';
+import type { Ask, Embedding, MapNode, OpLogEntry, Placement, Report, StuckCheck } from './types';
 
 /** The v2 database. A new name: v0.1 data comes in through import, never by upgrading its database. */
 export class Chat2KnowDB extends Dexie {
@@ -9,6 +9,7 @@ export class Chat2KnowDB extends Dexie {
   embeddings!: Table<Embedding, string>;
   asks!: EntityTable<Ask, 'id'>;
   stuckChecks!: EntityTable<StuckCheck, 'id'>;
+  reports!: EntityTable<Report, 'id'>;
 
   constructor(name = 'chat2know-v2') {
     super(name);
@@ -30,5 +31,7 @@ export class Chat2KnowDB extends Dexie {
       gaps: null,
       stuckChecks: 'id, mapId, checkedAt',
     });
+    // S4: the written reports on a map's questions.
+    this.version(3).stores({ reports: 'id, mapId, createdAt' });
   }
 }

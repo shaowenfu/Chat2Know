@@ -4,7 +4,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { LlmClient, type ModelSettings } from '@/src/llm/client';
-import { parseStuck, stuckPrompt } from '@/src/llm/prompts';
+import { askPrompt, parseStuck, stuckPrompt, type AskInput } from '@/src/llm/prompts';
 import { MOCK_KEY, startMockLlm, type MockLlm } from '../mock-llm/server';
 import { Chat2KnowDB } from '@/src/db/schema';
 import { Hlc } from '@/src/db/hlc';
@@ -12,6 +12,7 @@ import { Repository } from '@/src/db/repository';
 import { recordItem } from '@/src/services/record';
 import { placeItem } from '@/src/services/placement';
 import { proposeOutline } from '@/src/services/outline';
+import { generateReport } from '@/src/services/report';
 
 /**
  * Quality evals against a real model. Run with `npm run eval` after setting
@@ -79,8 +80,82 @@ describe('eval', () => {
     results.stuckAccuracy = samples.filter((s) => s.stuckRight).length / samples.length;
     results.stuckKindAccuracy = stuckOnes.filter((s) => s.kindRight).length / stuckOnes.length;
     results.stuckTopicAccuracy = stuckOnes.filter((s) => s.topicRight).length / stuckOnes.length;
+    // The card stays short: the longest explanation, in characters (Chinese) or words (English).
+    const size = (t: string) => (/[\u4e00-\u9fff]/.test(t) ? t.length : t.split(/\s+/).length);
+    results.stuckExplanationMaxSize = Math.max(0, ...samples.map((s) => (s.reply.stuck ? size(s.reply.explanation) : 0)));
     results.stuckSamples = samples;
     expect(samples).toHaveLength(cases.length);
+  });
+
+  it('ask: short answers about the selection, in the learner\'s language, formulas as $…$, follow-ups that build on the answer', async () => {
+    type Case = Omit<AskInput, 'turns' | 'question'> & { question: string; mustMention: string[][] };
+    const { cases, followUp } = data('ask.json') as { cases: Case[]; followUp: Omit<Case, 'question'> & { first: string; next: string } };
+    const answer = async (input: AskInput) => {
+      let text = '';
+      for await (const d of client.stream(askPrompt(input))) text += d;
+      return text;
+    };
+    const sentences = (t: string) => t.split(/[。！？!?]|\.\s/).filter((x) => x.trim().length > 3).length;
+    const samples = [];
+    for (const c of cases) {
+      const text = await answer({ ...c, turns: [] });
+      samples.push({
+        question: c.question,
+        text,
+        sentences: sentences(text),
+        languageRight: c.lang === 'zh' ? /[\u4e00-\u9fff]/.test(text) : !/[\u4e00-\u9fff]/.test(text),
+        noHeadings: !/^#+\s|^\*\*[^*]+\*\*\s*$/m.test(text),
+        mentions: c.mustMention.every((any) => any.some((w) => text.toLowerCase().includes(w.toLowerCase()))),
+      });
+    }
+    const first = await answer({ ...followUp, turns: [], question: followUp.first });
+    const next = await answer({ ...followUp, turns: [{ question: followUp.first, answer: first }], question: followUp.next });
+    results.askLanguageRight = samples.filter((s) => s.languageRight).length / samples.length;
+    results.askNoHeadings = samples.filter((s) => s.noHeadings).length / samples.length;
+    results.askMentions = samples.filter((s) => s.mentions).length / samples.length;
+    results.askMaxSentences = Math.max(...samples.map((s) => s.sentences));
+    results.askFollowUpBuilds = followUp.mustMention.every((any) => any.some((w) => next.includes(w)));
+    results.askSamples = [...samples, { question: followUp.next, text: next }];
+    expect(samples).toHaveLength(cases.length);
+  });
+
+  it('report: prose about this map\'s questions, in the learner\'s language, quoting them, with no scores or percentages', async () => {
+    const { cases } = data('stuck.json') as { cases: { map: string; sections: string[]; asks: { text: string; conversation: string; window?: boolean }[] }[] };
+    const samples = [];
+    // One Chinese and one English map, each with the questions of every case on its subject.
+    for (const map of ['线性代数', 'Transformers']) {
+      const own = cases.filter((c) => c.map === map);
+      const db = new Chat2KnowDB(`eval-report-${map}-${Date.now()}`);
+      let t = Date.UTC(2026, 10, 1, 8);
+      const repo = new Repository(db, new Hlc('eval', () => (t += 5 * 60_000)), () => t);
+      const { node: m } = await repo.addSubject(map);
+      for (const title of own[0]!.sections.filter((x) => !x.includes(' › '))) await repo.addSection(m.id, title);
+      for (const c of own) for (const a of c.asks) await repo.recordAsk({ site: 'deepseek', conversationUrl: `https://chat.deepseek.com/${map}/${a.conversation}`, text: a.text, via: a.window ? 'window' : 'site', mapId: m.id });
+      const zh = /[\u4e00-\u9fff]/.test(map);
+      const report = await generateReport(repo, client, m.id, zh ? 'zh' : 'en', { window: zh ? '浮窗' : 'Ask window', notes: (n) => (zh ? `${n} 条笔记` : `${n} notes`) }, t);
+      const text = report.markdown;
+      const asked = own.flatMap((c) => c.asks.map((a) => a.text));
+      samples.push({
+        map,
+        text,
+        size: zh ? text.replace(/\s/g, '').length : text.split(/\s+/).length,
+        languageRight: zh ? /[\u4e00-\u9fff]/.test(text) : !/[\u4e00-\u9fff]/.test(text),
+        // "attention scores" are subject matter; a score of the learner is not.
+        noScores: !/\d+\s*(%|percent)|\d+\s*\/\s*10\b|\bout of 10\b|分数|得分|评分|掌握(程度|度)|\byour (score|mastery|level|grade)\b|\brating\b/i.test(text),
+        noJudging: !/你笨|没吃透|基础差|you are slow|weak basics/i.test(text),
+        headingFirst: /^#/.test(text),
+        quotesQuestions: asked.some((q) => text.includes(q.slice(0, 8))),
+      });
+      await db.delete();
+    }
+    results.reportLanguageRight = samples.every((s) => s.languageRight);
+    results.reportNoScores = samples.every((s) => s.noScores);
+    results.reportNoJudging = samples.every((s) => s.noJudging);
+    results.reportStartsWithHeading = samples.filter((s) => s.headingFirst).length;
+    results.reportQuotesQuestions = samples.every((s) => s.quotesQuestions);
+    results.reportSizes = samples.map((s) => s.size);
+    results.reportSamples = samples;
+    expect(samples).toHaveLength(2);
   });
 
   it('placement: the topic of each note in its map; an unnamed map gets its subject\'s name; statements become one short sentence', async () => {

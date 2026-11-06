@@ -41,6 +41,23 @@ const list = (text: string, headers: string[]) => {
   return [...part.matchAll(/^\[(\d+)\] (.*)$/gm)].map(([, n, t]) => ({ n: Number(n), text: t!, last: t!.split(' › ').at(-1)! }));
 };
 
+/** A short report that counts the questions it read; it tries a script, which the page must drop. */
+function reportReply(user: string): string {
+  const count = (user.match(/^- \[/gm) ?? []).length;
+  return [
+    '## 概况',
+    '',
+    `你在这张导图里问了 ${count} 个问题，集中在 **转置**。`,
+    '',
+    '## 接下来',
+    '',
+    '- 先手算一遍 $(AB)^T = B^T A^T$。',
+    '- 再看 [逆矩阵](https://zh.wikipedia.org/wiki/逆矩阵)。',
+    '',
+    '<script>alert(1)</script><p onclick="alert(2)">不打分。</p>',
+  ].join('\n');
+}
+
 /** Stuck when 3 or more questions are about the same topic (the most specific title first): circling there. */
 function stuckReply(user: string): string {
   const asks = list(user, ['Questions', '提问']);
@@ -118,6 +135,8 @@ export function chatReply(task: string, user: string): string {
       return 'OK';
     case 'stuck':
       return stuckReply(user);
+    case 'report':
+      return reportReply(user);
     case 'outline':
       return outlineReply(user);
     case 'place':

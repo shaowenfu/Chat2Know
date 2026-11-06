@@ -213,10 +213,10 @@ describe('upgrading the database', () => {
 
     const db = new Chat2KnowDB(name);
     await db.open();
-    expect(db.verno).toBe(2);
+    expect(db.verno).toBe(3);
     expect(await db.nodes.count()).toBe(1);
     expect((await db.asks.toArray()).map((a) => a.text)).toEqual(['why?']);
-    expect(db.tables.map((t) => t.name).sort()).toEqual(['asks', 'embeddings', 'nodes', 'oplog', 'placements', 'stuckChecks']);
+    expect(db.tables.map((t) => t.name).sort()).toEqual(['asks', 'embeddings', 'nodes', 'oplog', 'placements', 'reports', 'stuckChecks']);
     expect(await db.asks.where('mapId').equals('s').count()).toBe(0); // old questions belong to no map
     await db.delete();
   });

@@ -17,6 +17,9 @@ npm run eval                      # prompts in Chinese; CHAT2KNOW_LANG=en for En
 | Metric | Data | What it measures |
 | --- | --- | --- |
 | `stuckAccuracy`, `stuckKindAccuracy`, `stuckTopicAccuracy` | `data/stuck.json` | 10 hand-labelled question sequences (5 stuck, 5 not): whether the stuck check gets stuck / not stuck right, and for the stuck ones the kind (circling, stuck, offTarget, phrasing) and a topic containing the expected word (none for `phrasing` with no topic). `stuckSamples` shows each reply for a manual look |
+| `stuckExplanationMaxSize` | `data/stuck.json` | The longest card explanation, in characters (Chinese) or words (English); the prompt asks for about 80 / 50 |
+| `askLanguageRight`, `askNoHeadings`, `askMentions`, `askMaxSentences`, `askFollowUpBuilds` | `data/ask.json` | Floating-window answers (streamed): in the prompt's language, no headings, containing the words a right answer needs, how many sentences the longest has, and whether a follow-up builds on the earlier answer. `askSamples` holds the texts |
+| `reportLanguageRight`, `reportNoScores`, `reportNoJudging`, `reportQuotesQuestions`, `reportStartsWithHeading`, `reportSizes` | `data/stuck.json` (its questions, per map) | Reports on a Chinese and an English map: right language, no scores / percentages / mastery levels, no judging of the person, quoting the learner's own questions, how many start with a heading (the page has its own title), and their size in characters / words. `reportSamples` holds the texts |
 | `placementTopicAccuracy` | `data/placement.json` | Each note goes into the map of its subject (as if the user opened it); the path names the expected topic (any listed keyword) |
 | `unnamedMapNamed` | `data/placement.json` | A note whose subject has no map goes into a new unnamed map, which the model names after the expected subject |
 | `termsExplained` | `data/placement.json` | A bare term ("幂指函数") is recorded as "term: one-sentence explanation" |

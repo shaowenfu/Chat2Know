@@ -8,6 +8,8 @@ v2 rebuild: Chat2Know becomes a knowledge map you record into with one click (se
 
 ### Added
 
+- A **Questions** tab on the full page: every question you recorded, newest first, with when and where it was asked (the site, or the Ask window); search it, show one map's questions (or those asked with no map open), and delete any. Beside it, **New report** has the model write an analysis of that map's questions: what you have been asking about, what has landed and what has not, your questioning habits with a way to improve each, and what to learn next. Markdown, shown sanitized (only formatting tags and http(s) links survive). Reports are kept; earlier ones stay in the date menu. No scores. Clearing your questions in settings also clears the checks and reports made from them.
+
 - **Ask** on the selection bar opens a small window beside the selection: ask a short question about it, the answer streams in (formulas typeset), and you can follow up. Add a useful answer to the map, keep it word for word, or copy it. The conversation itself is not kept; your questions go into your question log like those you send on the site. It can be moved by its title and closed with × or Esc.
 
 - Select text on a ticked AI site and a small bar appears above it: **Note** (as before, compressed to one sentence or a formula), **Keep words** (a protected quote: the exact words go into the open map; the model only chooses where; only you can edit it; it shows with a purple border and a serif face, and exports as a quotation) and **Ask**. The bar never appears in a text box. The right-click menu also has "Keep word for word in Chat2Know map".

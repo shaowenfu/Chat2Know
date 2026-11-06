@@ -107,3 +107,15 @@ export interface StuckCheck {
   evidenceAskIds?: string[];
   dismissedAt?: number;
 }
+
+/**
+ * A written analysis of one map's questions, made only when the user asks for it.
+ * Markdown (simple HTML allowed), shown sanitized. Older ones stay as history. Local only.
+ */
+export interface Report {
+  id: string;
+  mapId: string;
+  createdAt: number;
+  markdown: string;
+  askCount: number; // how many questions it read
+}

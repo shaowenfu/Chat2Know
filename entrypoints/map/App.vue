@@ -6,12 +6,13 @@ import { isEnvelope, sendMessage, type SubjectSummary } from '@/src/messaging';
 import { errorText } from '@/src/errors';
 import MapView from './MapView.vue';
 import SettingsView from './SettingsView.vue';
+import QuestionsView from './QuestionsView.vue';
 import LangSwitch from '@/src/ui/LangSwitch.vue';
 import { EXPORT_FORMATS, download, stamp, type ExportFormat } from './download';
 
 const GREY_KEY = 'chat2know.showGrey';
 
-/** The full page: `#settings`, or `#<subjectId>` for a subject's map. */
+/** The full page: `#settings`, `#questions`, or `#<subjectId>` for a subject's map. */
 const hash = ref(location.hash.slice(1));
 const subjects = ref<SubjectSummary[]>([]);
 const error = ref('');
@@ -19,6 +20,7 @@ const adding = ref(false);
 const newTitle = ref('');
 const version = ref(0); // bumps on every data change so the views reload
 const showGrey = ref(readShowGrey());
+const configured = ref(false);
 
 function readShowGrey(): boolean {
   try {
@@ -44,6 +46,9 @@ async function exportAs(f: ExportFormat) {
 }
 
 const isSettings = computed(() => hash.value === 'settings');
+const isQuestions = computed(() => hash.value === 'questions');
+/** Settings and the question log share one nav: 导图 · 提问 · 设置. */
+const isTool = computed(() => isSettings.value || isQuestions.value);
 const currentId = computed(() => (subjects.value.some((s) => s.id === hash.value) ? hash.value : subjects.value[0]?.id));
 
 async function run(action: () => Promise<unknown>) {
@@ -57,6 +62,8 @@ async function run(action: () => Promise<unknown>) {
 
 async function load() {
   subjects.value = await sendMessage('map/subjects', {});
+  const settings = await sendMessage('settings/get', {});
+  configured.value = Boolean(settings.baseUrl && settings.model && settings.hasKey);
   version.value++;
 }
 
@@ -91,7 +98,7 @@ onUnmounted(() => {
     <header class="bar">
       <span class="brand">{{ i18n.t('extName') }}</span>
       <nav class="tabs">
-        <template v-if="!isSettings">
+        <template v-if="!isTool">
           <a v-for="s in subjects" :key="s.id" :href="`#${s.id}`" :class="{ on: s.id === currentId }" data-testid="subject-tab">{{ s.title || i18n.t('map.unnamed') }}</a>
           <input
             v-if="adding"
@@ -106,12 +113,14 @@ onUnmounted(() => {
         </template>
         <template v-else>
           <a :href="`#${currentId ?? ''}`">{{ i18n.t('mapPage.mapTab') }}</a>
-          <a href="#settings" class="on">{{ i18n.t('mapPage.settingsTab') }}</a>
+          <a href="#questions" :class="{ on: isQuestions }" data-testid="questions-tab">{{ i18n.t('mapPage.questionsTab') }}</a>
+          <a href="#settings" :class="{ on: isSettings }">{{ i18n.t('mapPage.settingsTab') }}</a>
         </template>
       </nav>
       <div class="grow" />
       <LangSwitch v-if="isSettings" />
-      <template v-if="!isSettings">
+      <template v-if="!isTool">
+        <a href="#questions" class="tab-button" data-testid="questions-tab">{{ i18n.t('mapPage.questionsTab') }}</a>
         <label class="toggle">
           <input type="checkbox" :checked="showGrey" data-testid="show-grey" @change="setShowGrey(($event.target as HTMLInputElement).checked)">
           {{ i18n.t('mapPage.showOutline') }}
@@ -129,6 +138,7 @@ onUnmounted(() => {
     </header>
     <p v-if="error" class="error" role="alert">{{ error }}</p>
     <SettingsView v-if="isSettings" @error="error = $event" />
+    <QuestionsView v-else-if="isQuestions" :subjects="subjects" :version="version" :configured="configured" @error="error = $event" />
     <MapView v-else :subject-id="currentId" :subjects="subjects" :version="version" :show-grey="showGrey" @error="error = $event" />
   </div>
 </template>

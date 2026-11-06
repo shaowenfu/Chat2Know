@@ -360,4 +360,70 @@ test.describe('screenshots in Chinese, compared with the artboards', () => {
     await expect(panel.getByRole('tree')).toBeVisible();
     await expect(card).toHaveCount(0);
   });
+
+  test('提问: every question, searched, filtered by map and deleted; a report written on request, sanitized, with its history (artboard 16)', async ({ context, extensionId, fixtureServer, mockLlm }) => {
+    const panel = await context.newPage();
+    await panel.goto(`chrome-extension://${extensionId}/sidepanel.html`);
+    await importSeed(panel); // opens 线性代数 (id s)
+    await configureModel(panel, mockLlm.url);
+    await send(panel, 'sites/setOrigins', { origins: [fixtureServer] });
+    const other = (await send<{ id: string }>(panel, 'map/addSubject', { title: '概率论' })).data.id; // opens it
+
+    const chat = await context.newPage();
+    const ask = async (conversation: string, question: string) => {
+      if (!chat.url().endsWith(`c=${conversation}`)) {
+        await chat.goto(`${fixtureServer}/synthetic-chat-input.html?c=${conversation}`);
+        await chat.locator('chat2know-ui').waitFor({ state: 'attached' });
+        await chat.waitForTimeout(300);
+      }
+      await chat.locator('#prompt').fill(question);
+      await chat.locator('#prompt').press('Enter');
+      await chat.locator('#prompt').fill('');
+      await chat.waitForTimeout(150);
+    };
+    await ask('9', '期望和方差有什么关系？');
+    await send(panel, 'maps/open', { id: 's' });
+    await ask('1', '为什么转置之后乘积的顺序要反过来？');
+    await ask('1', '转置和逆的顺序规则一样吗？');
+    await ask('2', '迹有什么用？');
+    await ask('2', '矩阵乘法为什么不能交换？');
+    await expect.poll(async () => (await send<unknown[]>(panel, 'asks/list', {})).data.length).toBe(5);
+
+    const full = await context.newPage();
+    await full.setViewportSize({ width: 1280, height: 820 });
+    await full.goto(`chrome-extension://${extensionId}/map.html#questions`);
+    const items = full.getByTestId('asks').locator('li');
+    // The open map is shown first, newest first, with where each question was asked.
+    await expect(full.getByTestId('ask-summary')).toHaveText('线性代数 · 4 个提问 · 来自 2 段对话');
+    await expect(items.locator('.ask-text')).toHaveText(['矩阵乘法为什么不能交换？', '迹有什么用？', '转置和逆的顺序规则一样吗？', '为什么转置之后乘积的顺序要反过来？']);
+    await expect(items.first().locator('.ask-meta')).toContainText('127.0.0.1');
+    await full.getByTestId('ask-search').fill('顺序');
+    await expect(items).toHaveCount(2);
+    await full.getByTestId('ask-search').fill('');
+    await full.getByTestId('ask-filter').selectOption({ label: '全部导图' });
+    await expect(items).toHaveCount(5);
+    await expect(full.getByText('选一张导图，查看它的分析报告。')).toBeVisible();
+    await full.getByTestId('ask-filter').selectOption(other);
+    await expect(items.locator('.ask-text')).toHaveText(['期望和方差有什么关系？']);
+    await full.getByTestId('ask-filter').selectOption('s');
+    await items.filter({ hasText: '迹有什么用？' }).hover();
+    await items.filter({ hasText: '迹有什么用？' }).getByRole('button', { name: '删除这条提问' }).click();
+    await expect(items).toHaveCount(3);
+
+    // The report: only on request, from this map's questions; the model's script and handlers never reach the page.
+    await expect(full.getByText('还没有报告。点"生成新报告"，模型会根据这张导图里的 3 个提问写一份分析。')).toBeVisible();
+    await full.getByTestId('generate-report').click();
+    const report = full.getByTestId('report');
+    await expect(report).toContainText('你在这张导图里问了 3 个问题');
+    await expect(report.locator('h2')).toHaveText(['概况', '接下来']);
+    await expect(report.locator('.katex')).toHaveCount(1);
+    await expect(report.locator('a')).toHaveAttribute('target', '_blank');
+    const inner = await report.innerHTML();
+    for (const bad of ['<script', 'onclick', 'alert(']) expect(inner).not.toContain(bad);
+    await full.screenshot({ path: `${SHOTS}/16-questions.png` });
+    await full.getByTestId('generate-report').click();
+    await expect(full.getByTestId('report-version').locator('option')).toHaveCount(2);
+    // Reports are local: never in the export.
+    expect((await send<string>(panel, 'map/export', { format: 'json' })).data).not.toContain('你在这张导图里问了');
+  });
 });

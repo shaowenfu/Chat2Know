@@ -12,6 +12,7 @@ import type { ItemType } from '@/src/db/types';
 import type { RecordResult } from '@/src/services/record';
 import type { Place } from '@/src/services/relocate';
 import type { StuckView } from '@/src/services/stuck';
+import type { Report } from '@/src/db/types';
 import type { MapTree, OutlineNode } from '@/src/graph/tree';
 import type { PublicSettings } from '@/src/llm/settings';
 
@@ -97,6 +98,11 @@ export interface MessageMap {
   'stuck/view': { req: { mapId: string }; res: StuckView };
   /** "不用": the card goes, and this map stays quiet for the rest of the day. */
   'stuck/dismiss': { req: { checkId: string }; res: null };
+
+  // Written reports on a map's questions (only when the user asks)
+  /** A map's reports, newest first. */
+  'reports/list': { req: { mapId: string }; res: Report[] };
+  'reports/generate': { req: { mapId: string }; res: Report };
 
   // The map's data
   /** The whole map as a file's text; Markdown and OPML leave grey outline nodes out unless asked. */
