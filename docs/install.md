@@ -70,17 +70,23 @@ Click the Chat2Know icon in the toolbar to open the side panel. If it is not the
 
 ![工具栏上的 Chat2Know · Chat2Know in the toolbar](images/install/8-open.png)
 
-Chat2Know 不申请"读取所有网站"的权限：只有你在侧栏勾选的 AI 网站上会显示 ＋，勾选时浏览器会单独请求该网站的权限。
-Chat2Know does not ask to read every site: ＋ shows only on the AI sites you tick in the side panel, and the browser asks for each one when you tick it.
+Chat2Know 不申请"读取所有网站"的权限：只有在你勾选的 AI 网站上，选中文字时才会出现小浮层；勾选时浏览器会单独请求该网站的权限。
+Chat2Know does not ask to read every site: the bar over a selection shows only on the AI sites you tick, and the browser asks for each one when you tick it.
 
 ## 6. 第一次使用 · First use
 
-1. 在侧栏勾选你常用的 AI 网站（ChatGPT、Claude、Gemini、DeepSeek、Kimi、豆包），浏览器会请求该网站的访问权限。
-   In the side panel, tick the AI sites you use; the browser asks for access to each.
-2. 在这些网站的回答里，点公式旁边的 **＋**，就记下了；底部提示会告诉你记到了哪里，可以"改位置"或"撤销"。其他网页上选中文字按 **Alt+S**，或右键"记到 Chat2Know 导图"。
-   In an answer on those sites, click **＋** beside a formula; a toast says where it went, with *Move* and *Undo*. On other pages, select text and press **Alt+S**, or right-click → *Add to Chat2Know map*.
-3. 在设置里填写任意兼容 OpenAI 格式的接口地址、模型名和 API Key，记下的内容就会自动归位到对应的学科和知识点。不填也能记，只是会先放在"待归位"里，由你拖到合适的位置。
-   In Settings, enter any OpenAI-compatible base URL, model and API key, and what you record is filed under its subject and topic. Without one, recording still works; notes wait in *Unplaced* for you to drag them into place.
+侧栏第一次打开时是一个三步的首屏，右上角可以切换 中文 / EN。
+The first time, the side panel shows three steps; switch 中文 / EN at the top.
+
+1. **连接模型 · Connect your model**：填写任意兼容 OpenAI 格式的接口地址、模型名和 API Key（嵌入模型可选，在"高级"里），点"保存并测试连接"。浏览器会请求访问这个接口地址，只用于调用你的模型。不填也能记，只是记下的内容会先放在"待归位"里。
+   Enter any OpenAI-compatible base URL, model and API key (an embedding model is optional, under *Advanced*) and click *Save and test the connection*. The browser asks for access to that one address, used only to call your model. Recording works without a model; notes then wait in *Unplaced*.
+2. **勾选网站 · Tick your sites**：勾选你常用的 AI 网站（ChatGPT、Claude、Gemini、DeepSeek、Kimi、豆包）。"也记录我在这些网站上发出的提问"默认开启，用来发现你卡住的地方，可以在这里或设置里关掉。
+   Tick the AI sites you use. *Also record the questions I send on these sites* is on by default, to notice when you are stuck; turn it off here or in settings.
+3. **新建导图 · Create a map**：一门课或一个主题一张，名字可以不填（插件会按第一批内容起一次名）。建好即打开，之后记下的内容都进这张导图。
+   One per subject or topic; the name is optional (Chat2Know names an unnamed map once from its first notes). It opens at once, and what you record goes into it.
+
+然后在勾选的网站上，选中回答里的一段文字，上方会出现 **记下 / 保护原文 / 提问**；公式旁也有 **＋**。其他网页上选中文字按 **Alt+S**，或右键"记到 Chat2Know 导图"。
+Then, on a ticked site, select part of an answer and the bar shows **Note / Keep words / Ask**; display formulas also get a **＋**. On other pages, select text and press **Alt+S**, or right-click → *Add to Chat2Know map*.
 
 用过 0.1？见 [从 0.1 升级](migration-v0.1.md)。更多用法见 [README](../README.md#using-it)。
 Used 0.1? See [Moving from 0.1](migration-v0.1.md). More in the [README](../README.md#using-it).
@@ -101,7 +107,11 @@ Then click the reload button ⟳ on the Chat2Know card in the extensions page. Y
   Check `node -v` (22 or later).
 - **加载时报错"清单文件缺失" / "Manifest file is missing"**：选的文件夹不对，应选直接包含 `manifest.json` 的那个文件夹：解压出来的文件夹，或 `.output/chrome-mv3`（不是项目根目录，也不是 `.output`）。
   You picked the wrong folder: choose the one that directly contains `manifest.json`, the unzipped folder or `.output/chrome-mv3` (not the project root or `.output`).
-- **公式旁没有 ＋ / No ＋ beside formulas**：先在侧栏勾选这个网站；勾选前已经打开的页面会自动加上，个别页面需要刷新。只有独立成行的公式旁才有 ＋，行内公式请选中后按 **Alt+S**。浏览器自带页面（`chrome://`、扩展商店）上插件不能运行。
-  Tick the site in the side panel first; pages already open get the ＋ at once, a few need a reload. Only formulas on a line of their own get a ＋; for inline ones, select and press **Alt+S**. Extensions cannot run on built-in pages such as `chrome://` or the Web Store.
+- **选中文字后没有小浮层、公式旁没有 ＋ / No bar over a selection, no ＋ beside formulas**：先在侧栏勾选这个网站；勾选前已经打开的页面会自动加上，个别页面需要刷新。在输入框里选中的文字不会出现浮层，只选了一两个字也不会。只有独立成行的公式旁才有 ＋，行内公式请选中后点"记下"。浏览器自带页面（`chrome://`、扩展商店）上插件不能运行。
+  Tick the site in the side panel first; pages already open get it at once, a few need a reload. No bar appears for text selected in an input box, or for one or two characters. Only formulas on a line of their own get a ＋; for inline ones, select them and click *Note*. Extensions cannot run on built-in pages such as `chrome://` or the Web Store.
+- **记下时提示"还没有打开的导图" / "No map is open"**：在侧栏顶部打开或新建一张导图，或直接点提示里的"新建导图并记下"。
+  Open or create a map at the top of the side panel, or click *create a map and add this* in the toast.
+- **浮窗提问报错 / The Ask window shows an error**：错误原样来自你的模型服务商，例如 `HTTP 401` 表示 Key 不对，`HTTP 402` 表示余额不足。在设置里检查模型配置并点"测试连接"。
+  The error comes from your model provider as it wrote it: `HTTP 401` means the key is wrong, `HTTP 402` that the balance is used up. Check the model in settings and click *Test connection*.
 - **Alt+S 没反应 / Alt+S does nothing**：在 `chrome://extensions/shortcuts` 查看是否被其他扩展占用，可以改成别的组合键。
   Check `chrome://extensions/shortcuts`: another extension may use it; pick another key there.

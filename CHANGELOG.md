@@ -2,46 +2,33 @@
 
 All notable changes to this project are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/).
 
-## [Unreleased]
+## [0.2.0] - Unreleased
 
-v2 rebuild: Chat2Know becomes a knowledge map you record into with one click (see `docs/project-plan.md`).
+A rebuild. Chat2Know becomes a knowledge map you record into with one click, plus a coach for your questions. 0.1's cards, ask-later, quizzes and reviews are gone; 0.2 uses a new database and does not import 0.1 data (see [Moving from 0.1](https://github.com/shaowenfu/Chat2Know/blob/main/docs/migration-v0.1.md)).
+
+**Install:** download `chat2know-0.2.0-chrome.zip` below, unzip it into a folder, open `chrome://extensions`, turn on **Developer mode**, click **Load unpacked** and pick that folder. Step-by-step guide with screenshots: [docs/install.md](https://github.com/shaowenfu/Chat2Know/blob/main/docs/install.md).
 
 ### Added
 
-- A **Questions** tab on the full page: every question you recorded, newest first, with when and where it was asked (the site, or the Ask window); search it, show one map's questions (or those asked with no map open), and delete any. Beside it, **New report** has the model write an analysis of that map's questions: what you have been asking about, what has landed and what has not, your questioning habits with a way to improve each, and what to learn next. Markdown, shown sanitized (only formatting tags and http(s) links survive). Reports are kept; earlier ones stay in the date menu. No scores. Clearing your questions in settings also clears the checks and reports made from them.
-
-- **Ask** on the selection bar opens a small window beside the selection: ask a short question about it, the answer streams in (formulas typeset), and you can follow up. Add a useful answer to the map, keep it word for word, or copy it. The conversation itself is not kept; your questions go into your question log like those you send on the site. It can be moved by its title and closed with × or Esc.
-
-- Select text on a ticked AI site and a small bar appears above it: **Note** (as before, compressed to one sentence or a formula), **Keep words** (a protected quote: the exact words go into the open map; the model only chooses where; only you can edit it; it shows with a purple border and a serif face, and exports as a quotation) and **Ask**. The bar never appears in a text box. The right-click menu also has "Keep word for word in Chat2Know map".
-
-- Editing the map like a mind-map tool, in the side panel and the full page: double-click to edit, right-click for a new child, a formula or a statement, Enter for a new topic right after the selected one, Tab / Shift+Tab to change its level, Delete to delete (with undo). A click on an item only selects it; the small ↗ beside it goes back to the conversation.
-
-- A new first screen: what Chat2Know does (with a short animation), then ① connect your model (the embedding model under "Advanced", and a note on why the browser asks for access) ② tick your sites ③ create your first map. Language switch (中文 / EN) at the top; question recording is on by default and can be turned off there or in settings.
-
-- You create and open maps (side panel switcher, name optional). Everything you record goes into the open map; Chat2Know never creates, switches or renames a map on its own, and names an unnamed map once from its first notes. With no map open, the page offers "create a map and add this".
-
-- On the AI sites you tick, a ＋ beside every display formula records it to the map in one click; the formula shows "Added" and a toast says where it went, with Undo. The same formula is not added twice unless you choose "Add anyway".
-- Alt+S or the "Add to Chat2Know map" menu records the selection on any page (one formula selected becomes a formula item).
-- A recorded item goes where the previous item of the same conversation went, else into the subject's "Unplaced" group; it never waits for a model.
-- With a model set up, a recorded item then moves to its subject and topic (new topics and subjects are created as needed) and a long selection becomes one sentence; the toast follows, and Undo takes back both. Your later corrections teach where notes go.
-- "Move" in the toast opens a small picker on the page: three likely places, search, or a new topic; Undo works there too.
-- "Also record the questions I send on these sites" is a separate switch; ticking a site no longer records questions by itself.
-- The side panel is the map: switch subjects, fold chapters, drag items onto topics, right-click to move, edit or delete (with undo, also Ctrl+Z); formulas are typeset; a just-recorded item is marked. With no map yet it explains the ＋ and lets you tick sites or import v0.1 data; without a model it says new notes wait in "Unplaced".
-- A full-page map (outline with a detail pane showing each topic's notes and where they came from, add a formula or statement by hand, new maps, show or hide the outline, export) and a settings page (model, sites and question recording, export / import, delete all data).
-- After the first note in a new subject, Chat2Know offers once to lay out the course's outline (or your textbook's table of contents) as grey topics, with a preview; your own topics are kept and slotted in.
-- Getting unstuck: the questions you send (on the ticked sites and in the Ask window) are recorded into the map open at the time; every 5 new questions in a map, the model reads its latest 30. When you seem to be going in circles, held up by an earlier topic, asking off target or struggling to phrase the question, the side panel shows one gentle card: where you may be stuck, what to get clear first, and a better question to copy. The topic it names is outlined in orange. "Not now" keeps that map quiet for the day. This replaces the gap cards (no more filling in or quiz questions), and the extension no longer needs the `alarms` permission.
-- Saving a model, or importing, files the notes waiting in "Unplaced".
-- Placement prompts are written in your language (Chinese or English). A bare term is recorded as "term: one-sentence explanation".
-- New map database: every change can be undone; a deleted chapter's contents move up a level; deleted nodes can be restored.
-- Export the map as JSON (lossless), Markdown or OPML; import a JSON export. 0.1 data is not imported.
+- **First screen**: what Chat2Know does (with a short animation), then ① connect your model (the embedding model under "Advanced", and a note on why the browser asks for access), ② tick your sites, ③ create your first map. Switch 中文 / English there or in settings; the interface and the model prompts follow it.
+- **Maps you create and open.** Everything you record goes into the open map until you open another. Chat2Know never creates, switches or renames a map on its own; a map you left unnamed is named once from its first notes. With no map open, the page offers "create a map and add this".
+- **The bar over a selection** on the sites you tick: **Note** (compressed to one sentence, or kept as a formula; a bare term becomes "term: one-line explanation"), **Keep words** and **Ask**. It never appears in a text box. A ＋ also sits beside display formulas; on any page, Alt+S or the right-click menu records the selection.
+- **Protected quotes** (Keep words): the exact words go into the map, never rewritten. The model only chooses the place; only you can edit them. They show with a purple border and a serif face and export as quotations; the same words are not added twice.
+- **The Ask window**: a short question about the selection, answered right there (streaming, formulas typeset), with follow-ups. Add a useful answer to the map or keep it word for word, or copy it; the conversation itself is not kept.
+- **Automatic placement**: a note appears at once (where this conversation's last note went, or in the map's "Unplaced" group), then the model moves it to its chapter and topic in the open map, creating them as needed. The toast follows with **Move** (three likely places, search, or a new topic) and **Undo**; your corrections teach later placements. Without a model, notes wait in "Unplaced"; saving a model files them.
+- **The map** in the side panel and on a full page: fold, drag, double-click to edit, Enter for a new topic, Tab / Shift+Tab to change level, Delete (with undo), Ctrl+Z; add a formula or statement by hand. A click selects; the small ↗ goes back to the conversation. Formulas are typeset; a just-recorded item is marked.
+- **Outlines**: once a map has a name and its first note, Chat2Know offers once to lay out the course's outline (or your textbook's table of contents) as grey topics, with a preview; your own topics are kept and slotted in. Outlines are checked: generic titles ("Overview", "Methods") or titles in the wrong language are refused.
+- **Getting unstuck**: the questions you send on the ticked sites and in the Ask window are recorded into the map open at the time (on by default, with a REC badge; turn it off on the first screen or in settings). Every 5 new questions in a map, the model reads its latest 30. When you seem to be going in circles, held up by an earlier topic, asking off target or struggling to phrase the question, the side panel shows one gentle card: where you may be stuck, what to get clear first, and a better question to copy. The topic it names is outlined in orange. "Not now" keeps that map quiet for the day.
+- **Questions tab** on the full page: every recorded question with when and where it was asked; search, filter by map, delete. **New report** has the model write an analysis of a map's questions: what you have been asking about, what has landed and what has not, your questioning habits with a way to improve each, and what to learn next. Markdown, shown sanitized; reports are kept with their history. No scores.
+- **Export** a map as JSON (lossless), Markdown or OPML; import a JSON export. Exports never contain the API key or your questions.
 
 ### Removed
 
-- Ask later, ask now and follow-ups, the answer inbox and keep suggestions: asking happens in the chat page.
-- Question titles, title candidates, distilling cards, mastery requirements.
-- Quiz me, spaced repetition, "use it" problems, explain it to me, the one-minute script, weekly stats.
-- Organize page / pasted text, placement suggestions and concept merging (automatic placement replaces them).
-- The Ask later, Cards, Quiz me and Learning tabs, the selection toolbar and its shortcuts and menus; diagnosis cards, quizzes and systematic reviews; Anki export.
+- 0.1's cards, question titles and title candidates, ask later / ask now and the answer inbox, keep suggestions, mastery levels.
+- Quiz me, spaced repetition, "use it" problems, explain it to me, the one-minute script, weekly stats, Anki export.
+- The organize page, placement suggestions and concept merging (automatic placement replaces them).
+- Gap diagnosis: question tagging, prerequisite graphs, gap cards with "fill in" and quiz questions (the stuck check replaces them), and the `alarms` permission.
+- Importing 0.1 data.
 
 ## [0.1.0] - 2026-10-31
 

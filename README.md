@@ -1,12 +1,12 @@
 # Chat2Know
 
-**A knowledge map for your notes: one click puts a formula from your AI chat in the right place.** · 和 AI 聊天时，点一下就把公式或结论记到知识导图里合适的位置。
+**A knowledge map for your notes and a coach for your questions, while you learn by chatting with an AI.** · 和 AI 聊天学习时，一边把要点记进知识导图，一边帮你发现自己卡在哪里。
 
-Chat2Know is a browser extension for people who learn by chatting with an AI. While you read an answer, a ＋ sits beside every formula; one click records it, and Chat2Know files it on that subject's map (subject › chapter › topic). Over time the map shows what you have covered, and, if you let it, which parts you keep coming back to.
+Select something in an AI answer and one click records it in the right place on the map you opened, keeps it word for word, or asks about it right there. Chat2Know also listens to the questions you send: when you seem to be going in circles, the side panel suggests where you may be stuck and a better question to ask.
 
-Chat2Know 是一个浏览器插件：在 AI 对话里看到值得记的公式或结论，点一下就行，放到哪里由插件来定。导图会告诉你一门课学到了哪里、哪一块还缺。
+选中 AI 回答里的一段：点一下记进你打开的导图（放到哪里由插件来定），或一字不改地保存，或就地提问。插件也会看你发出的提问：像是在绕圈子时，侧栏会温和地告诉你可能卡在哪、先弄清什么、怎么问更好。
 
-> Status: 0.2.0 in development on this branch (`v2`), a rebuild of 0.1. The released 0.1.0 is on `main`. Chrome and other Chromium browsers (Edge, Brave, Arc); Firefox is not supported yet.
+> Status: 0.2.0, a rebuild of 0.1, is on the `v2` branch and in its final trial. The released 0.1.0 is on `main`. Chrome and other Chromium browsers (Edge, Brave, Arc); Firefox is not supported yet. Interface and model prompts in 中文 and English.
 
 ## Install
 
@@ -26,21 +26,28 @@ Step-by-step guide with screenshots (中文 / English): [docs/install.md](docs/i
 
 ## Using it
 
-1. Click the Chat2Know icon to open the side panel and tick the AI sites you use (ChatGPT, Claude, Gemini, DeepSeek, Kimi, 豆包). The browser asks for access to each ticked site only.
-2. In an answer on those sites, click the **＋** beside a formula. It shows **Added**, and a toast says where it went, with **Move** and **Undo**. On any page, select text and press **Alt+S** (or right-click → *Add to Chat2Know map*): one formula selected becomes a formula, anything else a one-sentence statement.
-3. Set up a model (any OpenAI-compatible endpoint: base URL, model, key; an embedding model is optional and places notes more accurately) in **Settings** (the side panel's *Set up a model* link, or ⚙ on the full map). With a model, each note moves to its subject and topic, new topics are created as needed, and a long selection becomes one sentence. Without one, notes wait in **Unplaced** and you drag them where they belong. Recording never waits for a model.
-4. The side panel is the map: switch subjects, fold chapters, drag items onto topics, right-click to move, edit or delete, Ctrl+Z to undo. Click an item to jump back to the conversation. **Full map ↗** opens a full page with a detail pane per topic, where you can also add a formula or statement by hand.
-5. After a subject's first note, Chat2Know offers once to lay out the course's outline, or your textbook's table of contents, as grey topics. Grey means "not learned yet"; the less grey, the more of the course you have covered.
-6. Optional: **Also record the questions I send on these sites** (settings). Chat2Know then matches your questions to the map's topics. A topic you keep coming back to is outlined in orange, and at most once a day the side panel asks about one: add its core formulas and statements (light blue, you can untick any), try one question, or say no for 30 days.
-7. Export the map as JSON, Markdown or OPML (mind-map apps); import a JSON export, or your 0.1 data.
+1. **First screen.** Click the Chat2Know icon to open the side panel. It asks for three things: ① your model (any OpenAI-compatible endpoint: base URL, model, key; an embedding model is optional, under *Advanced*), ② the AI sites you use (ChatGPT, Claude, Gemini, DeepSeek, Kimi, 豆包; the browser asks for each one you tick), ③ your first map. Switch between 中文 and English at the top.
+2. **Maps are yours.** Create a map per subject or topic (a name is optional) and open it from the switcher at the top of the side panel. Everything you record goes into the open map until you open another. Chat2Know never creates, switches or renames a map on its own; a map you left unnamed is named once from its first notes.
+3. **Select, then choose.** On a ticked site, select a few words of an answer and a small bar appears above them:
+   - **Note** records it, compressed: one formula selected stays a formula, anything else becomes one sentence (a bare term becomes "term: a one-line explanation").
+   - **Keep words** records a protected quote: the exact words, never rewritten. The model only chooses its place; only you can edit it. It shows with a purple border and a serif face.
+   - **Ask** opens a small window beside the selection: ask a short question about it, the answer streams in, follow up if you like. Add a useful answer to the map or keep it word for word; the conversation itself is not kept.
+   
+   A ＋ also sits beside display formulas. On any other page, select text and press **Alt+S**, or right-click → *Add to Chat2Know map* / *Keep word for word*.
+4. **It lands in the right place.** A note appears at once (where this conversation's last note went, or in the map's *Unplaced* group), then the model moves it to its chapter and topic, creating them as needed. The toast says where, with **Move** and **Undo**; your corrections teach later placements. Without a model, notes wait in *Unplaced* for you to drag them into place.
+5. **The map.** The side panel shows the open map: fold chapters, drag items, double-click to edit, Enter for a new topic, Tab / Shift+Tab to change level, Delete to delete, Ctrl+Z to undo. Clicking an item selects it; its small ↗ jumps back to the conversation. **Full map ↗** opens a full page with a detail pane per topic. Once a map has a name and its first note, Chat2Know offers once to lay out the course's outline (or your textbook's table of contents) in grey: grey means "not learned yet".
+6. **Getting unstuck.** The questions you send on the ticked sites and in the Ask window are recorded into the map open at the time (on by default; turn it off on the first screen or in settings; a REC badge shows while it is on). Every 5 new questions in a map, the model reads its latest 30. If you seem to be going in circles, held up by an earlier topic, asking off target or struggling to phrase the question, the side panel shows one gentle card: where you may be stuck, what to get clear first, and a better question to copy. The topic it names is outlined in orange. *Not now* keeps that map quiet for the day. Nothing appears on the chat page.
+7. **Questions and reports.** The full page's **Questions** tab lists every recorded question (search, filter by map, delete). **New report** has the model write an analysis of a map's questions: what you have been asking about, what has landed and what has not, your questioning habits with a way to improve each, and what to learn next. Reports are kept with their history. No scores, ever.
+8. **Export** a map as JSON (lossless), Markdown (protected quotes as quotations) or OPML for mind-map apps; import a JSON export.
 
-Your data stays in your browser. The only thing that leaves it is what a model call needs, sent to the provider you configured, with your own key. No account, no server, no telemetry. Details: [PRIVACY.md](PRIVACY.md).
+Your data stays in your browser. What leaves it is only what a model call needs, sent to the provider you configured, with your own key. No account, no server, no telemetry. Details: [PRIVACY.md](PRIVACY.md).
 
 ## Docs
 
 - [Install guide with screenshots (中文 / English)](docs/install.md)
 - [Moving from 0.1](docs/migration-v0.1.md)
 - [Privacy policy](PRIVACY.md)
+- [Changelog](CHANGELOG.md)
 - [Project plan (中文)](docs/project-plan.md)
 - [v0.1 docs (archived)](docs/archive-v0.1/)
 - [Contributing](CONTRIBUTING.md)
