@@ -298,54 +298,66 @@ test.describe('screenshots in Chinese, compared with the artboards', () => {
     await full.screenshot({ path: `${SHOTS}/3-settings.png` });
   });
 
-  test('a gap from the questions sent: orange mark, the card, a question to try, 整理进来 (artboard 4)', async ({ context, extensionId, fixtureServer, mockLlm }) => {
-    const setup = await context.newPage();
-    await setup.goto(`chrome-extension://${extensionId}/sidepanel.html`);
-    await importSeed(setup);
-    await configureModel(setup, mockLlm.url);
-    await send(setup, 'sites/setOrigins', { origins: [fixtureServer] });
-    await send(setup, 'sites/setRecordAsks', { on: true });
-    await setup.close();
-
-    // Three questions about 转置 in two conversations.
-    const chat = await context.newPage();
-    for (const [conversation, question] of [
-      ['1', '为什么转置之后乘积的顺序要反过来？'],
-      ['1', '转置和逆的顺序规则是一样的吗？'],
-      ['2', '矩阵转置到底改变了什么？'],
-    ]) {
-      if (!chat.url().endsWith(`c=${conversation}`)) {
-        await chat.goto(`${fixtureServer}/synthetic-chat-input.html?c=${conversation}`);
-        await chat.locator('chat2know-ui').waitFor({ state: 'attached' });
-        await chat.waitForTimeout(300); // the question listener attaches once the settings are read
-      }
-      await chat.locator('#prompt').fill(question!);
-      await chat.locator('#prompt').press('Enter');
-      await chat.locator('#prompt').fill('');
-      await chat.waitForTimeout(150); // the recorder reports once the box is empty
-    }
+  test('stuck: every 5 questions in the open map the model looks; a gentle card in the side panel, the topic orange, 不用 for today (artboard 15)', async ({ context, extensionId, fixtureServer, mockLlm }) => {
     const panel = await context.newPage();
     await panel.setViewportSize({ width: 380, height: 820 });
     await panel.goto(`chrome-extension://${extensionId}/sidepanel.html`);
-    await expect.poll(async () => (await send<unknown[]>(panel, 'asks/list', {})).data.length).toBe(3);
+    await importSeed(panel); // opens 线性代数
+    await configureModel(panel, mockLlm.url);
+    await send(panel, 'sites/setOrigins', { origins: [fixtureServer] });
 
-    // Opening the panel looks at the new questions: 转置 is marked and asked about once.
-    const card = panel.getByTestId('gap-card');
-    await expect(card).toContainText('你是不是不太熟悉「转置」？');
-    await expect(card).toContainText('2 段对话里问了 3 次');
-    await expect(card.locator('.proposed')).toHaveCount(2); // the two transpose rules already on the map are left out
-    await expect(panel.locator('.row.gap')).toHaveCount(1);
-    await panel.screenshot({ path: `${SHOTS}/4-gap.png` });
-
-    await card.getByRole('button', { name: '出道题试试' }).click();
-    await expect(card).toContainText('(AB)^T 等于什么？');
-    await card.getByTestId('gap-answer').fill('A^T B^T');
-    await card.getByRole('button', { name: '提交' }).click();
-    await expect(card).toContainText('顺序要反过来');
-    await card.getByRole('button', { name: '整理进来' }).click();
+    const chat = await context.newPage();
+    const sendQuestions = async (questions: [string, string][]) => {
+      for (const [conversation, question] of questions) {
+        if (!chat.url().endsWith(`c=${conversation}`)) {
+          await chat.goto(`${fixtureServer}/synthetic-chat-input.html?c=${conversation}`);
+          await chat.locator('chat2know-ui').waitFor({ state: 'attached' });
+          await chat.waitForTimeout(300); // the question listener attaches once the settings are read
+        }
+        await chat.locator('#prompt').fill(question);
+        await chat.locator('#prompt').press('Enter');
+        await chat.locator('#prompt').fill('');
+        await chat.waitForTimeout(150); // the recorder reports once the box is empty
+      }
+    };
+    const card = panel.getByTestId('stuck-card');
+    // Four questions: not looked at yet.
+    await sendQuestions([
+      ['1', '为什么转置之后乘积的顺序要反过来？'],
+      ['1', '转置和逆的顺序规则是一样的吗？'],
+      ['2', '矩阵转置到底改变了什么？'],
+      ['2', '迹有什么用？'],
+    ]);
+    await expect.poll(async () => (await send<unknown[]>(panel, 'asks/list', {})).data.length).toBe(4);
     await expect(card).toHaveCount(0);
-    await expect(panel.locator('.row.gap')).toHaveCount(0);
-    const json = JSON.parse((await send<string>(panel, 'map/export', { format: 'json' })).data) as { nodes: { latex?: string; origin: string }[] };
-    expect(json.nodes.filter((n) => n.origin === 'plugin').map((n) => n.latex)).toEqual(['(A^T)^T = A', undefined]);
+    // The fifth: the model reads the five, in order and by conversation, and sees circling on 转置.
+    await sendQuestions([['2', '还是不懂转置的顺序']]);
+    await expect(card).toContainText('好像在「转置」这里绕了几圈');
+    await expect(card).toContainText('最近 4 个问题都在问「转置」');
+    await expect(panel.getByTestId('better-question')).toHaveText('用一个具体的例子，一步步讲清楚「转置」是怎么算的。');
+    await expect(panel.locator('.row.stuck')).toHaveText(/转置/);
+    await expect(panel.locator('.foot')).toContainText('每 5 个新问题看一次');
+    const asks = (await send<{ mapId?: string; via: string }[]>(panel, 'asks/list', {})).data;
+    expect(asks.map((a) => [a.mapId, a.via])).toEqual(Array(5).fill(['s', 'site']));
+    const asked = mockLlm.requests.filter((r) => r.body.messages?.[0]?.content.startsWith('[task:stuck]'));
+    expect(asked).toHaveLength(1);
+    expect(asked[0]!.body.messages![1]!.content).toContain('对话 1\n[1] 为什么转置之后乘积的顺序要反过来？\n[2] 转置和逆的顺序规则是一样的吗？\n对话 2\n[3] 矩阵转置到底改变了什么？');
+    await panel.screenshot({ path: `${SHOTS}/15-stuck.png` });
+
+    await card.getByRole('button', { name: '看看我问过的' }).click();
+    await expect(panel.getByTestId('stuck-asks').locator('li')).toHaveCount(4);
+    await panel.bringToFront(); // the clipboard takes writes from the focused page
+    await card.getByRole('button', { name: '复制这个问题' }).click();
+    await expect(card.getByRole('button', { name: '已复制' })).toBeVisible();
+
+    // 不用: the card and the orange go; five more questions are looked at, but this map stays quiet today.
+    await card.getByRole('button', { name: '不用' }).click();
+    await expect(card).toHaveCount(0);
+    await expect(panel.locator('.row.stuck')).toHaveCount(0);
+    await sendQuestions([1, 2, 3, 4, 5].map((i) => ['3', `转置的顺序 ${i}`] as [string, string]));
+    await expect.poll(() => mockLlm.requests.filter((r) => r.body.messages?.[0]?.content.startsWith('[task:stuck]')).length).toBe(2);
+    await panel.reload();
+    await expect(panel.getByRole('tree')).toBeVisible();
+    await expect(card).toHaveCount(0);
   });
 });

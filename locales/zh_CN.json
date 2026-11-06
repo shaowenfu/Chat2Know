@@ -99,7 +99,7 @@
     "legendUser": "你记下的",
     "legendPlugin": "插件补充（你同意过）",
     "legendOutline": "大纲里还没学到",
-    "legendGap": "可能是短板",
+    "legendGap": "可能卡住的地方",
     "fromConversation": "来自对话 · $1",
     "noSource": "手动添加",
     "hint": "拖动节点可以改位置；双击可以改文字。",
@@ -119,7 +119,7 @@
     "model": "模型",
     "connected": "● 已连接",
     "notConnected": "未连接",
-    "modelExplain": "用来自动归位、压缩长文字和发现短板。任何兼容 OpenAI 格式的服务都可以。",
+    "modelExplain": "用来自动归位、压缩长文字、回答对选中内容的提问，以及发现你卡住的地方。任何兼容 OpenAI 格式的服务都可以。",
     "baseUrl": "服务地址",
     "modelName": "模型",
     "apiKey": "API Key",
@@ -134,7 +134,7 @@
     "permissionDenied": "没有获得访问 $1 的权限。",
     "sites": "网站",
     "sitesExplain": "在这些网站的公式旁显示 ＋",
-    "recordAsks": "也记录我在这些网站上发出的提问，用来发现短板",
+    "recordAsks": "也记录我在这些网站上发出的提问，用来发现我卡住的地方",
     "recordAsksNote": "只存本地；分析时分批发给上面的模型。",
     "clearAsks": "删除提问记录（$1 条）",
     "asksCleared": "已删除提问记录。",
@@ -166,21 +166,6 @@
     "generating": "正在生成大纲…",
     "footer": "黑色是你记下的，灰色是大纲。灰色越少，这门课就学得越完整。"
   },
-  "gaps": {
-    "question": "你是不是不太熟悉「$1」？",
-    "evidence": "最近两周你在 $1 段对话里问了 $2 次相关的问题。要我把这一块整理出来，放到导图里吗？",
-    "preview": "会加入（预览）",
-    "drafting": "正在整理…",
-    "nothingNew": "你的导图里已经都有了。",
-    "fill": "整理进来",
-    "tryQuestion": "出道题试试",
-    "no": "不用",
-    "showAsks": "看看我问过的 $1 句",
-    "answerPlaceholder": "写下你的答案",
-    "check": "提交",
-    "right": "答对了。",
-    "addAfterWrong": "要把这一块整理进来吗？"
-  },
   "onboard": {
     "stepModel": "① 连接你的模型",
     "stepSites": "② 在这些网站上使用",
@@ -208,5 +193,22 @@
     "copied": "已复制",
     "note": "这段对话不会保存，有用的回答记到导图里。你的问题会进入提问记录。",
     "interrupted": "回答中断了，请再问一次。"
+  },
+  "stuck": {
+    "circlingAt": "好像在「$1」这里绕了几圈",
+    "circling": "最近的问题好像在绕圈子",
+    "stuckAt": "好像卡在「$1」了",
+    "stuck": "可能被前面的某一步挡住了",
+    "offTargetAt": "关于「$1」的问题好像没问到点子上",
+    "offTarget": "问题好像没问到点子上",
+    "phrasingAt": "关于「$1」，换个问法可能更快",
+    "phrasing": "换个问法可能更快",
+    "tryAsking": "可以这样问",
+    "copy": "复制这个问题",
+    "copied": "已复制",
+    "showAsks": "看看我问过的",
+    "hideAsks": "收起我问过的",
+    "no": "不用",
+    "footer": "每 5 个新问题看一次；只出现在侧栏，不打断聊天。点\"不用\"，这张导图今天不再提。"
   }
 }

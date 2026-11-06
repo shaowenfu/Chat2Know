@@ -1,5 +1,6 @@
 import 'fake-indexeddb/auto';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import Dexie from 'dexie';
 import { Chat2KnowDB } from '@/src/db/schema';
 import { Hlc } from '@/src/db/hlc';
 import { Repository } from '@/src/db/repository';
@@ -169,8 +170,8 @@ describe('recorded questions', () => {
   afterEach(() => db.delete());
 
   it('stores asks newest first, outside the oplog', async () => {
-    await repo.recordAsk({ site: 'chatgpt', conversationUrl: 'https://chatgpt.com/c/1#x', text: 'why transpose?' });
-    await repo.recordAsk({ site: 'chatgpt', conversationUrl: 'https://chatgpt.com/c/2', text: 'what is a trace?' });
+    await repo.recordAsk({ site: 'chatgpt', conversationUrl: 'https://chatgpt.com/c/1#x', text: 'why transpose?', via: 'site' });
+    await repo.recordAsk({ site: 'chatgpt', conversationUrl: 'https://chatgpt.com/c/2', text: 'what is a trace?', via: 'site' });
     expect((await repo.listAsks()).map((a) => [a.text, a.conversationUrl])).toEqual([
       ['what is a trace?', 'https://chatgpt.com/c/2'],
       ['why transpose?', 'https://chatgpt.com/c/1'],
@@ -179,15 +180,45 @@ describe('recorded questions', () => {
   });
 
   it('deletes one ask, a whole conversation, or everything', async () => {
-    const a = await repo.recordAsk({ site: 'kimi', conversationUrl: 'https://www.kimi.com/chat/1', text: 'a' });
-    await repo.recordAsk({ site: 'kimi', conversationUrl: 'https://www.kimi.com/chat/1', text: 'b' });
-    await repo.recordAsk({ site: 'kimi', conversationUrl: 'https://www.kimi.com/chat/2', text: 'c' });
+    const a = await repo.recordAsk({ site: 'kimi', conversationUrl: 'https://www.kimi.com/chat/1', text: 'a', via: 'site' });
+    await repo.recordAsk({ site: 'kimi', conversationUrl: 'https://www.kimi.com/chat/1', text: 'b', via: 'site' });
+    await repo.recordAsk({ site: 'kimi', conversationUrl: 'https://www.kimi.com/chat/2', text: 'c', via: 'site' });
     await repo.deleteAsk(a.id);
     expect((await repo.listAsks()).map((x) => x.text)).toEqual(['c', 'b']);
     await repo.deleteConversationAsks('https://www.kimi.com/chat/1#top');
     expect((await repo.listAsks()).map((x) => x.text)).toEqual(['c']);
     await repo.clearAsks();
     expect(await repo.listAsks()).toEqual([]);
+  });
+});
+
+describe('upgrading the database', () => {
+  it('a v1 database keeps its map and questions; the gap tables go', async () => {
+    const name = `upgrade-${Date.now()}`;
+    const v1 = new Dexie(name);
+    v1.version(1).stores({
+      nodes: 'id, subjectId, parentId, kind',
+      oplog: 'id, group, entityId, undoes',
+      placements: 'id, at',
+      embeddings: 'nodeId',
+      asks: 'id, sentAt, conversationUrl',
+      askTags: 'id, askId, sectionId',
+      prereqEdges: 'id, from, to',
+      gaps: 'id, sectionId, status',
+    });
+    await v1.table('nodes').add({ id: 's', subjectId: 's', kind: 'subject', order: 'a0', title: '线性代数', origin: 'user', createdAt: 0, updatedAt: '' });
+    await v1.table('asks').add({ id: 'q', site: 'chatgpt', conversationUrl: 'https://chatgpt.com/c/1', text: 'why?', sentAt: 1, taggedAt: 2 });
+    await v1.table('gaps').add({ id: 'g', sectionId: 's', status: 'suspected' });
+    v1.close();
+
+    const db = new Chat2KnowDB(name);
+    await db.open();
+    expect(db.verno).toBe(2);
+    expect(await db.nodes.count()).toBe(1);
+    expect((await db.asks.toArray()).map((a) => a.text)).toEqual(['why?']);
+    expect(db.tables.map((t) => t.name).sort()).toEqual(['asks', 'embeddings', 'nodes', 'oplog', 'placements', 'stuckChecks']);
+    expect(await db.asks.where('mapId').equals('s').count()).toBe(0); // old questions belong to no map
+    await db.delete();
   });
 });
 

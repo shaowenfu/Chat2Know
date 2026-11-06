@@ -12,7 +12,7 @@ import { recordItem, type RecordResult } from '@/src/services/record';
 import { placeItem, placeUnplaced } from '@/src/services/placement';
 import { textFragmentUrl } from '@/src/capture/text-fragment';
 import { outlineOfferable, proposeOutline } from '@/src/services/outline';
-import { EMPTY_STATE, analyze, dismissGap, fillGap, gapMarks, gapCard, judgeGap, nextGap, proposeFill, quizGap, type GapState } from '@/src/services/gaps';
+import { checkDue, checkStuck, stuckView } from '@/src/services/stuck';
 import { loadOutlines, saveOutline } from '@/src/outline/state';
 import { moveByUser, parentPath, placeOptions, searchPlaces } from '@/src/services/relocate';
 import { isConfigured } from '@/src/llm/settings';
@@ -97,16 +97,40 @@ async function setSiteOrigins(origins: string[]): Promise<SiteSettings> {
   return next;
 }
 
-/** A question the user sent, on the chat site or in the floating window. The gate uses the page it came from, never anything the page could claim. */
-async function recordQuestion(text: string, sender: Browser.runtime.MessageSender): Promise<boolean> {
+/**
+ * A question the user sent, on the chat site or in the floating window, goes to the
+ * map open at the time. The gate uses the page it came from, never anything the page
+ * could claim. Every 5 new questions in a map, the stuck check runs.
+ */
+async function recordQuestion(text: string, sender: Browser.runtime.MessageSender, via: 'site' | 'window'): Promise<boolean> {
   const url = sender.url;
   if (!url || sender.id !== browser.runtime.id || !shouldRecord(await loadSites(), url)) return false;
   const host = new URL(url).hostname;
-  await (await repo()).recordAsk({ site: siteFor(host)?.id ?? host, conversationUrl: url, text });
-  if (sender.tab?.id !== undefined) askingTabs.add(sender.tab.id);
-  await browser.alarms.create(GAP_ALARM, { delayInMinutes: CONVERSATION_IDLE_MIN });
+  const r = await repo();
+  const openId = await loadOpenMap();
+  const open = openId === undefined ? undefined : await r.find(openId);
+  const mapId = open && !open.deletedAt && open.kind === 'subject' ? open.id : undefined;
+  await r.recordAsk({ site: siteFor(host)?.id ?? host, conversationUrl: url, text, via, ...(mapId ? { mapId } : {}) });
   notifyChanged();
+  if (mapId) void checkWhenDue(mapId);
   return true;
+}
+
+/** One check at a time; a map's check runs once 5 new questions are in and a model is set up. A failure is logged and the next question tries again. */
+let checking: Promise<void> = Promise.resolve();
+function checkWhenDue(mapId: string): Promise<void> {
+  checking = checking.then(async () => {
+    const settings = await loadSettings();
+    const r = await repo();
+    if (!isConfigured(settings) || !(await checkDue(r, mapId))) return;
+    try {
+      const check = await checkStuck(r, new LlmClient(settings), mapId, promptLang(), Date.now());
+      if (check.stuck) notifyChanged();
+    } catch (err) {
+      console.warn('Chat2Know: the stuck check failed:', err instanceof Error ? err.message : String(err));
+    }
+  });
+  return checking;
 }
 
 /** One question from the floating window: its answer streams back over the port; nothing of it is kept but the question. */
@@ -121,7 +145,7 @@ function answerOnPort(port: Browser.runtime.Port): void {
       try {
         await ready();
         if (port.sender?.id !== browser.runtime.id || port.sender.tab === undefined) throw new Error('Questions come only from a page');
-        await recordQuestion(start.question, port.sender);
+        await recordQuestion(start.question, port.sender, 'window');
         const client = new LlmClient(await loadSettings());
         const messages = askPrompt({ lang: promptLang(), ...start });
         for await (const delta of client.stream(messages, abort.signal)) post({ delta });
@@ -184,35 +208,6 @@ function placeWaiting(): Promise<void> {
   return placing;
 }
 
-const GAP_ALARM = 'chat2know-gaps';
-const GAP_STATE = 'gapState';
-/** A conversation counts as over 10 minutes after its last question. */
-const CONVERSATION_IDLE_MIN = 10;
-/** Tabs that sent recorded questions in this session: closing one ends its conversation. */
-const askingTabs = new Set<number>();
-
-async function loadGapState(): Promise<GapState> {
-  return ((await browser.storage.local.get(GAP_STATE))[GAP_STATE] as GapState | undefined) ?? EMPTY_STATE;
-}
-const saveGapState = (state: GapState) => browser.storage.local.set({ [GAP_STATE]: state });
-
-let analyzing: Promise<void> = Promise.resolve();
-
-/** After a conversation (idle, closed, or the side panel opened): new questions are tagged and gaps marked. One run at a time. */
-function analyzeGaps(): Promise<void> {
-  analyzing = analyzing
-    .catch(() => {}) // a failed run already surfaced (to its caller, or in the extension's error log); the next one still runs
-    .then(async () => {
-      const settings = await loadSettings();
-      if (!isConfigured(settings)) return;
-      const r = await repo();
-      const before = (await r.listGaps()).length;
-      await saveGapState(await analyze(r, new LlmClient(settings), settings.embeddingModel, Date.now(), await loadGapState()));
-      if ((await r.listGaps()).length !== before) notifyChanged();
-    });
-  return analyzing;
-}
-
 /** The user's language is read once at start and followed after; strings and prompts wait for it. */
 let i18nReady: Promise<void> | undefined;
 // The context menu speaks the chosen language too.
@@ -238,6 +233,7 @@ export default defineBackground(() => {
         await browser.scripting.unregisterContentScripts({ ids: [V01_RECORDER_ID] });
       }
       await migrateV01Sites();
+      await browser.storage.local.remove('gapState'); // the gap flow's state, replaced by the stuck check (S3)
       await registerSiteScript(await loadSites());
     })();
     // onInstalled also fires when the browser updates, while the menu still exists.
@@ -250,12 +246,6 @@ export default defineBackground(() => {
   });
   browser.commands.onCommand.addListener((command, tab) => {
     if (command === 'record-selection' && tab?.id !== undefined) void recordSelection(tab.id);
-  });
-  browser.alarms.onAlarm.addListener((alarm) => {
-    if (alarm.name === GAP_ALARM) void analyzeGaps();
-  });
-  browser.tabs.onRemoved.addListener((tabId) => {
-    if (askingTabs.delete(tabId)) void analyzeGaps();
   });
   browser.runtime.onConnect.addListener((port) => {
     if (port.name === ASK_PORT) answerOnPort(port);
@@ -410,39 +400,9 @@ export default defineBackground(() => {
       notifyChanged();
       return null;
     },
-    'gaps/check': async () => {
-      await analyzeGaps();
-      return null;
-    },
-    'gaps/view': async ({ subjectId }) => {
-      const r = await repo();
-      const marks = await gapMarks(r, subjectId);
-      if (!isConfigured(await loadSettings())) return { marks };
-      const next = await nextGap(r, subjectId, Date.now(), await loadGapState());
-      if (!next) return { marks };
-      await saveGapState(next.state);
-      return { marks, card: next.card };
-    },
-    'gaps/marks': async ({ subjectId }) => gapMarks(await repo(), subjectId),
-    'gaps/forSection': async ({ sectionId }) => {
-      const r = await repo();
-      const gap = (await r.listGaps()).find((g) => g.sectionId === sectionId && (g.status === 'suspected' || g.status === 'asked'));
-      return gap ? gapCard(r, gap.id) : null;
-    },
-    'gaps/proposeFill': async ({ gapId }) => proposeFill(await repo(), new LlmClient(await loadSettings()), gapId),
-    'gaps/fill': async ({ gapId, skip }) => {
-      const group = await fillGap(await repo(), gapId, skip, Date.now());
-      notifyChanged();
-      return { group };
-    },
-    'gaps/quiz': async ({ gapId }) => ({ question: await quizGap(await repo(), new LlmClient(await loadSettings()), gapId) }),
-    'gaps/judge': async ({ gapId, answer }) => {
-      const verdict = await judgeGap(await repo(), new LlmClient(await loadSettings()), gapId, answer, Date.now());
-      if (verdict.correct) notifyChanged();
-      return verdict;
-    },
-    'gaps/dismiss': async ({ gapId }) => {
-      await dismissGap(await repo(), gapId, Date.now());
+    'stuck/view': async ({ mapId }) => stuckView(await repo(), mapId, Date.now()),
+    'stuck/dismiss': async ({ checkId }) => {
+      await (await repo()).dismissStuck(checkId, Date.now());
       notifyChanged();
       return null;
     },
@@ -463,7 +423,7 @@ export default defineBackground(() => {
       notifyChanged();
       return { undone };
     },
-    'asks/record': async ({ text }, sender) => ({ recorded: await recordQuestion(text, sender) }),
+    'asks/record': async ({ text }, sender) => ({ recorded: await recordQuestion(text, sender, 'site') }),
     'map/export': async ({ format, includeGrey }) => {
       const r = await repo();
       if (format === 'json') {

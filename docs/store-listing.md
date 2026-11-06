@@ -38,7 +38,6 @@ Record formulas and conclusions from AI conversations into a knowledge map in th
 | `activeTab` | Records the selected text only on the tab where the user pressed the shortcut or used the context menu. |
 | `scripting` | Injects the recording script into that tab on demand; registers the site script (＋ beside formulas) only on sites the user ticks. |
 | `contextMenus` | "Add to Chat2Know map" entry for selected text. |
-| `alarms` | When the user turned on question recording: looks at the recorded questions ten minutes after a conversation goes quiet. |
 | Optional host permissions (`https://*/*`, `http://*/*`) | Requested at runtime for exactly one origin at a time: the AI model endpoint the user enters in settings, and each AI chat site the user ticks. Nothing is requested at install. |
 
 **Remote code:** No. All code is in the package.
@@ -47,6 +46,6 @@ Record formulas and conclusions from AI conversations into a knowledge map in th
 
 - Collected and stored locally only: website content the user records ("Website content"), and, only if the user turns on question recording, the questions the user sends on the ticked sites ("User activity").
 - Not sold, not transferred to third parties, not used for unrelated purposes or creditworthiness.
-- The only transfer is to the AI model endpoint the user configures, with the user's own key, to place recorded notes, propose outlines and find gaps.
+- The only transfer is to the AI model endpoint the user configures, with the user's own key, to place recorded notes, propose outlines, answer questions about a selection and notice when the user is stuck.
 
 **Privacy policy URL:** https://github.com/shaowenfu/Chat2Know/blob/main/PRIVACY.md

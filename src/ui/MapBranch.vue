@@ -5,7 +5,6 @@ import { isGrey, itemCount, type MapTree } from '@/src/graph/tree';
 import type { MapNode } from '@/src/db/types';
 import { itemHtml } from './math';
 import { useMap } from './map-context';
-import GapCard from './GapCard.vue';
 
 defineOptions({ name: 'MapBranch' });
 const props = defineProps<{ trees: MapTree[]; parentId: string; unplaced?: boolean }>();
@@ -137,7 +136,7 @@ function finishEdit(node: MapNode, save: boolean) {
             'is-unplaced': t.node.role === 'unplaced',
             target: map.dropTarget.value === t.node.id,
             selected: map.selectedId.value === t.node.id,
-            gap: map.gapMarks.value.has(t.node.id),
+            stuck: map.stuckMarks.value.has(t.node.id),
           }"
           data-testid="map-section"
           draggable="true"
@@ -182,7 +181,6 @@ function finishEdit(node: MapNode, save: boolean) {
                   : itemCount(t)
           }}</span>
         </div>
-        <GapCard v-if="map.gapCard?.value?.gap.sectionId === t.node.id" :key="map.gapCard.value.gap.id" :card="map.gapCard.value" @done="map.gapDone?.()" />
         <MapBranch v-if="showChildren(t)" :trees="t.children" :parent-id="t.node.id" :unplaced="t.node.role === 'unplaced'" />
       </template>
     </li>
@@ -250,7 +248,7 @@ li {
 .jump:focus-visible {
   visibility: visible;
 }
-.row.gap {
+.row.stuck {
   outline: 2px solid #b4480f;
   outline-offset: 1px;
 }

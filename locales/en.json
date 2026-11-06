@@ -99,7 +99,7 @@
     "legendUser": "Recorded by you",
     "legendPlugin": "Added by Chat2Know (you agreed)",
     "legendOutline": "In the outline, not learned yet",
-    "legendGap": "Possible gap",
+    "legendGap": "Where you may be stuck",
     "fromConversation": "From the conversation · $1",
     "noSource": "Added by hand",
     "hint": "Drag a node to move it; double-click to edit its text.",
@@ -119,7 +119,7 @@
     "model": "Model",
     "connected": "● Connected",
     "notConnected": "Not connected",
-    "modelExplain": "Places your notes, shortens long selections and finds gaps. Any OpenAI-compatible service works.",
+    "modelExplain": "Places your notes, shortens long selections, answers questions about a selection and notices when you are stuck. Any OpenAI-compatible service works.",
     "baseUrl": "Base URL",
     "modelName": "Model",
     "apiKey": "API key",
@@ -134,7 +134,7 @@
     "permissionDenied": "No access to $1 was granted.",
     "sites": "Sites",
     "sitesExplain": "Show ＋ beside formulas on these sites",
-    "recordAsks": "Also record the questions I send on these sites, to find gaps",
+    "recordAsks": "Also record the questions I send on these sites, to notice when I am stuck",
     "recordAsksNote": "Kept in this browser; sent to the model above in batches for analysis.",
     "clearAsks": "Delete the recorded questions ($1)",
     "asksCleared": "Recorded questions deleted.",
@@ -166,21 +166,6 @@
     "generating": "Drafting the outline…",
     "footer": "Black is what you recorded, grey is the outline. The less grey, the more of the course you have covered."
   },
-  "gaps": {
-    "question": "Not quite at home with $1?",
-    "evidence": "In the last two weeks you asked about this $2 times in $1 conversations. Shall I put this part together on your map?",
-    "preview": "Will be added (preview)",
-    "drafting": "Putting it together…",
-    "nothingNew": "Your map already has all of it.",
-    "fill": "Add them",
-    "tryQuestion": "Try a question",
-    "no": "No thanks",
-    "showAsks": "See the $1 questions I asked",
-    "answerPlaceholder": "Your answer",
-    "check": "Check",
-    "right": "Right.",
-    "addAfterWrong": "Shall I add this part to your map?"
-  },
   "onboard": {
     "stepModel": "① Connect your model",
     "stepSites": "② Use it on these sites",
@@ -208,5 +193,22 @@
     "copied": "Copied",
     "note": "This conversation isn't kept; add a useful answer to the map. Your questions go into your question log.",
     "interrupted": "The answer was interrupted. Ask again."
+  },
+  "stuck": {
+    "circlingAt": "Going in circles around “$1”?",
+    "circling": "Your latest questions seem to go in circles",
+    "stuckAt": "Stuck on “$1”?",
+    "stuck": "Something earlier may be holding you up",
+    "offTargetAt": "The questions about “$1” may be missing the point",
+    "offTarget": "The questions may be missing the point",
+    "phrasingAt": "A clearer question about “$1” may help",
+    "phrasing": "A clearer question may help",
+    "tryAsking": "Try asking",
+    "copy": "Copy this question",
+    "copied": "Copied",
+    "showAsks": "What I asked",
+    "hideAsks": "Hide my questions",
+    "no": "Not now",
+    "footer": "Looked at every 5 new questions, only here in the side panel. \"Not now\" keeps this map quiet for today."
   }
 }

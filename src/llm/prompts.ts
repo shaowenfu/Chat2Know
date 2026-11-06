@@ -1,133 +1,14 @@
 import type { ChatMessage } from './client';
 import { LlmError } from './client';
-import { obj, str, strList } from './validate';
+import { obj, oneOf, str, strList } from './validate';
 import type { OutlineNode } from '@/src/graph/tree';
-import type { ItemType } from '@/src/db/types';
+import type { ItemType, StuckKind } from '@/src/db/types';
 
 /**
  * Every prompt starts its system message with a `[task:<name>]` tag. Real models
  * ignore it; the mock server in tests routes on it.
  */
 const system = (task: string, text: string): ChatMessage => ({ role: 'system', content: `[task:${task}]\n${text}` });
-
-// ---------------------------------------------------------------- gaps: tagging questions onto the map
-
-/** Numbered lists are 1-based in prompts; replies refer to the numbers. */
-const numbered = (lines: string[]) => lines.map((l, i) => `[${i + 1}] ${l}`).join('\n');
-
-const index = (v: unknown, max: number, what: string): number => {
-  if (typeof v !== 'number' || !Number.isInteger(v) || v < 1 || v > max) throw new LlmError(`Unexpected ${what} ${String(v)}`);
-  return v - 1;
-};
-
-/** Which sections of the learner's maps each question is about (0–3 each). */
-export function tagPrompt(input: { asks: string[]; sections: string[] }): ChatMessage[] {
-  return [
-    system(
-      'tag',
-      'A learner asked an AI the numbered questions below. Their knowledge maps have the numbered topics listed after them ("subject › chapter › topic"). For each question, give the numbers of the 0–3 most specific topics it is about. A question about none of them (chit-chat, writing or formatting requests, another subject) gets none. Return JSON only: {"tags": [{"ask": 1, "sections": [3]}]} with every question exactly once.',
-    ),
-    { role: 'user', content: `Questions:\n${numbered(input.asks)}\n\nTopics:\n${numbered(input.sections)}` },
-  ];
-}
-
-/** Section indexes per question, in question order. */
-export function parseTags(value: unknown, askCount: number, sectionCount: number): number[][] {
-  const list = obj(value).tags;
-  if (!Array.isArray(list)) throw new LlmError('Expected "tags" to be a list');
-  const byAsk = new Map<number, number[]>();
-  for (const item of list) {
-    const t = obj(item);
-    const n = index(t.ask, askCount, 'ask');
-    if (byAsk.has(n)) throw new LlmError(`Ask ${n + 1} tagged twice`);
-    if (!Array.isArray(t.sections) || t.sections.length > 3) throw new LlmError('Expected 0–3 "sections"');
-    byAsk.set(n, [...new Set(t.sections.map((x) => index(x, sectionCount, 'section')))]);
-  }
-  if (byAsk.size !== askCount) throw new LlmError(`Expected ${askCount} tagged questions, got ${byAsk.size}`);
-  return Array.from({ length: askCount }, (_, i) => byAsk.get(i)!);
-}
-
-/** Which topics of one subject must be understood before which. */
-export function prereqPrompt(input: { subject: string; sections: string[] }): ChatMessage[] {
-  return [
-    system(
-      'prereq',
-      'You map prerequisites between the numbered topics of one subject, to tell basics from what builds on them. An edge {"from": A, "to": B} means topic A must be understood before topic B. Give only direct, real prerequisites between the listed topics; a chapter is not a prerequisite of its own topics. No cycles. Return JSON only: {"edges": [{"from": 1, "to": 2}]}.',
-    ),
-    { role: 'user', content: `Subject: ${input.subject}\n\nTopics:\n${numbered(input.sections)}` },
-  ];
-}
-
-export function parsePrereqs(value: unknown, sectionCount: number): { from: number; to: number }[] {
-  const list = obj(value).edges;
-  if (!Array.isArray(list)) throw new LlmError('Expected "edges" to be a list');
-  return list.map((item) => {
-    const e = obj(item);
-    const edge = { from: index(e.from, sectionCount, 'topic'), to: index(e.to, sectionCount, 'topic') };
-    if (edge.from === edge.to) throw new LlmError('A topic cannot be its own prerequisite');
-    return edge;
-  });
-}
-
-// ---------------------------------------------------------------- gaps: filling one in, or a question to try
-
-export const FILL_MAX = 8;
-
-export interface FillItem {
-  itemType: 'formula' | 'statement';
-  text: string; // LaTeX for a formula, one sentence for a statement
-}
-
-/** The core formulas and statements of a topic the learner keeps asking about, without what they already have. */
-export function fillPrompt(input: { path: string; existing: string[]; asks: string[] }): ChatMessage[] {
-  return [
-    system(
-      'fill',
-      `A learner keeps asking about the topic below; their map of it is thin. Give the core formulas and statements of this topic that answer what they asked: at most ${FILL_MAX}, each one formula (LaTeX, no $ delimiters) or one plain sentence (about 40 Chinese characters or 20 English words, formulas inside as $...$), in the language of the topic. Leave out what the learner already has. Return JSON only: {"items": [{"type": "formula", "text": "..."}, {"type": "statement", "text": "..."}]}.`,
-    ),
-    { role: 'user', content: `Topic: ${input.path}\n\nAlready on the map:\n${input.existing.map((e) => `- ${e}`).join('\n') || '(nothing)'}\n\nThe learner asked:\n${input.asks.map((a) => `- ${a}`).join('\n')}` },
-  ];
-}
-
-export function parseFill(value: unknown): FillItem[] {
-  const list = obj(value).items;
-  if (!Array.isArray(list) || list.length === 0 || list.length > FILL_MAX) throw new LlmError(`Expected 1–${FILL_MAX} "items"`);
-  return list.map((item) => {
-    const o = obj(item);
-    const type = o.type;
-    if (type !== 'formula' && type !== 'statement') throw new LlmError('Expected "type" formula or statement');
-    return { itemType: type, text: str(o, 'text') };
-  });
-}
-
-/** One short question that shows whether the learner has the topic. */
-export function quizPrompt(input: { path: string; items: string[]; asks: string[] }): ChatMessage[] {
-  return [
-    system(
-      'quiz',
-      'Write one short question that shows whether a learner really has the topic below: something they can answer in a line or two, aimed at what they kept asking about, in the language of the topic. Return JSON only: {"question": "..."}.',
-    ),
-    { role: 'user', content: `Topic: ${input.path}\n\nOn their map:\n${input.items.map((e) => `- ${e}`).join('\n') || '(nothing)'}\n\nThey asked:\n${input.asks.map((a) => `- ${a}`).join('\n')}` },
-  ];
-}
-
-export const parseQuiz = (value: unknown): string => str(obj(value), 'question');
-
-export function judgePrompt(input: { path: string; question: string; answer: string }): ChatMessage[] {
-  return [
-    system(
-      'judge',
-      'Judge a learner\'s answer to a question about the topic below. "correct" is true when the answer gets the essential point right, even if brief or informal. "feedback" is one sentence: what was right, or the key point that was missing, in the language of the question. Return JSON only: {"correct": true, "feedback": "..."}.',
-    ),
-    { role: 'user', content: `Topic: ${input.path}\nQuestion: ${input.question}\nAnswer: ${input.answer}` },
-  ];
-}
-
-export function parseJudgement(value: unknown): { correct: boolean; feedback: string } {
-  const o = obj(value);
-  if (typeof o.correct !== 'boolean') throw new LlmError('Expected boolean "correct"');
-  return { correct: o.correct, feedback: str(o, 'feedback') };
-}
 
 // ---------------------------------------------------------------- automatic placement
 
@@ -352,4 +233,92 @@ export function askPrompt(input: AskInput): ChatMessage[] {
       ...(turn.answer ? [{ role: 'assistant' as const, content: turn.answer }] : []),
     ]),
   ];
+}
+
+// ---------------------------------------------------------------- is the learner stuck? (every 5 new questions in a map)
+
+export const STUCK_KINDS = ['circling', 'stuck', 'offTarget', 'phrasing'] as const satisfies readonly StuckKind[];
+
+export interface StuckInput {
+  lang: PromptLang;
+  map: string; // the map's name, '' when unnamed
+  asks: { text: string; conversation: string; window: boolean }[]; // oldest first; `conversation` tells conversations apart
+  sections: string[]; // the map's topics, "chapter › topic"
+}
+
+export type StuckReply =
+  | { stuck: false }
+  | { stuck: true; kind: StuckKind; section: number; explanation: string; question: string; evidence: number[] }; // section: 0-based, -1 for none; evidence: 0-based
+
+const STUCK_TEXT = {
+  zh: {
+    task: [
+      '你在旁边看一位学习者向 AI 提问，帮他发现自己是不是卡住了。下面是他在一张知识导图里最近的提问（按时间编号，按对话分段，“浮窗”是他针对页面上选中内容问的），后面是这张导图里的知识点（编号）。',
+      '判断这些提问是否显出下面一种情况：circling（同一个点换着说法反复问，一直没弄懂）；stuck（被前面某个没弄懂的知识点挡住，后面的问题都绕不过去）；offTarget（问的和他真正不懂的地方不是一回事，问不到点子上）；phrasing（不会组织问题，问得含糊、宽泛，得不到有用的回答）。一步步往下学、每个问题都有进展，就是没有卡住；拿不准时也算没有卡住。',
+      '卡住时："kind" 是上面四个词之一；"section" 是最相关的知识点编号，没有合适的填 0；"explanation" 用两三句话温和地说：看到了什么、可能卡在哪里、先弄清什么（不评判，不打分）；"question" 是一个他可以直接发给 AI 的更好的问法，具体、能回答，用他的语言；"evidence" 是体现这一点的提问编号。',
+      '只返回 JSON：卡住时 {"stuck": true, "kind": "...", "section": 0, "explanation": "...", "question": "...", "evidence": [1]}，没有卡住时 {"stuck": false}。用中文写。',
+    ].join(''),
+    map: '导图',
+    unnamed: '（未命名）',
+    asks: '提问',
+    conversation: (n: number) => `对话 ${n}`,
+    window: '（浮窗）',
+    sections: '知识点',
+    none: '（无）',
+  },
+  en: {
+    task: [
+      "You watch over a learner's questions to an AI and help them notice when they are stuck. Below are their latest questions in one knowledge map (numbered in order, grouped by conversation; \"window\" marks a question about something they selected on the page), then the map's topics (numbered).",
+      ' Decide whether the questions show one of these: circling (asking about the same point again and again in other words, never getting it); stuck (held up by an earlier topic they have not understood, so the later questions cannot get past it); offTarget (asking about something other than what they actually do not understand); phrasing (questions too vague or broad to get a useful answer). Moving on step by step with each question making progress is not stuck; when unsure, it is not stuck.',
+      ' When stuck: "kind" is one of the four words above; "section" is the number of the most relevant topic, 0 if none fits; "explanation" says gently, in two or three sentences, what you noticed, where they may be stuck and what to get clear first (no judging, no scores); "question" is a better question they can send to the AI as it is, concrete and answerable, in their language; "evidence" lists the numbers of the questions that show it.',
+      ' Return JSON only: when stuck {"stuck": true, "kind": "...", "section": 0, "explanation": "...", "question": "...", "evidence": [1]}, otherwise {"stuck": false}. Write in English.',
+    ].join(''),
+    map: 'Map',
+    unnamed: '(unnamed)',
+    asks: 'Questions',
+    conversation: (n: number) => `Conversation ${n}`,
+    window: ' (window)',
+    sections: 'Topics',
+    none: '(none)',
+  },
+} as const;
+
+export function stuckPrompt(input: StuckInput): ChatMessage[] {
+  const t = STUCK_TEXT[input.lang];
+  const lines: string[] = [];
+  let conversation: string | undefined;
+  let n = 0;
+  input.asks.forEach((a, i) => {
+    if (a.conversation !== conversation) {
+      conversation = a.conversation;
+      lines.push(`${t.conversation(++n)}`);
+    }
+    lines.push(`[${i + 1}] ${a.text.replace(/\s+/g, ' ').trim()}${a.window ? t.window : ''}`);
+  });
+  const sections = input.sections.map((s, i) => `[${i + 1}] ${s}`).join('\n') || t.none;
+  return [
+    system('stuck', t.task),
+    { role: 'user', content: `${t.map}: ${input.map || t.unnamed}\n\n${t.asks}:\n${lines.join('\n')}\n\n${t.sections}:\n${sections}` },
+  ];
+}
+
+const number = (v: unknown, min: number, max: number, what: string): number => {
+  if (typeof v !== 'number' || !Number.isInteger(v) || v < min || v > max) throw new LlmError(`Unexpected ${what} ${String(v)}`);
+  return v;
+};
+
+export function parseStuck(value: unknown, askCount: number, sectionCount: number): StuckReply {
+  const o = obj(value);
+  if (typeof o.stuck !== 'boolean') throw new LlmError('Expected boolean "stuck"');
+  if (!o.stuck) return { stuck: false };
+  const evidence = o.evidence;
+  if (!Array.isArray(evidence) || !evidence.length) throw new LlmError('Expected a non-empty "evidence" list');
+  return {
+    stuck: true,
+    kind: oneOf(o, 'kind', STUCK_KINDS),
+    section: number(o.section, 0, sectionCount, 'section') - 1,
+    explanation: str(o, 'explanation'),
+    question: str(o, 'question'),
+    evidence: [...new Set(evidence.map((e) => number(e, 1, askCount, 'question number') - 1))].sort((x, y) => x - y),
+  };
 }

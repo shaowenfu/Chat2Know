@@ -1,7 +1,6 @@
 import { inject, provide, type InjectionKey, type Ref } from 'vue';
 import type { MapNode } from '@/src/db/types';
 import type { AddingItem } from './map-editing';
-import type { GapCard } from '@/src/services/gaps';
 
 /** What every row of the map tree shares: fold state, the drag in progress, the row being edited, and the actions. */
 export interface MapContext {
@@ -10,11 +9,8 @@ export interface MapContext {
   editingId: Ref<string | undefined>;
   dragging: Ref<string | undefined>;
   dropTarget: Ref<string | undefined>;
-  /** Sections marked orange (possible gaps). */
-  gapMarks: Ref<Set<string>>;
-  /** The side panel's one gap card, shown under its section. */
-  gapCard?: Ref<GapCard | undefined>;
-  gapDone?(): void;
+  /** Sections outlined orange: where the latest check saw the learner stuck. */
+  stuckMarks: Ref<Set<string>>;
   /** The selected node: keys act on it; on the full page its section fills the detail pane. */
   selectedId: Ref<string | undefined>;
   /** A formula or statement being typed in under a section. */

@@ -1,5 +1,5 @@
 import Dexie, { type EntityTable, type Table } from 'dexie';
-import type { Ask, AskTag, Embedding, Gap, MapNode, OpLogEntry, Placement, PrereqEdge } from './types';
+import type { Ask, Embedding, MapNode, OpLogEntry, Placement, StuckCheck } from './types';
 
 /** The v2 database. A new name: v0.1 data comes in through import, never by upgrading its database. */
 export class Chat2KnowDB extends Dexie {
@@ -8,9 +8,7 @@ export class Chat2KnowDB extends Dexie {
   placements!: EntityTable<Placement, 'id'>;
   embeddings!: Table<Embedding, string>;
   asks!: EntityTable<Ask, 'id'>;
-  askTags!: EntityTable<AskTag, 'id'>;
-  prereqEdges!: EntityTable<PrereqEdge, 'id'>;
-  gaps!: EntityTable<Gap, 'id'>;
+  stuckChecks!: EntityTable<StuckCheck, 'id'>;
 
   constructor(name = 'chat2know-v2') {
     super(name);
@@ -23,6 +21,14 @@ export class Chat2KnowDB extends Dexie {
       askTags: 'id, askId, sectionId',
       prereqEdges: 'id, from, to',
       gaps: 'id, sectionId, status',
+    });
+    // S3: questions belong to the open map and a check every 5 replaces the gap flow.
+    this.version(2).stores({
+      asks: 'id, sentAt, conversationUrl, mapId',
+      askTags: null,
+      prereqEdges: null,
+      gaps: null,
+      stuckChecks: 'id, mapId, checkedAt',
     });
   }
 }

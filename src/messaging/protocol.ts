@@ -11,8 +11,7 @@ import type { TextQuote } from '@/src/capture/text-quote';
 import type { ItemType } from '@/src/db/types';
 import type { RecordResult } from '@/src/services/record';
 import type { Place } from '@/src/services/relocate';
-import type { GapCard } from '@/src/services/gaps';
-import type { Gap } from '@/src/db/types';
+import type { StuckView } from '@/src/services/stuck';
 import type { MapTree, OutlineNode } from '@/src/graph/tree';
 import type { PublicSettings } from '@/src/llm/settings';
 
@@ -93,22 +92,11 @@ export interface MessageMap {
   /** "不用": never asked again for this subject. */
   'outline/decline': { req: { subjectId: string }; res: null };
 
-  // Gaps found in the recorded questions
-  /** Looks at new questions now (the side panel opened). */
-  'gaps/check': { req: Record<string, never>; res: null };
-  /** The subject's orange marks, and the one gap to ask about now (at most one a day). */
-  'gaps/view': { req: { subjectId: string }; res: { marks: string[]; card?: GapCard } };
-  /** The subject's orange marks only (the full page). */
-  'gaps/marks': { req: { subjectId: string }; res: string[] };
-  /** The open gap on a section the user picked on the full page, if any; not counted as asking. */
-  'gaps/forSection': { req: { sectionId: string }; res: GapCard | null };
-  'gaps/proposeFill': { req: { gapId: string }; res: NonNullable<Gap['proposal']> };
-  /** "整理进来", minus the proposal items the user unticked. */
-  'gaps/fill': { req: { gapId: string; skip: number[] }; res: { group: string } };
-  'gaps/quiz': { req: { gapId: string }; res: { question: string } };
-  'gaps/judge': { req: { gapId: string; answer: string }; res: { correct: boolean; feedback: string } };
-  /** "不用": quiet for 30 days. */
-  'gaps/dismiss': { req: { gapId: string }; res: null };
+  // Is the learner stuck? (a check every 5 new questions in a map)
+  /** The map's orange marks and its card, if the latest check saw the learner stuck. */
+  'stuck/view': { req: { mapId: string }; res: StuckView };
+  /** "不用": the card goes, and this map stays quiet for the rest of the day. */
+  'stuck/dismiss': { req: { checkId: string }; res: null };
 
   // The map's data
   /** The whole map as a file's text; Markdown and OPML leave grey outline nodes out unless asked. */

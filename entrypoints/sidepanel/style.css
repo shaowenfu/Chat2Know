@@ -94,6 +94,11 @@
   font-size: 12px;
 }
 
+.stuck-card {
+  margin: 16px 16px 0;
+  flex: none;
+}
+
 .map {
   flex: 1;
   padding: 16px 16px 16px 20px;

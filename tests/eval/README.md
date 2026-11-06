@@ -16,7 +16,7 @@ npm run eval                      # prompts in Chinese; CHAT2KNOW_LANG=en for En
 
 | Metric | Data | What it measures |
 | --- | --- | --- |
-| `tagAccuracy` | `data/tags.json` | A question is tagged with a topic of the seeded maps (`data/placement.json`) whose path names the expected keyword; non-knowledge questions get no topic. `tagSamples` shows the tags for a manual look |
+| `stuckAccuracy`, `stuckKindAccuracy`, `stuckTopicAccuracy` | `data/stuck.json` | 10 hand-labelled question sequences (5 stuck, 5 not): whether the stuck check gets stuck / not stuck right, and for the stuck ones the kind (circling, stuck, offTarget, phrasing) and a topic containing the expected word (none for `phrasing` with no topic). `stuckSamples` shows each reply for a manual look |
 | `placementTopicAccuracy` | `data/placement.json` | Each note goes into the map of its subject (as if the user opened it); the path names the expected topic (any listed keyword) |
 | `unnamedMapNamed` | `data/placement.json` | A note whose subject has no map goes into a new unnamed map, which the model names after the expected subject |
 | `termsExplained` | `data/placement.json` | A bare term ("幂指函数") is recorded as "term: one-sentence explanation" |

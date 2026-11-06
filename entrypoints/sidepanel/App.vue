@@ -14,7 +14,8 @@ import OutlineOffer from '@/src/ui/OutlineOffer.vue';
 import MapSwitcher from '@/src/ui/MapSwitcher.vue';
 import FirstScreen from '@/src/ui/FirstScreen.vue';
 import type { OutlineNode } from '@/src/graph/tree';
-import type { GapCard } from '@/src/services/gaps';
+import StuckCardView from '@/src/ui/StuckCard.vue';
+import type { StuckCard } from '@/src/services/stuck';
 
 /** An item recorded this recently is marked "刚记下". */
 const JUST_MS = 10 * 60_000;
@@ -31,8 +32,8 @@ const notice = ref<{ text: string; group: string }>();
 const menu = ref<{ node: MapNode; x: number; y: number }>();
 const loaded = ref(false);
 const outlineOffer = ref<{ outline?: OutlineNode[] }>();
-const gapMarks = ref(new Set<string>());
-const gapCard = ref<GapCard>();
+const stuckMarks = ref(new Set<string>());
+const stuckCard = ref<StuckCard>();
 
 const expanded = ref(new Set<string>(readExpanded()));
 const newestId = ref<string>();
@@ -112,11 +113,11 @@ async function load() {
   tree.value = await sendMessage('map/tree', { subjectId: currentId.value! });
   const offer = await sendMessage('outline/state', { subjectId: currentId.value! });
   outlineOffer.value = offer.offer ? { ...(offer.outline ? { outline: offer.outline } : {}) } : undefined;
-  const gaps = await sendMessage('gaps/view', { subjectId: currentId.value! });
-  gapMarks.value = new Set(gaps.marks);
-  // A card the user is in the middle of stays as it is; its section's chapter unfolds so it shows.
-  if (gaps.card?.gap.id !== gapCard.value?.gap.id) gapCard.value = gaps.card;
-  if (gapCard.value) for (const id of ancestorsOf(tree.value, gapCard.value.gap.sectionId) ?? []) expanded.value.add(id);
+  const stuck = await sendMessage('stuck/view', { mapId: currentId.value! });
+  stuckMarks.value = new Set(stuck.marks);
+  // A card the user is in the middle of stays as it is; the orange topic's chapter unfolds so it shows.
+  if (stuck.card?.checkId !== stuckCard.value?.checkId) stuckCard.value = stuck.card;
+  for (const mark of stuck.marks) for (const id of ancestorsOf(tree.value, mark) ?? []) expanded.value.add(id);
   const path = newestPath(tree.value);
   newestId.value = path.at(-1)?.id;
   for (const n of path.slice(1, -1)) expanded.value.add(n.id);
@@ -145,12 +146,7 @@ function showNotice(text: string, group: string) {
 
 provideMap({
   expanded,
-  gapMarks,
-  gapCard,
-  gapDone() {
-    gapCard.value = undefined;
-    void run(load);
-  },
+  stuckMarks,
   newestId,
   editingId,
   dragging,
@@ -240,12 +236,7 @@ function onMessage(message: unknown) {
 }
 
 onMounted(() => {
-  // Opening the panel ends a conversation for gap finding: new questions are looked at, then the map reloads.
-  void run(async () => {
-    await load();
-    await sendMessage('gaps/check', {});
-    await load();
-  });
+  void run(load);
   browser.runtime.onMessage.addListener(onMessage);
   window.addEventListener('keydown', onKey);
 });
@@ -282,6 +273,7 @@ const subjectNode = computed(() => tree.value?.node);
       </div>
       <p v-if="error" class="error" role="alert">{{ error }}</p>
 
+      <StuckCardView v-if="stuckCard && !outlineOffer" :key="stuckCard.checkId" class="stuck-card" :card="stuckCard" @done="stuckCard = undefined; run(load)" />
       <OutlineOffer v-if="outlineOffer" :key="current.id" :tree="tree" :outline="outlineOffer.outline" @done="run(load)" />
       <section v-else class="map" role="tree" :aria-label="current.title || i18n.t('map.unnamed')">
         <div
@@ -311,7 +303,7 @@ const subjectNode = computed(() => tree.value?.node);
           <span>{{ notice.text }}</span>
           <button v-if="notice.group" type="button" class="link-button" @click="undo(notice.group)">{{ i18n.t('toast.undo') }}</button>
         </template>
-        <span v-else class="muted">{{ outlineOffer ? i18n.t('outline.footer') : configured ? i18n.t('panel.hint') : i18n.t('panel.hintNoModel') }}</span>
+        <span v-else class="muted">{{ outlineOffer ? i18n.t('outline.footer') : stuckCard ? i18n.t('stuck.footer') : configured ? i18n.t('panel.hint') : i18n.t('panel.hintNoModel') }}</span>
       </footer>
     </template>
 

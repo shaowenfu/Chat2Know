@@ -27,59 +27,38 @@ const read = (req: IncomingMessage) =>
     req.on('end', () => resolve(data));
   });
 
-function between(text: string, start: string, end = '\n'): string {
-  const at = text.indexOf(start);
-  if (at < 0) return '';
-  const rest = text.slice(at + start.length);
-  const stop = rest.indexOf(end);
-  return (stop < 0 ? rest : rest.slice(0, stop)).trim();
-}
-
 /** Words in a question that point to a topic title (besides the title itself). */
-const MOCK_TAGS: [RegExp, string][] = [
+const MOCK_TOPICS: [RegExp, string][] = [
   [/transpose|转置/i, '转置'],
   [/multipl|乘法/i, '矩阵乘法'],
   [/trace|迹/i, '迹'],
   [/inverse|逆/i, '逆矩阵'],
 ];
-/** Prerequisites between topic titles the mock knows. */
-const MOCK_PREREQS: [string, string][] = [
-  ['矩阵乘法', '转置'],
-  ['矩阵乘法', '逆矩阵'],
-  ['转置', '特征值与特征向量'],
-];
 
-const list = (text: string, header: string) =>
-  [...(text.split(`${header}:\n`)[1] ?? '').matchAll(/^\[(\d+)\] (.*)$/gm)].map(([, n, t]) => ({ n: Number(n), text: t!, last: t!.split(' › ').at(-1)! }));
+/** Numbered lines "[n] text" under a header, in either language. */
+const list = (text: string, headers: string[]) => {
+  const part = text.split(new RegExp(`^(?:${headers.join('|')}):\\n`, 'm'))[1]?.split('\n\n')[0] ?? '';
+  return [...part.matchAll(/^\[(\d+)\] (.*)$/gm)].map(([, n, t]) => ({ n: Number(n), text: t!, last: t!.split(' › ').at(-1)! }));
+};
 
-function tagReply(user: string): string {
-  const topics = list(user, 'Topics');
-  const tags = list(user.split('\n\nTopics:')[0]!, 'Questions').map((q) => {
-    const titles = new Set([...MOCK_TAGS.filter(([re]) => re.test(q.text)).map(([, t]) => t), ...topics.filter((t) => q.text.includes(t.last)).map((t) => t.last)]);
-    return { ask: q.n, sections: topics.filter((t) => titles.has(t.last)).map((t) => t.n).slice(0, 3) };
-  });
-  return JSON.stringify({ tags });
-}
-
-function prereqReply(user: string): string {
-  const topics = list(user, 'Topics');
-  const n = (title: string) => topics.find((t) => t.last === title)?.n;
-  return JSON.stringify({ edges: MOCK_PREREQS.map(([a, b]) => ({ from: n(a), to: n(b) })).filter((e) => e.from && e.to) });
-}
-
-function fillReply(user: string): string {
-  const topic = between(user, 'Topic:').split(' › ').at(-1)!;
-  if (topic === '转置') {
-    return JSON.stringify({
-      items: [
-        { type: 'formula', text: '(AB)^T = B^T A^T' },
-        { type: 'formula', text: '(A+B)^T = A^T + B^T' },
-        { type: 'formula', text: '(A^T)^T = A' },
-        { type: 'statement', text: 'A 与 A^T 的秩相同。' },
-      ],
-    });
+/** Stuck when 3 or more questions are about the same topic (the most specific title first): circling there. */
+function stuckReply(user: string): string {
+  const asks = list(user, ['Questions', '提问']);
+  const topics = list(user, ['Topics', '知识点']).sort((a, b) => b.last.length - a.last.length);
+  for (const t of topics) {
+    const about = asks.filter((q) => q.text.includes(t.last) || MOCK_TOPICS.some(([re, title]) => title === t.last && re.test(q.text)));
+    if (about.length >= 3) {
+      return JSON.stringify({
+        stuck: true,
+        kind: 'circling',
+        section: t.n,
+        explanation: `最近 ${about.length} 个问题都在问「${t.last}」。先把它的定义弄清楚，后面会容易很多。`,
+        question: `用一个具体的例子，一步步讲清楚「${t.last}」是怎么算的。`,
+        evidence: about.map((q) => q.n),
+      });
+    }
   }
-  return JSON.stringify({ items: [{ type: 'statement', text: `${topic}的定义。` }] });
+  return JSON.stringify({ stuck: false });
 }
 
 /** Where the mock files a note, by words in it: first match wins. */
@@ -137,20 +116,12 @@ export function chatReply(task: string, user: string): string {
   switch (task) {
     case 'ping':
       return 'OK';
-    case 'tag':
-      return tagReply(user);
-    case 'prereq':
-      return prereqReply(user);
+    case 'stuck':
+      return stuckReply(user);
     case 'outline':
       return outlineReply(user);
     case 'place':
       return placeReply(user);
-    case 'fill':
-      return fillReply(user);
-    case 'quiz':
-      return JSON.stringify({ question: '(AB)^T 等于什么？' });
-    case 'judge':
-      return JSON.stringify(/B\^?T\s*A\^?T|BᵀAᵀ/.test(between(user, 'Answer:')) ? { correct: true, feedback: '对，顺序反过来。' } : { correct: false, feedback: '顺序要反过来：BᵀAᵀ。' });
     default:
       return `Unknown task ${task}`;
   }

@@ -71,53 +71,39 @@ export interface Embedding {
 }
 
 /**
- * A question the user sent on an AI site, recorded for gap detection.
- * Local only: not in the oplog, not in the default export.
+ * A question the user sent: on an AI site, or in the floating window about a
+ * selection. It belongs to the map that was open when it was sent (none if no map
+ * was open). Local only: not in the oplog, not in the default export.
  */
 export interface Ask {
   id: string;
   site: string; // site config id, or the hostname for sites handled by the generic rule
-  conversationUrl: string; // page URL without the hash; tells "same conversation" from "across conversations"
+  conversationUrl: string; // page URL without the hash; tells conversations apart
   text: string;
   sentAt: number;
-  taggedAt?: number; // set once tagging has looked at it, even when it found nothing
-  vector?: number[]; // embedding for circling detection, computed once per embedding model
-  vectorModel?: string;
+  mapId?: string;
+  via: 'site' | 'window';
 }
 
-/** A recorded question is about this section node. Local only. */
-export interface AskTag {
-  id: string;
-  askId: string;
-  sectionId: string;
-}
-
-/** Section `from` must be understood before section `to`. Local only. */
-export interface PrereqEdge {
-  id: string;
-  from: string;
-  to: string;
-}
-
-export type GapStatus = 'suspected' | 'asked' | 'filled' | 'dismissed';
+export type StuckKind = 'circling' | 'stuck' | 'offTarget' | 'phrasing';
 
 /**
- * A possible gap on a section node (orange outline), from the user's own questions.
- * Suspected silently; asked once in the side panel; filled ("整理进来") or dismissed
- * ("不用", or a passed question), then quiet until `coolDownUntil`. Local only.
+ * One look at a map's latest questions, made every 5 new ones. When the model saw
+ * the learner stuck, the side panel shows a card and its topic is marked orange
+ * until "不用" (which also keeps the map quiet for the rest of the day) or the next
+ * check. Local only.
  */
-export interface Gap {
+export interface StuckCheck {
   id: string;
-  sectionId: string;
-  explains: string[]; // the sections whose questions it accounts for
-  evidenceAskIds: string[];
-  signals: { kind: 'repeat' | 'downshift' | 'circling'; count: number }[];
-  status: GapStatus;
-  createdAt: number;
-  askedAt?: number;
-  coolDownUntil?: number;
-  /** What "整理进来" would add, drafted once when the card is shown. */
-  proposal?: { itemType: 'formula' | 'statement'; text: string }[];
-  /** The question of "出道题试试", once asked. */
-  quiz?: string;
+  mapId: string;
+  checkedAt: number;
+  throughSentAt: number; // the newest question it read; the next check waits for 5 after it
+  askIds: string[]; // the questions it read, oldest first
+  stuck: boolean;
+  kind?: StuckKind;
+  sectionId?: string;
+  explanation?: string;
+  betterQuestion?: string;
+  evidenceAskIds?: string[];
+  dismissedAt?: number;
 }

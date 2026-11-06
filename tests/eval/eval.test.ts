@@ -4,7 +4,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { LlmClient, type ModelSettings } from '@/src/llm/client';
-import { parseTags, tagPrompt } from '@/src/llm/prompts';
+import { parseStuck, stuckPrompt } from '@/src/llm/prompts';
 import { MOCK_KEY, startMockLlm, type MockLlm } from '../mock-llm/server';
 import { Chat2KnowDB } from '@/src/db/schema';
 import { Hlc } from '@/src/db/hlc';
@@ -49,20 +49,38 @@ afterAll(async () => {
 });
 
 describe('eval', () => {
-  it('tagging: each question lands on a topic of the seeded maps that names the expected keyword; chit-chat on none', async () => {
-    const cases = data('tags.json') as { question: string; expected: string[] }[];
-    const { map } = data('placement.json') as { map: Record<string, Record<string, string[]>> };
-    const sections = Object.entries(map).flatMap(([subject, chapters]) =>
-      Object.entries(chapters).flatMap(([chapter, topics]) => [`${subject} › ${chapter}`, ...topics.map((t) => `${subject} › ${chapter} › ${t}`)]),
-    );
-    const tags = await client.json(tagPrompt({ asks: cases.map((c) => c.question), sections }), (v) => parseTags(v, cases.length, sections.length));
-    const hit = cases.filter((c, i) => {
-      const titles = tags[i]!.map((k) => sections[k]!.toLowerCase());
-      return c.expected.length ? titles.some((t) => c.expected.some((e) => t.includes(e.toLowerCase()))) : titles.length === 0;
-    });
-    results.tagAccuracy = hit.length / cases.length;
-    results.tagSamples = cases.map((c, i) => ({ question: c.question, sections: tags[i]!.map((k) => sections[k]) }));
-    expect(tags).toHaveLength(cases.length);
+  it('stuck: each labelled sequence of questions is judged stuck or not, with the right kind and topic', async () => {
+    const { cases } = data('stuck.json') as {
+      cases: {
+        name: string;
+        map: string;
+        sections: string[];
+        asks: { text: string; conversation: string; window?: boolean }[];
+        expected: { stuck: boolean; kind?: string; topic?: string };
+      }[];
+    };
+    const lang = (s: string) => (/[\u4e00-\u9fff]/.test(s) ? 'zh' : 'en');
+    const samples = [];
+    for (const c of cases) {
+      const reply = await client.json(
+        stuckPrompt({ lang: lang(c.map), map: c.map, asks: c.asks.map((a) => ({ ...a, window: a.window ?? false })), sections: c.sections }),
+        (v) => parseStuck(v, c.asks.length, c.sections.length),
+      );
+      const topic = reply.stuck && reply.section >= 0 ? c.sections[reply.section]! : '';
+      samples.push({
+        name: c.name,
+        stuckRight: reply.stuck === c.expected.stuck,
+        kindRight: c.expected.stuck ? reply.stuck && reply.kind === c.expected.kind : undefined,
+        topicRight: c.expected.stuck ? (c.expected.topic ? topic.toLowerCase().includes(c.expected.topic.toLowerCase()) : topic === '') : undefined,
+        reply,
+      });
+    }
+    const stuckOnes = samples.filter((s) => s.kindRight !== undefined);
+    results.stuckAccuracy = samples.filter((s) => s.stuckRight).length / samples.length;
+    results.stuckKindAccuracy = stuckOnes.filter((s) => s.kindRight).length / stuckOnes.length;
+    results.stuckTopicAccuracy = stuckOnes.filter((s) => s.topicRight).length / stuckOnes.length;
+    results.stuckSamples = samples;
+    expect(samples).toHaveLength(cases.length);
   });
 
   it('placement: the topic of each note in its map; an unnamed map gets its subject\'s name; statements become one short sentence', async () => {
