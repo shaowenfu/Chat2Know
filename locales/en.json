@@ -20,8 +20,7 @@
     "barLabel": "For the selection",
     "barNote": "Note",
     "barQuote": "Keep words",
-    "barAsk": "Ask",
-    "barAskSoon": "Coming in the next version"
+    "barAsk": "Ask"
   },
   "toast": {
     "relocate": "Move",
@@ -194,5 +193,20 @@
     "demoChapter": "Matrices",
     "demoTopic": "Transpose",
     "demoOther": "Determinants"
+  },
+  "ask": {
+    "title": "Ask · about the selection",
+    "close": "Close",
+    "firstPlaceholder": "What would you like to know?",
+    "nextPlaceholder": "Ask a follow-up…",
+    "send": "Send",
+    "record": "＋ Add to map",
+    "recorded": "Added",
+    "protect": "Keep words",
+    "protected": "Kept",
+    "copy": "Copy",
+    "copied": "Copied",
+    "note": "This conversation isn't kept; add a useful answer to the map. Your questions go into your question log.",
+    "interrupted": "The answer was interrupted. Ask again."
   }
 }

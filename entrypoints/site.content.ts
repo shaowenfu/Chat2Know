@@ -9,6 +9,10 @@ import { captureSelection } from '@/src/capture/selection';
 import { UI_ATTR, buildTextIndex, quoteFromRange } from '@/src/capture/text-quote';
 import { PageUi } from '@/src/capture/page-ui';
 import { buildPicker } from '@/src/capture/picker';
+import { buildAskWindow, type AskTurn } from '@/src/capture/ask-window';
+import { answerStatement } from '@/src/capture/answer-html';
+import { UserError } from '@/src/errors';
+import { ASK_PORT, type AskEvent, type AskStart } from '@/src/messaging';
 import type { FormulaBlock } from '@/src/capture/formulas';
 import { SITES_KEY, loadSites, shouldRecord } from '@/src/sites/settings';
 
@@ -143,6 +147,72 @@ export default defineContentScript({
       void record(req, () => {});
     }
 
+    /** The question being answered: closing its port stops the answer. */
+    let asking: Browser.runtime.Port | undefined;
+    let askWin: ReturnType<typeof buildAskWindow> | undefined;
+
+    function closeAsk(): void {
+      asking?.disconnect();
+      asking = undefined;
+      askWin?.stop();
+      askWin = undefined;
+      ui.askWindow(null);
+    }
+
+    /** One answer over its own port; rejects with the error to show in the window. */
+    function streamAnswer(start: AskStart, onDelta: (delta: string) => void): Promise<void> {
+      return new Promise((resolve, reject) => {
+        const port = browser.runtime.connect({ name: ASK_PORT });
+        asking = port;
+        let settled = false;
+        port.onMessage.addListener((event: AskEvent) => {
+          if ('delta' in event) return onDelta(event.delta);
+          settled = true;
+          port.disconnect();
+          if ('done' in event) resolve();
+          else reject(new Error(event.key ? errorText(new UserError(event.key, event.subs)) : event.error));
+        });
+        port.onDisconnect.addListener(() => {
+          if (!settled) reject(new Error(i18n.t('ask.interrupted')));
+        });
+        port.postMessage(start);
+      });
+    }
+
+    /** 提问: a window beside the selection for a short question about it; nothing of it is kept but the questions. */
+    function openAsk(range: Range): void {
+      const captured = captureSelection(document, location.href);
+      if (!captured) return;
+      closeAsk();
+      const { quote, pageTitle } = captured;
+      const recordAnswer = (itemType: 'statement' | 'quote') => (answer: string, onRecorded: (recorded: boolean) => void) =>
+        void record({ itemType, title: itemType === 'quote' ? answer.trim() : answerStatement(answer), quote, pageTitle }, onRecorded);
+      const win = buildAskWindow(document, {
+        text: {
+          title: i18n.t('ask.title'),
+          close: i18n.t('ask.close'),
+          firstPlaceholder: i18n.t('ask.firstPlaceholder'),
+          nextPlaceholder: i18n.t('ask.nextPlaceholder'),
+          send: i18n.t('ask.send'),
+          record: i18n.t('ask.record'),
+          recorded: i18n.t('ask.recorded'),
+          protect: i18n.t('ask.protect'),
+          protected: i18n.t('ask.protected'),
+          copy: i18n.t('ask.copy'),
+          copied: i18n.t('ask.copied'),
+          note: i18n.t('ask.note'),
+        },
+        selection: captured.words,
+        ask: (question: string, turns: AskTurn[], onDelta) =>
+          streamAnswer({ selection: captured.markdown, before: quote.prefix, after: quote.suffix, pageTitle, turns, question }, onDelta),
+        record: recordAnswer('statement'),
+        protect: recordAnswer('quote'),
+        close: closeAsk,
+      });
+      askWin = win;
+      ui.askWindow(win.el, range.getBoundingClientRect());
+    }
+
     /** The selection the bar is for: a few characters of the conversation, not of an input box or our own UI. */
     function readingSelection(): Range | null {
       const sel = document.getSelection();
@@ -166,7 +236,7 @@ export default defineContentScript({
       ui.showBar(range, i18n.t('site.barLabel'), [
         { id: 'note', label: i18n.t('site.barNote'), run: () => recordSelection() },
         { id: 'quote', label: i18n.t('site.barQuote'), run: () => recordSelection('quote') },
-        { id: 'ask', label: i18n.t('site.barAsk'), run: () => {}, disabled: true, title: i18n.t('site.barAskSoon') },
+        { id: 'ask', label: i18n.t('site.barAsk'), run: () => openAsk(range) },
       ]);
     }
 

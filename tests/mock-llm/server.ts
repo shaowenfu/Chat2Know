@@ -11,7 +11,7 @@ export const MOCK_KEY = 'test-key';
 export interface RecordedRequest {
   path: string;
   authorization: string | undefined;
-  body: { model: string; messages?: { role: string; content: string }[]; input?: string[] };
+  body: { model: string; messages?: { role: string; content: string }[]; input?: string[]; stream?: boolean };
 }
 
 export interface MockLlm {
@@ -126,6 +126,13 @@ function outlineReply(user: string): string {
   return JSON.stringify({ outline });
 }
 
+/** A short answer about the selection, echoing the question and how many came before it (follow-ups see the earlier turns). */
+function askReply(user: string, earlier: number): string {
+  const selected = /^(?:Selected|选中的内容):\n(.*)$/m.exec(user)?.[1] ?? '';
+  const question = user.trim().split('\n').at(-1)!;
+  return `About “${selected}”: ${question}\n\nThe scaling keeps $QK^\\top$ small: divide by $\\sqrt{d_k}$. (turn ${earlier + 1})`;
+}
+
 export function chatReply(task: string, user: string): string {
   switch (task) {
     case 'ping':
@@ -179,6 +186,19 @@ export async function startMockLlm(): Promise<MockLlm> {
     const user = body.messages?.filter((m) => m.role === 'user').map((m) => m.content).join('\n') ?? '';
     if (user.includes('FAIL_MODEL')) return send(500, { error: { message: 'Mock failure' } });
     const task = /\[task:(\w+)\]/.exec(systemMsg)?.[1] ?? 'ping';
+    if (task === 'ask') {
+      // The floating window streams: the answer goes out in small server-sent pieces.
+      const last = body.messages!.filter((m) => m.role === 'user').at(-1)!.content;
+      const first = body.messages!.find((m) => m.role === 'user')!.content;
+      const answer = askReply(`${first}\n${last}`, body.messages!.filter((m) => m.role === 'assistant').length);
+      if (!body.stream) return send(200, { choices: [{ message: { role: 'assistant', content: answer } }] });
+      res.writeHead(200, { 'content-type': 'text/event-stream' });
+      for (const piece of answer.match(/[\s\S]{1,12}/g)!) {
+        res.write(`data: ${JSON.stringify({ choices: [{ delta: { content: piece } }] })}\n\n`);
+        await new Promise((r) => setTimeout(r, last.includes('SLOW') ? 200 : 10));
+      }
+      return res.end('data: [DONE]\n\n');
+    }
     send(200, { choices: [{ message: { role: 'assistant', content: chatReply(task, user) } }] });
   });
   await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));

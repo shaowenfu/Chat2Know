@@ -155,3 +155,21 @@ export function unwrap<T>(result: Result<T> | undefined): T {
   if (!result.ok) throw result.key ? new UserError(result.key, result.subs) : new Error(result.error);
   return result.data;
 }
+
+/**
+ * The floating question window streams over a runtime port named `ASK_PORT`, one
+ * per question: the page sends one `AskStart`, the background answers with
+ * `AskEvent`s. The page closing the port stops the answer.
+ */
+export const ASK_PORT = 'chat2know-ask';
+
+export interface AskStart {
+  selection: string;
+  before: string;
+  after: string;
+  pageTitle: string;
+  turns: { question: string; answer: string }[];
+  question: string;
+}
+
+export type AskEvent = { delta: string } | { done: true } | { error: string; key?: string; subs?: string[] };

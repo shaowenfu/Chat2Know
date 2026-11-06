@@ -68,6 +68,36 @@ const CSS = `
 .bar button[data-action="quote"] { color: #E2D3FF; }
 .bar button[data-action="ask"] { color: #A9C0FF; }
 .bar button:disabled { opacity: 0.4; cursor: default; }
+.ask { position: fixed; width: 440px; max-width: calc(100vw - 32px); box-sizing: border-box; display: flex; flex-direction: column; border-radius: 12px; border: 1px solid #D6D3CA; background: #FFFFFF; color: #1B1B19; box-shadow: 0 16px 40px rgba(0,0,0,0.18); font-size: 13px; line-height: 1.7; pointer-events: auto; }
+.ask-head { height: 44px; flex: none; display: flex; align-items: center; justify-content: space-between; padding: 0 8px 0 14px; border-bottom: 1px solid #E3E1DA; cursor: move; user-select: none; }
+.ask-title { font-size: 13px; font-weight: 700; }
+.ask-close { width: 28px; height: 28px; border: 0; border-radius: 6px; background: transparent; font: inherit; font-size: 16px; color: #5F5E58; cursor: pointer; }
+.ask-close:hover { background: #F1F0EC; }
+.ask-body { padding: 14px; display: flex; flex-direction: column; gap: 12px; max-height: min(56vh, 460px); overflow-y: auto; }
+.ask-quote { padding: 8px 10px; border-radius: 6px; background: #F4F3EF; border-left: 3px solid #C9C6BC; color: #3A3935; white-space: pre-wrap; max-height: 96px; overflow-y: auto; }
+.ask-question { align-self: flex-end; max-width: 300px; padding: 8px 12px; border-radius: 12px; background: #F1F0EC; white-space: pre-wrap; overflow-wrap: anywhere; }
+.ask-answer { display: flex; flex-direction: column; gap: 8px; }
+.ask-text { overflow-wrap: anywhere; }
+.ask-text p, .ask-text ul, .ask-text ol { margin: 0 0 6px; }
+.ask-text ul, .ask-text ol { padding-left: 20px; }
+.ask-text code { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px; background: #F4F3EF; padding: 0 3px; border-radius: 3px; }
+.ask-text math[display="block"] { margin: 6px 0; overflow-x: auto; }
+.ask-pending { color: #8F8C82; }
+.ask-error { color: #B4480F; }
+.ask-actions { display: flex; gap: 8px; }
+.ask button { cursor: pointer; }
+.ask-secondary, .ask-plain { height: 28px; padding: 0 10px; border-radius: 6px; font: inherit; font-size: 12px; }
+.ask-secondary { border: 1px solid #D6D3CA; background: #FFFFFF; color: #1B1B19; }
+.ask-secondary:hover:not(:disabled) { border-color: #2B57D9; }
+.ask-protect { color: #7A4FB5; }
+.ask-plain { border: 0; background: transparent; color: #5F5E58; }
+.ask-secondary:disabled { opacity: 0.6; cursor: default; }
+.ask-form { display: flex; gap: 8px; padding: 10px 14px 14px; margin: 0; }
+.ask-input { flex: 1; min-width: 0; height: 36px; box-sizing: border-box; padding: 0 12px; border: 1px solid #D6D3CA; border-radius: 8px; font: inherit; font-size: 13px; color: #1B1B19; background: #FFFFFF; }
+.ask-input:focus { outline: 2px solid #2B57D9; outline-offset: -1px; border-color: transparent; }
+.ask-send { height: 36px; padding: 0 14px; border: 0; border-radius: 8px; background: #1B1B19; color: #FFFFFF; font: inherit; font-size: 13px; }
+.ask-send:disabled { opacity: 0.4; cursor: default; }
+.ask-note { padding: 0 14px 12px; font-size: 11.5px; line-height: 1.5; color: #5F5E58; }
 [hidden] { display: none !important; }
 `;
 
@@ -119,6 +149,7 @@ export class PageUi {
   private popoverEl: HTMLElement | undefined;
   private toastTimer: ReturnType<typeof setTimeout> | undefined;
   private bar: { el: HTMLElement; range: Range } | undefined;
+  private askEl: HTMLElement | undefined;
 
   constructor(
     private readonly doc: Document,
@@ -186,6 +217,24 @@ export class PageUi {
     this.layer.append(el);
     this.bar = { el, range };
     this.place();
+  }
+
+  /** The floating question window, one at a time, beside the selection it is about; null takes it away. */
+  askWindow(el: HTMLElement | null, near?: DOMRect): void {
+    this.askEl?.remove();
+    this.askEl = el ?? undefined;
+    if (!el) return;
+    this.layer.append(el);
+    const view = this.doc.defaultView!;
+    const r = near ?? new DOMRect(view.innerWidth / 2, view.innerHeight / 3, 0, 0);
+    const { offsetWidth: w, offsetHeight: h } = el;
+    // Below the selection, else above it, else as low as fits; the selection itself stays visible where it can.
+    const below = r.bottom + BAR_GAP;
+    const top = below + h <= view.innerHeight - BAR_GAP ? below : Math.max(BAR_GAP, Math.min(r.top - BAR_GAP - h, view.innerHeight - h - BAR_GAP));
+    const left = Math.min(Math.max(BAR_GAP, r.left), view.innerWidth - w - BAR_GAP);
+    el.style.left = `${Math.round(left)}px`;
+    el.style.top = `${Math.round(top)}px`;
+    el.querySelector<HTMLElement>('input')?.focus();
   }
 
   hideBar(): void {

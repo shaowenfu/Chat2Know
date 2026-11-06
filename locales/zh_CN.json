@@ -20,8 +20,7 @@
     "barLabel": "对选中内容",
     "barNote": "记下",
     "barQuote": "保护原文",
-    "barAsk": "提问",
-    "barAskSoon": "下一版本推出"
+    "barAsk": "提问"
   },
   "toast": {
     "relocate": "改位置",
@@ -194,5 +193,20 @@
     "demoChapter": "矩阵",
     "demoTopic": "转置",
     "demoOther": "行列式"
+  },
+  "ask": {
+    "title": "提问 · 关于选中的内容",
+    "close": "关闭",
+    "firstPlaceholder": "想问什么？",
+    "nextPlaceholder": "继续追问…",
+    "send": "发送",
+    "record": "＋ 记到导图",
+    "recorded": "已记下",
+    "protect": "保护原文",
+    "protected": "已原样记下",
+    "copy": "复制",
+    "copied": "已复制",
+    "note": "这段对话不会保存，有用的回答记到导图里。你的问题会进入提问记录。",
+    "interrupted": "回答中断了，请再问一次。"
   }
 }

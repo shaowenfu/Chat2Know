@@ -307,3 +307,49 @@ export function parseOutline(value: unknown, subject: string): OutlineNode[] {
   checkOutline(outline, subject);
   return outline;
 }
+
+// ---------------------------------------------------------------- asking about a selection (the floating window)
+
+export interface AskTurn {
+  question: string;
+  answer: string;
+}
+
+export interface AskInput {
+  lang: PromptLang;
+  selection: string; // what the learner selected, as Markdown
+  before: string; // the conversation just around it
+  after: string;
+  pageTitle: string;
+  turns: AskTurn[]; // earlier questions in this window, with their answers
+  question: string;
+}
+
+const ASK_TEXT = {
+  zh: {
+    task: '学习者在和 AI 的对话里选中了一段内容，就它提一个小问题。像一位耐心的老师那样，围绕选中的内容直接回答：先给结论，再用一两句解释为什么，一般 2–6 句，不要客套，不要标题。公式写成 $...$（单独成行的写成 $$...$$）。学习者追问时接着前面的回答说。用中文回答。',
+    selected: '选中的内容',
+    context: '上下文',
+    page: '页面',
+  },
+  en: {
+    task: 'A learner selected a passage in a conversation with an AI and asks a short question about it. Answer like a patient teacher, about the selection: the answer first, then a sentence or two on why; usually 2–6 sentences, no pleasantries, no headings. Write formulas as $...$ (a displayed one as $$...$$). When the learner follows up, build on your earlier answers. Answer in English.',
+    selected: 'Selected',
+    context: 'Context',
+    page: 'Page',
+  },
+} as const;
+
+/** The selection and its context go first; then each question of this window, with the answers given so far. */
+export function askPrompt(input: AskInput): ChatMessage[] {
+  const t = ASK_TEXT[input.lang];
+  const intro = [`${t.selected}:\n${input.selection}`, `${t.context}: …${input.before.trim()} [SELECTED] ${input.after.trim()}…`, `${t.page}: ${input.pageTitle}`].join('\n\n');
+  const turns = [...input.turns, { question: input.question, answer: '' }];
+  return [
+    system('ask', t.task),
+    ...turns.flatMap((turn, i): ChatMessage[] => [
+      { role: 'user', content: i === 0 ? `${intro}\n\n${turn.question}` : turn.question },
+      ...(turn.answer ? [{ role: 'assistant' as const, content: turn.answer }] : []),
+    ]),
+  ];
+}

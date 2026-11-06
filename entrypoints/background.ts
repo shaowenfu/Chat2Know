@@ -1,6 +1,6 @@
 import { browser } from 'wxt/browser';
 import { defineBackground } from 'wxt/utils/define-background';
-import { onMessages, type Envelope } from '@/src/messaging';
+import { ASK_PORT, onMessages, type AskEvent, type AskStart, type Envelope } from '@/src/messaging';
 import { Chat2KnowDB } from '@/src/db/schema';
 import { Hlc } from '@/src/db/hlc';
 import { Repository } from '@/src/db/repository';
@@ -23,7 +23,7 @@ import { siteFor } from '@/src/capture/sites';
 import { currentLang, i18n, initI18n, loadUiLang, saveUiLang } from '@/src/i18n';
 import { EXPORT_FORMAT, EXPORT_VERSION, parseImport, type ExportFile } from '@/src/export/json';
 import { loadOpenMap, saveOpenMap } from '@/src/sites/open-map';
-import type { PromptLang } from '@/src/llm/prompts';
+import { askPrompt, type PromptLang } from '@/src/llm/prompts';
 import { mapToMarkdown } from '@/src/export/markdown';
 import { mapToOpml } from '@/src/export/opml';
 
@@ -95,6 +95,43 @@ async function setSiteOrigins(origins: string[]): Promise<SiteSettings> {
     await Promise.allSettled(tabs.map((t) => inject(t.id!)));
   }
   return next;
+}
+
+/** A question the user sent, on the chat site or in the floating window. The gate uses the page it came from, never anything the page could claim. */
+async function recordQuestion(text: string, sender: Browser.runtime.MessageSender): Promise<boolean> {
+  const url = sender.url;
+  if (!url || sender.id !== browser.runtime.id || !shouldRecord(await loadSites(), url)) return false;
+  const host = new URL(url).hostname;
+  await (await repo()).recordAsk({ site: siteFor(host)?.id ?? host, conversationUrl: url, text });
+  if (sender.tab?.id !== undefined) askingTabs.add(sender.tab.id);
+  await browser.alarms.create(GAP_ALARM, { delayInMinutes: CONVERSATION_IDLE_MIN });
+  notifyChanged();
+  return true;
+}
+
+/** One question from the floating window: its answer streams back over the port; nothing of it is kept but the question. */
+function answerOnPort(port: Browser.runtime.Port): void {
+  const abort = new AbortController();
+  const post = (event: AskEvent) => {
+    if (!abort.signal.aborted) port.postMessage(event);
+  };
+  port.onDisconnect.addListener(() => abort.abort());
+  port.onMessage.addListener((start: AskStart) => {
+    void (async () => {
+      try {
+        await ready();
+        if (port.sender?.id !== browser.runtime.id || port.sender.tab === undefined) throw new Error('Questions come only from a page');
+        await recordQuestion(start.question, port.sender);
+        const client = new LlmClient(await loadSettings());
+        const messages = askPrompt({ lang: promptLang(), ...start });
+        for await (const delta of client.stream(messages, abort.signal)) post({ delta });
+        post({ done: true });
+      } catch (err) {
+        if (abort.signal.aborted) return;
+        post(err instanceof UserError ? { error: err.message, key: err.key, subs: err.subs } : { error: err instanceof Error ? err.message : String(err) });
+      }
+    })();
+  });
 }
 
 /** Alt+S or the context menu: the tab was granted by the gesture; the site script records its selection. */
@@ -219,6 +256,9 @@ export default defineBackground(() => {
   });
   browser.tabs.onRemoved.addListener((tabId) => {
     if (askingTabs.delete(tabId)) void analyzeGaps();
+  });
+  browser.runtime.onConnect.addListener((port) => {
+    if (port.name === ASK_PORT) answerOnPort(port);
   });
   browser.contextMenus.onClicked.addListener((info, tab) => {
     if (tab?.id === undefined) return;
@@ -423,17 +463,7 @@ export default defineBackground(() => {
       notifyChanged();
       return { undone };
     },
-    'asks/record': async ({ text }, sender) => {
-      // The gate uses the page the message came from, never anything the page could claim.
-      const url = sender.url;
-      if (!url || sender.id !== browser.runtime.id || !shouldRecord(await loadSites(), url)) return { recorded: false };
-      const host = new URL(url).hostname;
-      await (await repo()).recordAsk({ site: siteFor(host)?.id ?? host, conversationUrl: url, text });
-      if (sender.tab?.id !== undefined) askingTabs.add(sender.tab.id);
-      await browser.alarms.create(GAP_ALARM, { delayInMinutes: CONVERSATION_IDLE_MIN });
-      notifyChanged();
-      return { recorded: true };
-    },
+    'asks/record': async ({ text }, sender) => ({ recorded: await recordQuestion(text, sender) }),
     'map/export': async ({ format, includeGrey }) => {
       const r = await repo();
       if (format === 'json') {

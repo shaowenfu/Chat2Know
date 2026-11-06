@@ -68,7 +68,7 @@ test('＋ beside formulas on ticked sites: record, toast, undo, duplicates; noth
   expect(await other.locator('chat2know-ui').count()).toBe(0);
 });
 
-test('the bar over a selection: 记下, 保护原文 word for word, 提问 not yet; never in a text box', async ({ context, extensionId, fixtureServer }) => {
+test('the bar over a selection: 记下, 保护原文 word for word, 提问; never in a text box', async ({ context, extensionId, fixtureServer }) => {
   const panel = await context.newPage();
   await panel.setViewportSize({ width: 380, height: 820 });
   await panel.goto(`chrome-extension://${extensionId}/sidepanel.html`);
@@ -92,7 +92,7 @@ test('the bar over a selection: 记下, 保护原文 word for word, 提问 not y
   const words = 'attention is a learned, content-based lookup.';
   await selectText(page, '#outro', words);
   await expect(bar.getByRole('button')).toHaveText(['Note', 'Keep words', 'Ask']);
-  await expect(bar.getByRole('button', { name: 'Ask' })).toBeDisabled();
+  await expect(bar.getByRole('button', { name: 'Ask' })).toBeEnabled();
   // The bar sits above the selection.
   const [barBox, textBox] = [await bar.boundingBox(), await page.locator('#outro').boundingBox()];
   expect(barBox!.y + barBox!.height).toBeLessThanOrEqual(textBox!.y);
@@ -142,6 +142,77 @@ test('the bar over a selection: 记下, 保护原文 word for word, 提问 not y
     expect.stringContaining('Noto Serif SC'),
   ]);
   await panel.screenshot({ path: 'tests/e2e/screenshots/panel-quote.png' });
+});
+
+test('提问: a window beside the selection streams a short answer; it goes to the map or is kept word for word; follow-ups; nothing else kept', async ({ context, extensionId, fixtureServer, mockLlm }) => {
+  const panel = await context.newPage();
+  await panel.goto(`chrome-extension://${extensionId}/sidepanel.html`);
+  await send(panel, 'sites/setOrigins', { origins: [fixtureServer] });
+  await send(panel, 'map/addSubject', { title: '注意力' });
+  await configureModel(panel, mockLlm.url, 'wrong-key');
+  const markdown = async () => (await send<string>(panel, 'map/export', { format: 'markdown' })).data;
+
+  const page = await context.newPage();
+  await page.setViewportSize({ width: 1100, height: 760 });
+  await page.goto(`${fixtureServer}/synthetic-chat-katex.html`);
+  await expect(page.locator('chat2know-ui button[data-state="add"]')).toHaveCount(1);
+  const bar = page.locator('chat2know-ui [role="toolbar"]');
+  const win = page.getByRole('dialog', { name: 'Ask · about the selection' });
+  const answers = win.locator('.ask-answer');
+
+  await selectText(page, 'p:has(strong)', 'keeps the softmax from saturating');
+  await bar.getByRole('button', { name: 'Ask' }).click();
+  await expect(win).toBeVisible();
+  await expect(bar).toHaveCount(0);
+  await expect(win.locator('.ask-quote')).toHaveText('keeps the softmax from saturating');
+  await expect(win.getByPlaceholder('What would you like to know?')).toBeFocused();
+  // A provider error shows in the window, as the provider wrote it.
+  await page.keyboard.type('why scale?');
+  await page.keyboard.press('Enter');
+  await expect(answers.first().locator('.ask-error')).toHaveText('HTTP 401: Invalid API key');
+  await page.keyboard.press('Escape');
+  await expect(win).toHaveCount(0);
+
+  await configureModel(panel, mockLlm.url);
+  await selectText(page, 'p:has(strong)', 'keeps the softmax from saturating');
+  await bar.getByRole('button', { name: 'Ask' }).click();
+  await page.keyboard.type('why scale?');
+  await page.keyboard.press('Enter');
+  const first = answers.first();
+  await expect(first.locator('.ask-text')).toContainText('About “keeps the softmax from saturating”: why scale?');
+  await expect(first.locator('.ask-text math')).toHaveCount(2); // typeset, not $…$
+  await expect(first.getByRole('button')).toHaveText(['＋ Add to map', 'Keep words', 'Copy']);
+  mkdirSync('tests/e2e/screenshots', { recursive: true });
+  await page.screenshot({ path: 'tests/e2e/screenshots/page-ask.png' });
+  // The model saw the selection with its context; the question went into the question log.
+  const asked = mockLlm.requests.filter((r) => r.body.messages?.[0]?.content.startsWith('[task:ask]'));
+  expect(asked.at(-1)!.body.stream).toBe(true);
+  expect(asked.at(-1)!.body.messages![1]!.content).toContain('Selected:\nkeeps the softmax from saturating\n\nContext: …ax(QKᵀ/√dₖ)V The scaling factor [SELECTED] when d_k is large.');
+  expect((await send<{ text: string }[]>(panel, 'asks/list', {})).data.map((a) => a.text)).toEqual(['why scale?', 'why scale?']);
+
+  // 记到导图: a statement (one line, formulas as $…$) sourced at the selection; 保护原文: the answer word for word.
+  await first.getByRole('button', { name: '＋ Add to map' }).click();
+  const toast = page.locator('chat2know-ui .toast');
+  await expect(toast).toContainText('Added to 注意力 ›');
+  await expect(first.getByRole('button', { name: 'Added' })).toBeDisabled();
+  await first.getByRole('button', { name: 'Keep words' }).click();
+  await expect(toast).toContainText('Kept word for word in 注意力 ›');
+  await expect.poll(markdown).toContain('- > About “keeps the softmax from saturating”: why scale?\n  >\n  > The scaling keeps $QK^\\top$ small');
+  expect(await markdown()).toContain('- About “keeps the softmax from saturating”: why scale? The scaling keeps $QK^\\top$ small: divide by $\\sqrt{d_k}$. ([source](http');
+
+  // A follow-up carries the earlier turn.
+  await win.getByPlaceholder('Ask a follow-up…').fill('and without it?');
+  await win.getByRole('button', { name: 'Send' }).click();
+  await expect(answers.nth(1).locator('.ask-text')).toContainText('(turn 2)');
+  expect(mockLlm.requests.at(-1)!.body.messages!.map((m) => m.role)).toEqual(['system', 'user', 'assistant', 'user']);
+
+  // Closing mid-answer stops it; nothing of the window is left, and the page works as before.
+  await win.getByPlaceholder('Ask a follow-up…').fill('SLOW one');
+  await win.getByRole('button', { name: 'Send' }).click();
+  await win.getByRole('button', { name: 'Close' }).click();
+  await expect(win).toHaveCount(0);
+  await selectText(page, '#outro', 'attention is a learned');
+  await expect(bar).toHaveCount(1);
 });
 
 test('＋ on the saved pages of the six AI sites', async ({ context, extensionId, fixtureServer }) => {
