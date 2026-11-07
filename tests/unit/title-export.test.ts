@@ -52,6 +52,11 @@ describe('map exports', () => {
     expect(mapToMarkdown([map!], { ...opts, includeGrey: true })).toContain('## 特征值');
   });
 
+  it('Markdown keeps a note of several lines inside its bullet', () => {
+    const [m] = buildTree([n('s', 'subject', undefined, 'a0', '优化'), n('t', 'item', 's', 'a0', '| a | b |\n| --- | --- |\n| 1 | 2 |', { itemType: 'statement' })]);
+    expect(mapToMarkdown([m!], opts)).toBe('# 优化\n\n- | a | b |\n  | --- | --- |\n  | 1 | 2 |\n');
+  });
+
   it('Markdown keeps a protected quote word for word, as a quotation inside its bullet', () => {
     const [quoted] = buildTree([
       n('s', 'subject', undefined, 'a0', '写作'),

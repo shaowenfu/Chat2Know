@@ -158,6 +158,36 @@ describe('eval', () => {
     expect(samples).toHaveLength(2);
   });
 
+  it('requests: a note recorded with a request is written as asked; without one it is still one sentence', async () => {
+    const { cases } = data('requests.json') as {
+      cases: { map: string; request: string; text: string; expect: { table?: boolean; list?: boolean; contains?: string[]; notContains?: string[]; maxLength?: number } }[];
+    };
+    const db = new Chat2KnowDB(`eval-requests-${Date.now()}`);
+    const repo = new Repository(db, new Hlc('eval'));
+    const labels = { unplaced: '待归位', unnamed: '未命名导图' };
+    const samples = [];
+    for (const [i, c] of cases.entries()) {
+      const mapId = (await repo.listSubjects()).find((m) => m.title === c.map)?.id ?? (await repo.addSubject(c.map)).node.id;
+      const source = { url: `https://chat.example/r/${i}`, pageTitle: '', quoteExact: '', quotePrefix: '', quoteSuffix: '', capturedAt: 0 };
+      const r = await recordItem(repo, mapId, { itemType: 'statement', title: c.text, source, ...(c.request ? { request: c.request } : {}) }, labels);
+      if (r.status !== 'recorded') throw new Error(`Duplicate case ${i}`);
+      await placeItem(repo, client, settings.embeddingModel, { itemId: r.itemId, group: r.group, before: '', after: '', lang: 'zh', unplaced: labels.unplaced });
+      const note = (await repo.node(r.itemId)).title;
+      const e = c.expect;
+      const honoured =
+        (!e.table || /^\s*\|.*\|\s*$/m.test(note) && /\|\s*-{3,}/.test(note)) &&
+        (!e.list || /^\s*(?:[-*]|\d+[.)])\s+/m.test(note)) &&
+        (e.contains ?? []).every((x) => note.includes(x)) &&
+        (e.notContains ?? []).every((x) => !note.includes(x)) &&
+        (e.maxLength === undefined || note.length <= e.maxLength);
+      samples.push({ request: c.request, honoured, note });
+    }
+    results.requestsHonoured = samples.filter((s) => s.honoured).length / samples.length;
+    results.requestSamples = samples;
+    await db.delete();
+    expect(samples).toHaveLength(cases.length);
+  });
+
   it('placement: the topic of each note in its map; an unnamed map gets its subject\'s name; statements become one short sentence', async () => {
     const { map, cases } = data('placement.json') as {
       map: Record<string, Record<string, string[]>>;

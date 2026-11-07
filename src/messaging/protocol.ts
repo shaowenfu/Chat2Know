@@ -49,7 +49,7 @@ export interface MessageMap {
   // Recording onto the map
   /** From the site script: a formula or a selection the user just recorded on the sender's page. */
   'map/record': {
-    req: { itemType: ItemType; title: string; latex?: string; quote: TextQuote; pageTitle: string; force?: boolean; createMap?: boolean };
+    req: { itemType: ItemType; title: string; latex?: string; quote: TextQuote; pageTitle: string; request?: string; force?: boolean; createMap?: boolean };
     res: RecordResult;
   };
   /** Subjects in map order, with how many items each holds and when the newest was recorded. */

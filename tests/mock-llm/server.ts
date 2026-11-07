@@ -92,8 +92,10 @@ function placeReply(user: string): string {
   const unnamed = /^(?:Map|导图): (?:\(unnamed\)|（未命名）)$/m.test(user);
   // The mock's place for the note: the map name it would give, and the path below the map.
   const [, mapName, path] = MOCK_PLACES.find(([re]) => re.test(text)) ?? [null, '线性代数', ['其他']];
-  // A statement keeps its first sentence.
-  const statement = type === 'text' || type === '文字' ? (text.split(/(?<=[.。])\s*/)[0] ?? text) : '';
+  // A statement keeps its first sentence; with a request, the whole note as written.
+  const request = /^(?:Request|要求): (.*)$/m.exec(user)?.[1];
+  const whole = user.split(/\n\n(?:Request|要求): /)[0]!.replace(/^(?:Note|笔记) \([^)]*\): /, '');
+  const statement = type === 'text' || type === '文字' ? (request ? whole : (text.split(/(?<=[.。])\s*/)[0] ?? text)) : '';
   return JSON.stringify({ path, statement, mapName: unnamed ? mapName : '' });
 }
 

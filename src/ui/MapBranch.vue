@@ -102,11 +102,14 @@ function finishEdit(node: MapNode, save: boolean) {
             @keydown.esc.prevent="finishEdit(t.node, false)"
             @blur="finishEdit(t.node, true)"
           >
-          <!-- eslint-disable vue/no-v-html -- KaTeX output; plain text is escaped (src/ui/math.ts) -->
-          <button
+          <!-- eslint-disable vue/no-v-html -- KaTeX output, or Markdown sanitized to formatting tags (src/ui/rich-html.ts) -->
+          <!-- A div, not a button: a note may hold a table, paragraphs or a link. -->
+          <div
             v-else
-            type="button"
+            role="button"
+            tabindex="0"
             class="item-body"
+            :class="{ rich: t.node.itemType !== 'formula' }"
             @click="map.select(t.node)"
             @dblclick="map.dblclick(t.node)"
             v-html="itemHtml(t.node)"
@@ -293,9 +296,10 @@ li {
 }
 .item {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 4px 8px;
   padding: 6px 10px;
   border-radius: 6px;
   background: var(--surface);
@@ -323,9 +327,12 @@ li {
 .item.quote {
   border: 1.5px solid var(--quote);
 }
+/* A note shaped like a block (a table, a list, a displayed formula, an image, several paragraphs) takes the row's width; the badge and handle wrap below it. */
+.item-body.rich:has(table, ul, ol, pre, blockquote, img, .katex-display, h1, h2, h3, h4, p + *) {
+  flex-basis: 100%;
+}
 .item.quote .item-body {
   font-family: var(--serif);
-  white-space: pre-wrap;
 }
 .item.formula .item-body {
   font-family: var(--mono);

@@ -2,6 +2,7 @@
 // DOMPurify needs a standards-complete DOM: happy-dom keeps event attributes and drops headings.
 import { describe, expect, it } from 'vitest';
 import { reportHtml } from '@/src/ui/report-html';
+import { itemHtml } from '@/src/ui/math';
 
 describe('the report as the page shows it', () => {
   it('keeps formatting, typesets formulas and opens http(s) links in a new tab', () => {
@@ -42,3 +43,36 @@ describe('the report as the page shows it', () => {
     expect(html).not.toContain('\\(');
   });
 });
+
+describe('a note as the map shows it', () => {
+  const statement = (title: string) => itemHtml({ itemType: 'statement', title });
+
+  it('keeps a table with its formulas, line breaks and a displayed formula', () => {
+    const html = itemHtml({
+      itemType: 'quote',
+      title: '### 方法二：套公式\n\n| 函数 | Hessian |\n| --- | --- |\n| $a^\\top x + b$ | $O$ |\n| $\\|x\\|^2$ | $2I$ |\n\n**适用**：二次函数\n注意常数矩阵\n\n$$\\nabla^2 f = H^\\top H$$',
+    });
+    expect(html).toContain('<h3>方法二：套公式</h3>');
+    expect(html).toContain('<table>');
+    expect(html.match(/<td>/g)).toHaveLength(4);
+    expect(html.match(/class="katex"/g)).toHaveLength(5);
+    expect(html).toContain('katex-display');
+    expect(html).toContain('<strong>适用</strong>：二次函数<br>注意常数矩阵');
+  });
+
+  it('keeps a page\'s https and inline images, nothing else that could run or track', () => {
+    expect(statement('![图](https://cdn.example.org/a.png)')).toContain('<img src="https://cdn.example.org/a.png" alt="图" loading="lazy" referrerpolicy="no-referrer">');
+    expect(statement('![x](data:image/png;base64,iVBORw0KGgo=)')).toContain('<img src="data:image/png;base64,iVBORw0KGgo="');
+    for (const bad of ['![x](http://plain.example.org/a.png)', '![x](data:image/svg+xml;base64,PHN2Zz4=)', '<img src="https://x.org/a.png" onerror="alert(1)">']) {
+      const html = statement(bad);
+      expect(html).not.toMatch(/onerror|http:\/\/plain|svg\+xml/);
+    }
+    expect(statement('[a](data:image/png;base64,iVBO)').trim()).toBe('<p><a>a</a></p>');
+    expect(statement('[a](https://example.org)')).toContain('href="https://example.org" target="_blank"');
+  });
+
+  it('a report never shows images', () => {
+    expect(reportHtml('![x](https://cdn.example.org/a.png)')).not.toContain('<img');
+  });
+});
+

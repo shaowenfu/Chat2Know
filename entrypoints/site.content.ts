@@ -5,7 +5,7 @@ import { onMessages, sendMessage, type Req } from '@/src/messaging';
 import { errorText } from '@/src/errors';
 import { startRecorder } from '@/src/capture/recorder';
 import { siteFor } from '@/src/capture/sites';
-import { captureSelection } from '@/src/capture/selection';
+import { captureSelection, type CapturedSelection } from '@/src/capture/selection';
 import { UI_ATTR, buildTextIndex, quoteFromRange } from '@/src/capture/text-quote';
 import { PageUi } from '@/src/capture/page-ui';
 import { buildPicker } from '@/src/capture/picker';
@@ -136,15 +136,35 @@ export default defineContentScript({
         ui.toast(i18n.t('toast.noSelection'), '', []);
         return;
       }
+      recordCaptured(captured, as);
+    }
+
+    /**
+     * The captured selection, kept as Markdown so a table, a list or a displayed
+     * formula keeps its shape. A quote is it word for word. A note with a request is
+     * a statement the model writes as asked; without one, one display formula is a
+     * formula and anything else a statement placement compresses to one sentence.
+     */
+    function recordCaptured(captured: CapturedSelection, as?: 'quote', request = ''): void {
       const { quote, pageTitle } = captured;
-      const formula = ONE_FORMULA.exec(captured.markdown);
+      const markdown = captured.markdown.trim();
+      const formula = request ? null : ONE_FORMULA.exec(markdown);
       const req: RecordReq =
         as === 'quote'
-          ? { itemType: 'quote', title: captured.words, quote, pageTitle }
+          ? { itemType: 'quote', title: markdown, quote, pageTitle }
           : formula
             ? { itemType: 'formula', title: '', latex: formula[1]!.trim(), quote, pageTitle }
-            : { itemType: 'statement', title: captured.markdown.replace(/\s+/g, ' ').trim(), quote, pageTitle };
+            : { itemType: 'statement', title: markdown, quote, pageTitle, ...(request ? { request } : {}) };
       void record(req, () => {});
+    }
+
+    /** 记下 on the bar: the selection is taken now, then the bar asks how to note it (Enter alone: as usual). */
+    function noteWithRequest(): void {
+      const captured = captureSelection(document, location.href);
+      if (!captured) return;
+      ui.promptBar({ label: i18n.t('site.noteRequestLabel'), placeholder: i18n.t('site.noteRequestPlaceholder'), submit: i18n.t('site.barNote') }, (request) =>
+        recordCaptured(captured, undefined, request),
+      );
     }
 
     /** The question being answered: closing its port stops the answer. */
@@ -234,7 +254,7 @@ export default defineContentScript({
         return;
       }
       ui.showBar(range, i18n.t('site.barLabel'), [
-        { id: 'note', label: i18n.t('site.barNote'), run: () => recordSelection() },
+        { id: 'note', label: i18n.t('site.barNote'), run: noteWithRequest, keepBar: true },
         { id: 'quote', label: i18n.t('site.barQuote'), run: () => recordSelection('quote') },
         { id: 'ask', label: i18n.t('site.barAsk'), run: () => openAsk(range) },
       ]);
@@ -249,7 +269,7 @@ export default defineContentScript({
       else if (e.shiftKey && !ui.owns(e)) offerBar();
     });
     document.addEventListener('selectionchange', () => {
-      if (ui.barShown && !readingSelection()) ui.hideBar();
+      if (ui.barShown && !ui.barPrompting && !readingSelection()) ui.hideBar();
     });
 
     onMessages({

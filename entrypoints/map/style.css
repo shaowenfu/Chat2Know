@@ -257,7 +257,6 @@
 }
 .entry-body.quote {
   font-family: var(--serif);
-  white-space: pre-wrap;
 }
 .entry-body.formula {
   font-family: var(--mono);

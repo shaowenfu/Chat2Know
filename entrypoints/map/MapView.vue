@@ -202,7 +202,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKey));
         <ul class="items">
           <li v-for="item in selectedItems" :key="item.id" class="entry" :class="{ plugin: item.origin === 'plugin', quote: item.itemType === 'quote' }">
             <!-- eslint-disable-next-line vue/no-v-html -- KaTeX output; plain text is escaped (src/ui/math.ts) -->
-            <span class="entry-body" :class="{ formula: item.itemType === 'formula', quote: item.itemType === 'quote' }" v-html="itemHtml(item)" />
+            <div class="entry-body" :class="{ formula: item.itemType === 'formula', quote: item.itemType === 'quote', rich: item.itemType !== 'formula' }" v-html="itemHtml(item)" />
             <button v-if="item.source" type="button" class="link-button source" @click="run(() => sendMessage('map/openSource', { itemId: item.id }))">
               {{ i18n.t('mapPage.fromConversation', [dateOf(item.source.capturedAt)]) }}
             </button>

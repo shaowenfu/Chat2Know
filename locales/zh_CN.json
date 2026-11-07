@@ -20,7 +20,9 @@
     "barLabel": "对选中内容",
     "barNote": "记下",
     "barQuote": "保护原文",
-    "barAsk": "提问"
+    "barAsk": "提问",
+    "noteRequestLabel": "怎么记这一段？",
+    "noteRequestPlaceholder": "怎么记？如：保留表格里的公式（直接回车按默认）"
   },
   "toast": {
     "relocate": "改位置",

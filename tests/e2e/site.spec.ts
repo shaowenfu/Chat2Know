@@ -107,9 +107,24 @@ test('the bar over a selection: 记下, 保护原文 word for word, 提问; neve
 
   // 记下: the same as Alt+S, a statement.
   await selectText(page, 'p:has(strong)', 'keeps the softmax from saturating');
+  // 记下 asks how to note it; Enter alone records as usual.
   await bar.getByRole('button', { name: 'Note' }).click();
+  const request = bar.getByRole('textbox', { name: 'How should this be noted?' });
+  await expect(request).toBeFocused();
+  await expect(page.locator('chat2know-ui .marked')).not.toHaveCount(0); // the selection stays marked while typing
+  await page.keyboard.type('keep the reason');
+  await page.screenshot({ path: 'tests/e2e/screenshots/page-note-request.png' });
+  await request.fill('');
+  await page.keyboard.press('Enter');
   await expect(toast).toContainText('Added to 注意力 › Unplaced');
+  await expect(bar).toHaveCount(0);
   expect(await markdown()).toContain('- keeps the softmax from saturating');
+  // Esc puts the box away without recording.
+  await selectText(page, '#intro', 'Attention lets each token');
+  await bar.getByRole('button', { name: 'Note' }).click();
+  await page.keyboard.press('Escape');
+  await expect(bar).toHaveCount(0);
+  await expect(page.locator('chat2know-ui .marked')).toHaveCount(0);
 
   // Esc puts the bar away; collapsing the selection does too.
   await selectText(page, '#intro', 'Attention lets each token');
@@ -142,6 +157,52 @@ test('the bar over a selection: 记下, 保护原文 word for word, 提问; neve
     expect.stringContaining('Noto Serif SC'),
   ]);
   await panel.screenshot({ path: 'tests/e2e/screenshots/panel-quote.png' });
+});
+
+test('记下 with a request: a table is kept as a table, and the map shows it as one', async ({ context, extensionId, fixtureServer, mockLlm }) => {
+  const panel = await context.newPage();
+  await panel.setViewportSize({ width: 380, height: 820 });
+  await panel.goto(`chrome-extension://${extensionId}/sidepanel.html`);
+  await send(panel, 'sites/setOrigins', { origins: [fixtureServer] });
+  await send(panel, 'map/addSubject', { title: '注意力' });
+  await configureModel(panel, mockLlm.url);
+
+  const page = await context.newPage();
+  await page.goto(`${fixtureServer}/synthetic-chat-katex.html`);
+  await expect(page.locator('chat2know-ui button[data-state="add"]')).toHaveCount(1);
+  await page.evaluate(() => {
+    const range = document.createRange();
+    range.selectNode(document.querySelector('table')!);
+    document.getSelection()!.removeAllRanges();
+    document.getSelection()!.addRange(range);
+    document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+  });
+  const bar = page.locator('chat2know-ui [role="toolbar"]');
+  await bar.getByRole('button', { name: 'Note' }).click();
+  await page.keyboard.type('keep the table with its formulas');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('chat2know-ui .toast')).toContainText('Added to 注意力 ›');
+
+  // The model got the whole table and the request, and wrote the note as asked.
+  // The mock server is shared by the tests in this worker: find this placement by its request.
+  const places = () => mockLlm.requests.filter((r) => r.body.messages?.[0]?.content.startsWith('[task:place]') && r.body.messages[1]?.content.includes('Request: '));
+  await expect.poll(() => places().length).toBe(1);
+  const placed = places()[0]!;
+  expect(placed.body.messages![1]!.content).toContain('| Full attention | $O(n^2)$ | Exact |');
+  expect(placed.body.messages![1]!.content).toContain('Request: keep the table with its formulas');
+  const json = JSON.parse((await send<string>(panel, 'map/export', { format: 'json' })).data) as { nodes: { title: string; request?: string }[] };
+  const note = json.nodes.find((n) => n.request)!;
+  expect(note.request).toBe('keep the table with its formulas');
+  expect(note.title).toContain('| Linear attention | $O(n)$ |');
+
+  const mapId = (await send<{ id: string }[]>(panel, 'map/subjects', {})).data[0]!.id;
+  await send(panel, 'outline/decline', { subjectId: mapId }); // the first note's outline offer would cover the tree
+  await panel.reload();
+  const item = panel.getByTestId('map-item').filter({ has: panel.locator('table') });
+  await expect(item.locator('td')).toHaveCount(6);
+  await expect(item.locator('.katex')).toHaveCount(2);
+  mkdirSync('tests/e2e/screenshots', { recursive: true });
+  await panel.screenshot({ path: 'tests/e2e/screenshots/panel-table-note.png' });
 });
 
 test('提问: a window beside the selection streams a short answer; it goes to the map or is kept word for word; follow-ups; nothing else kept', async ({ context, extensionId, fixtureServer, mockLlm }) => {

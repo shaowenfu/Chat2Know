@@ -30,6 +30,7 @@ export interface MapNode {
   itemType?: ItemType; // items only
   latex?: string; // formula items: kept verbatim
   source?: ItemSource; // items the user recorded
+  request?: string; // how the user asked for this note to be written ("记下" with a request); placement follows it
   origin: Origin;
   /** The subject's "待归位" group: where items wait for automatic placement. Titled by the UI. */
   role?: 'unplaced';

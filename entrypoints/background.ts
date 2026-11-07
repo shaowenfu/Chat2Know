@@ -294,7 +294,7 @@ export default defineBackground(() => {
       notifyChanged();
       return next;
     },
-    'map/record': async ({ itemType, title, latex, quote, pageTitle, force, createMap }, sender) => {
+    'map/record': async ({ itemType, title, latex, quote, pageTitle, request, force, createMap }, sender) => {
       // The source is the page the message came from, never a URL the page could claim.
       const url = sender.url;
       if (!url || sender.id !== browser.runtime.id || sender.tab === undefined) throw new Error('map/record comes only from a page');
@@ -302,7 +302,7 @@ export default defineBackground(() => {
       const r = await repo();
       // "新建导图并记下": the user asked for a new, unnamed map; it opens and takes this note.
       if (createMap) await saveOpenMap((await r.addSubject('')).node.id);
-      const result = await recordItem(r, await loadOpenMap(), { itemType, title, ...(latex === undefined ? {} : { latex }), source, ...(force ? { force } : {}) }, labels());
+      const result = await recordItem(r, await loadOpenMap(), { itemType, title, ...(latex === undefined ? {} : { latex }), source, ...(request?.trim() ? { request: request.trim() } : {}), ...(force ? { force } : {}) }, labels());
       notifyChanged();
       if (result.status === 'recorded') void placeAfterRecord(result, quote, sender.tab.id!);
       return result;

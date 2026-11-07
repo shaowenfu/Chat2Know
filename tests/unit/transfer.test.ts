@@ -33,13 +33,14 @@ describe('JSON export and import', () => {
     const { node: matrix } = await a.addSection(subject.id, '矩阵');
     await a.addSection(matrix.id, '迹', 'outline');
     await a.addItem({ parentId: matrix.id }, { itemType: 'formula', title: '', latex: '(AB)^T = B^T A^T', source });
-    await a.addItem({ unplacedIn: subject.id }, { itemType: 'statement', title: '可逆当且仅当 det A ≠ 0' });
+    await a.addItem({ unplacedIn: subject.id }, { itemType: 'statement', title: '可逆当且仅当 det A ≠ 0', request: '保留原句' });
     const { node: gone } = await a.addSection(subject.id, '删掉的');
     await a.remove(gone.id);
 
     const b = setup('b');
     const parsed = parseImport(await exportText(a));
     expect(parsed).toHaveLength(6);
+    expect(parsed.find((n) => n.request)?.request).toBe('保留原句');
     await b.importNodes(parsed);
     expect(shape(await b.subjectTree(subject.id))).toEqual(shape(await a.subjectTree(subject.id)));
 
@@ -58,6 +59,7 @@ describe('JSON export and import', () => {
     expect(() => parseImport(file([{ ...node, order: 'a00' }]))).toThrow('error.invalidExport');
     expect(() => parseImport(file([node, { ...node, id: 'i', kind: 'item', parentId: 'missing', itemType: 'formula' }]))).toThrow('error.invalidExport');
     expect(() => parseImport(file([node, { ...node, id: 'i', kind: 'section', parentId: 's', itemType: 'formula' }]))).toThrow('error.invalidExport');
+    expect(() => parseImport(file([node, { ...node, id: 'i', kind: 'section', parentId: 's', request: 'x' }]))).toThrow('error.invalidExport');
     expect(parseImport(file([node]))).toEqual([node]);
   });
 });
