@@ -44,6 +44,7 @@ Your data stays in your browser. What leaves it is only what a model call needs,
 
 ## Docs
 
+- [Website](https://shaowenfu.github.io/Chat2Know/) (landing page, source in `site/`)
 - [Install guide with screenshots (中文 / English)](docs/install.md)
 - [Moving from 0.1](docs/migration-v0.1.md)
 - [Privacy policy](PRIVACY.md)
