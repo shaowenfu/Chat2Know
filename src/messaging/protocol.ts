@@ -3,18 +3,18 @@
  * Every message has a `type` and a `payload`; each type maps to exactly one response shape.
  */
 
-import type { CapturedSelection } from '@/src/capture/selection';
 import { UserError } from '@/src/errors';
+import type { Ask } from '@/src/db/types';
+import type { SiteSettings } from '@/src/sites/settings';
+import type { UiLang } from '@/src/i18n';
 import type { TextQuote } from '@/src/capture/text-quote';
-import type { AskLaterResult, AskView, CaptureType, ImportResult, KeepDecision, PageQuestion, Stats } from '@/src/db/repository';
-import type { InboxItem, Mastery, QuizItem, Review, Verdict } from '@/src/db/types';
-import type { RecordingSettings } from '@/src/recording/settings';
-import type { CandidateCard, Suggestion } from '@/src/llm/prompts';
-import type { Placement } from '@/src/services/placement';
-import type { ExplainResult } from '@/src/services/explain';
-import type { DiagnosisView } from '@/src/services/confirm';
+import type { ItemType } from '@/src/db/types';
+import type { RecordResult } from '@/src/services/record';
+import type { Place } from '@/src/services/relocate';
+import type { StuckView } from '@/src/services/stuck';
+import type { Report } from '@/src/db/types';
+import type { MapTree, OutlineNode } from '@/src/graph/tree';
 import type { PublicSettings } from '@/src/llm/settings';
-import type { NodeView } from '@/src/db/types';
 
 export type Context = 'content' | 'background' | 'sidepanel';
 
@@ -22,112 +22,105 @@ export interface MessageMap {
   /** Health check. Any context can ping the background. */
   ping: { req: { from: Context }; res: { from: 'background'; echo: Context; at: number } };
 
-  // Side panel / content script -> background
-  /** Inject the selection toolbar into a tab (active tab when omitted). */
-  'page/activate': { req: { tabId?: number }; res: { tabId: number } };
-  /** Save a selection the content script already captured. */
-  'capture/save': { req: { type: CaptureType; capture: CapturedSelection }; res: { nodeId: string } };
-  /** Capture the current selection in a tab (shortcut and context-menu path). */
-  'capture/fromTab': { req: { type: CaptureType; tabId?: number }; res: { nodeId: string } };
-  /** Save an ask-later question. Never calls a model. */
-  'ask/save': { req: { term: string; question: string; capture: CapturedSelection }; res: AskLaterResult };
-  'ask/update': { req: { id: string; question: string }; res: null };
-  /** Open the ask-later prompt in a tab (shortcut and context-menu path). */
-  'ask/fromTab': { req: { tabId?: number }; res: null };
-  'ask/forUrl': { req: { url: string }; res: PageQuestion[] };
-  /** Ask now: save the question and answer it right away into the inbox. Never touches the host page. */
-  'ask/now': { req: { term: string; question: string; capture: CapturedSelection }; res: InboxItem };
-  /** A follow-up question on a card or answer, answered right away; becomes its child. */
-  'ask/followUp': { req: { parentId: string; question: string }; res: InboxItem };
-  /** Answer a queued question with the model; the answer lands in the inbox. */
-  'ask/answer': { req: { questionId: string }; res: InboxItem };
-  /** Drop a question from the queue (its answer stays in the inbox until it expires). */
-  'ask/dismiss': { req: { questionId: string; suggestion?: Suggestion }; res: null };
-  'inbox/list': { req: Record<string, never>; res: InboxItem[] };
-  'keep/suggest': { req: { inboxId: string }; res: Suggestion };
-  'keep/confirm': { req: { inboxId: string; suggestion: Suggestion; decision: KeepDecision }; res: { nodeId: string } };
-  'nodes/confirmTitle': { req: { id: string; title: string }; res: null };
-  'nodes/retryDistill': { req: { id: string }; res: null };
-  /** Move a card under another (before a sibling, or last), or to the top level with parentId null. */
-  'nodes/move': { req: { id: string; parentId: string | null; beforeId?: string }; res: null };
-  /** Parent and duplicate suggestions for a card; null when no embedding model is configured. */
-  'place/suggest': { req: { nodeId: string }; res: Placement | null };
-  'nodes/merge': { req: { duplicateId: string; targetId: string }; res: null };
-  /** Organize a whole page (active tab when omitted) into candidate cards. */
-  'organize/page': { req: { tabId?: number }; res: { cards: CandidateCard[]; url: string; pageTitle: string } };
-  /** Organize pasted text into candidate cards. */
-  'organize/text': { req: { text: string }; res: { cards: CandidateCard[] } };
-  'organize/keep': {
-    req: { cards: { title: string; summary: string; quote: string }[]; page?: { url: string; pageTitle: string } };
-    res: { kept: number };
-  };
-  'nodes/setMastery': { req: { id: string; mastery: Mastery | null }; res: null };
-  'quiz/due': { req: Record<string, never>; res: QuizItem[] };
-  'quiz/grade': { req: { nodeId: string; answer: string; verdict: Verdict }; res: Review };
-  /** A problem that needs the card's knowledge (apply mode). */
-  'quiz/problem': { req: { nodeId: string }; res: { problem: string } };
-  /** Model judge; with `problem`, the answer is judged as a solution to it (apply mode). */
-  'quiz/judge': { req: { nodeId: string; answer: string; problem?: string }; res: Review };
-  /** "Explain it to me": check an explanation of a card and its branch; every kept card in it gets a review. */
-  'explain/check': { req: { nodeId: string; explanation: string }; res: ExplainResult };
-  /** A one-minute script to say out loud for a card and its branch. */
-  'explain/oneMinute': { req: { nodeId: string }; res: { script: string } };
-  'stats/get': { req: Record<string, never>; res: Stats };
+  // Model settings
   'settings/get': { req: Record<string, never>; res: PublicSettings };
   /** Omitting apiKey keeps the stored key. */
   'settings/save': { req: { baseUrl: string; model: string; embeddingModel: string; apiKey?: string }; res: PublicSettings };
   'settings/test': { req: Record<string, never>; res: { reply: string } };
-  'nodes/list': { req: Record<string, never>; res: NodeView[] };
-  'nodes/delete': { req: { id: string }; res: null };
-  /** Open a source page and highlight the quote. */
-  'source/open': { req: { sourceId: string }; res: { tabId: number; highlighted: boolean } };
-  'data/exportJson': { req: Record<string, never>; res: string };
-  'data/exportMarkdown': { req: Record<string, never>; res: string };
-  'data/exportOpml': { req: Record<string, never>; res: string };
-  'data/exportAnki': { req: Record<string, never>; res: string };
-  'data/importJson': { req: { json: string }; res: ImportResult };
 
-  // Recording the user's sent questions (learning diagnosis)
-  'recording/get': { req: Record<string, never>; res: RecordingSettings };
-  /** Sets the sites to record on. The side panel requests their host permission first. */
-  'recording/setOrigins': { req: { origins: string[] }; res: RecordingSettings };
-  'recording/setPaused': { req: { paused: boolean }; res: RecordingSettings };
+  // The extension's language: the browser's, or the user's pick
+  'ui/getLang': { req: Record<string, never>; res: UiLang };
+  'ui/setLang': { req: { lang: UiLang }; res: null };
+
+  // The AI sites the site script runs on
+  'sites/get': { req: Record<string, never>; res: SiteSettings };
+  /** Sets the ticked sites. The page requests their host permission first. */
+  'sites/setOrigins': { req: { origins: string[] }; res: SiteSettings };
+  /** "Also record the questions I send on these sites." */
+  'sites/setRecordAsks': { req: { on: boolean }; res: SiteSettings };
   /** From the recorder: a question the user just sent on the sender's page. Stored only if the background's gate allows. */
   'asks/record': { req: { text: string }; res: { recorded: boolean } };
-  'asks/list': { req: Record<string, never>; res: AskView[] };
+  'asks/list': { req: Record<string, never>; res: Ask[] };
   'asks/delete': { req: { id: string }; res: null };
   'asks/clear': { req: Record<string, never>; res: null };
   /** Stop recording a conversation and delete what was recorded in it. */
-  'asks/exclude': { req: { conversationUrl: string }; res: RecordingSettings };
-  'asks/export': { req: Record<string, never>; res: string };
-  /** Open diagnoses (suspected or confirmed) with their evidence. */
-  'diagnosis/list': { req: Record<string, never>; res: DiagnosisView[] };
-  /** 3–5 questions on the diagnosed concept. Not stored until answered. */
-  'diagnosis/quiz': { req: { id: string }; res: { items: { question: string; expected: string }[] } };
-  /** Judge the answers: passing withdraws the diagnosis, failing confirms it. */
-  'diagnosis/checkQuiz': {
-    req: { id: string; items: { question: string; expected: string }[]; answers: string[] };
-    res: { results: { verdict: Verdict; feedback: string }[]; passed: boolean };
+  'asks/exclude': { req: { conversationUrl: string }; res: SiteSettings };
+
+  // Recording onto the map
+  /** From the site script: a formula or a selection the user just recorded on the sender's page. */
+  'map/record': {
+    req: { itemType: ItemType; title: string; latex?: string; quote: TextQuote; pageTitle: string; force?: boolean; createMap?: boolean };
+    res: RecordResult;
   };
-  /** The learner's verdict without the quiz: accurate confirms, not accurate dismisses. */
-  'diagnosis/decide': { req: { id: string; accurate: boolean }; res: null };
-  /** Review cards from the foundations up, for the learner to pick. */
-  'diagnosis/review': { req: { id: string }; res: { cards: { question: string; summary: string }[] } };
-  'diagnosis/keepReview': { req: { id: string; cards: { question: string; summary: string }[]; internalize: boolean }; res: { kept: number } };
-  /** Questions waiting for analysis and the last background failure. */
-  'analysis/get': { req: Record<string, never>; res: { pending: number; lastError?: string } };
-  /** Analyze now: tag every waiting question. Errors go to the caller. */
-  'analysis/run': { req: Record<string, never>; res: null };
+  /** Subjects in map order, with how many items each holds and when the newest was recorded. */
+  'map/subjects': { req: Record<string, never>; res: SubjectSummary[] };
+  'map/tree': { req: { subjectId: string }; res: MapTree };
+  /** A drag in the map: a node into a structure node, before `beforeId` or last. */
+  'map/moveNode': { req: { id: string; parentId: string; beforeId?: string }; res: { group: string } };
+  'map/edit': { req: { id: string; title?: string; latex?: string }; res: { group: string } };
+  /** Soft delete; a section's contents move up a level. */
+  'map/remove': { req: { id: string }; res: { group: string } };
+  /** The user creates a map (title may be empty: named from its content once) and it opens. */
+  'map/addSubject': { req: { title: string }; res: { id: string } };
+  /** The user opens a map: everything recorded goes into it. */
+  'maps/open': { req: { id: string }; res: null };
+  'map/addSection': { req: { parentId: string; title: string; beforeId?: string }; res: { id: string } };
+  /** An item the user types in on the full page (a formula's LaTeX, or a statement). */
+  'map/addItem': { req: { parentId: string; itemType: ItemType; text: string }; res: { id: string } };
+  /** "清空所有数据". */
+  'map/clear': { req: Record<string, never>; res: null };
+  /** Opens the item's conversation in a new tab, scrolled to the quote. */
+  'map/openSource': { req: { itemId: string }; res: null };
+  /** The "改位置" picker: where the item is now and three other places. */
+  'map/placeOptions': { req: { itemId: string }; res: { now: string[]; places: Place[] } };
+  'map/searchPlaces': { req: { query: string }; res: Place[] };
+  /** The user moves an item to a place, or into a new topic there. */
+  'map/moveItem': { req: { itemId: string; placeId: string; newTopic?: string }; res: { group: string; path: string[] } };
+  /** Undoes one write (a toast's "撤销"), or the latest one (Ctrl+Z). */
+  'map/undo': { req: { group?: string }; res: { undone: boolean } };
+  /** Background -> site script: record the page's selection (Alt+S, context menu). */
+  'site/recordSelection': { req: { as?: 'quote' }; res: null };
+  /** Background -> site script: automatic placement moved a recorded item (or failed, and it stays). */
+  'site/placed': { req: { itemId: string; path?: string[]; error?: string }; res: null };
 
-  // Background -> content script
-  'content/capture': { req: Record<string, never>; res: CapturedSelection | null };
-  'content/askLater': { req: Record<string, never>; res: null };
-  'content/pageMarkdown': { req: Record<string, never>; res: { markdown: string; url: string; pageTitle: string } };
-  'content/highlight': { req: { quote: TextQuote }; res: { found: boolean } };
+  // Laying an outline over a subject (asked once per subject)
+  /** Whether to offer an outline for the subject, and the one already proposed. */
+  'outline/state': { req: { subjectId: string }; res: { offer: boolean; outline?: OutlineNode[] } };
+  /** Proposes the standard outline, or the pasted table of contents as one. */
+  'outline/propose': { req: { subjectId: string; toc?: string }; res: OutlineNode[] };
+  /** "铺上大纲": lays the proposed outline as grey sections and files what waits in 待归位. */
+  'outline/apply': { req: { subjectId: string }; res: { group: string } };
+  /** "不用": never asked again for this subject. */
+  'outline/decline': { req: { subjectId: string }; res: null };
 
-  // Background -> side panel (broadcast)
-  /** Nodes, inbox or settings changed; the side panel reloads. */
+  // Is the learner stuck? (a check every 5 new questions in a map)
+  /** The map's orange marks and its card, if the latest check saw the learner stuck. */
+  'stuck/view': { req: { mapId: string }; res: StuckView };
+  /** "不用": the card goes, and this map stays quiet for the rest of the day. */
+  'stuck/dismiss': { req: { checkId: string }; res: null };
+
+  // Written reports on a map's questions (only when the user asks)
+  /** A map's reports, newest first. */
+  'reports/list': { req: { mapId: string }; res: Report[] };
+  'reports/generate': { req: { mapId: string }; res: Report };
+
+  // The map's data
+  /** The whole map as a file's text; Markdown and OPML leave grey outline nodes out unless asked. */
+  'map/export': { req: { format: 'json' | 'markdown' | 'opml'; includeGrey?: boolean }; res: string };
+  /** An export merges into the maps (nodes with the same id are replaced). */
+  'map/import': { req: { json: string }; res: { nodes: number } };
+
+  // Background -> extension pages (broadcast)
+  /** Data or settings changed; open pages reload. */
   'event/dataChanged': { req: Record<string, never>; res: null };
+}
+
+export interface SubjectSummary {
+  id: string;
+  title: string;
+  items: number;
+  latest: number; // createdAt of its newest item, 0 when it has none
+  open: boolean; // the map the user opened
 }
 
 export type MessageType = keyof MessageMap;
@@ -156,3 +149,21 @@ export function unwrap<T>(result: Result<T> | undefined): T {
   if (!result.ok) throw result.key ? new UserError(result.key, result.subs) : new Error(result.error);
   return result.data;
 }
+
+/**
+ * The floating question window streams over a runtime port named `ASK_PORT`, one
+ * per question: the page sends one `AskStart`, the background answers with
+ * `AskEvent`s. The page closing the port stops the answer.
+ */
+export const ASK_PORT = 'chat2know-ask';
+
+export interface AskStart {
+  selection: string;
+  before: string;
+  after: string;
+  pageTitle: string;
+  turns: { question: string; answer: string }[];
+  question: string;
+}
+
+export type AskEvent = { delta: string } | { done: true } | { error: string; key?: string; subs?: string[] };

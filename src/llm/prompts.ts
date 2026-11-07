@@ -1,6 +1,8 @@
 import type { ChatMessage } from './client';
 import { LlmError } from './client';
 import { obj, oneOf, str, strList } from './validate';
+import type { OutlineNode } from '@/src/graph/tree';
+import type { ItemType, StuckKind } from '@/src/db/types';
 
 /**
  * Every prompt starts its system message with a `[task:<name>]` tag. Real models
@@ -8,418 +10,396 @@ import { obj, oneOf, str, strList } from './validate';
  */
 const system = (task: string, text: string): ChatMessage => ({ role: 'system', content: `[task:${task}]\n${text}` });
 
-const SAME_LANGUAGE = 'Write in the same language as the user material (Chinese stays Chinese, English stays English).';
+// ---------------------------------------------------------------- automatic placement
 
-// ---------------------------------------------------------------- answer
+/** The language a prompt is written in, and asks the model to answer in. */
+export type PromptLang = 'zh' | 'en';
 
-export interface AnswerInput {
-  question: string;
-  quote: string;
-  context?: string; // title of the question this one arose from
+export interface PlacementInput {
+  lang: PromptLang;
+  itemType: ItemType;
+  text: string; // LaTeX for a formula, the recorded text for a statement, the exact words of a quote
+  before: string; // the conversation just before it
+  after: string;
+  map: string; // the open map's name, '' when the user left it unnamed
+  now: string; // where it sits now, "chapter › topic" below the map
+  candidates: string[]; // the closest topics, "chapter › topic"
+  outline: string; // the map's chapters and topics, indented titles
+  examples: { text: string; path: string[] }[]; // where the user moved earlier notes
 }
 
-export function answerPrompt(input: AnswerInput): ChatMessage[] {
+export interface PlacementReply {
+  path: string[]; // 1–3 chapter / topic titles below the map
+  statement: string; // the one-sentence statement; "" for a formula or a quote
+  mapName: string; // a name for an unnamed map; "" otherwise
+}
+
+export const MAX_PATH = 3;
+
+const PLACE_TEXT = {
+  zh: {
+    task: (type: ItemType, unnamed: boolean) =>
+      [
+        '你负责把学习者的一条笔记放进他打开的这张知识导图。导图下面是章和知识点，标题都是简短的名词，不是问句。',
+        '为这条笔记选出它在这张导图里的路径：1 到 3 层章 / 知识点标题。优先用已有位置（候选位置或导图结构里的原标题，一字不差）；都不合适时才新建知识点或章。新标题是简短的中文名词。学习者自己改过的位置说明了他的整理习惯，照着做。',
+        type === 'statement'
+          ? '再把笔记改写成一句保留原意的话（约 40 个汉字以内，公式写成 $...$）。如果笔记只是一个术语或名称，写成"术语：一句话解释"，解释根据上下文和你的知识。'
+          : type === 'quote'
+            ? '这条笔记是学习者要原样保留的原文：只决定它放在哪里，不改写、不总结，"statement" 填 ""。'
+            : '这条笔记是公式，"statement" 填 ""。',
+        unnamed ? '这张导图还没有名字：按这条笔记所属的学科或主题，起一个简短的中文名字填在 "mapName"。' : '"mapName" 填 ""。',
+        '只返回 JSON：{"path": ["..."], "statement": "...", "mapName": "..."}。',
+      ].join(''),
+    labels: { note: '笔记', formula: '公式', statement: '文字', quote: '原文', context: '上下文', now: '现在在', candidates: '候选位置', map: '导图', unnamed: '（未命名）', outline: '导图结构', examples: '学习者改过的位置', none: '（无）' },
+  },
+  en: {
+    task: (type: ItemType, unnamed: boolean) =>
+      [
+        "You file one of a learner's notes into the knowledge map they have open. Below the map are chapters and topics; their titles are short nouns, never questions.",
+        ' Choose the note\'s path in this map: 1–3 chapter / topic titles. Prefer an existing place (a candidate or a path from the map\'s outline, with the exact titles); add a new topic or chapter only when nothing fits. New titles are short English nouns. The learner\'s own corrections show how they organize notes; follow them.',
+        type === 'statement'
+          ? ' Also rewrite the note as one plain sentence that keeps its claim (about 20 words at most, formulas as $...$). If the note is only a term or a name, write "term: a one-sentence explanation", drawn from the context and your knowledge.'
+          : type === 'quote'
+            ? ' The note is a quote the learner keeps word for word: only choose its place, never rewrite or summarize it; "statement" is "".'
+            : ' The note is a formula: "statement" is "".',
+        unnamed ? ' The map has no name yet: give it a short English name for the subject or topic this note belongs to, in "mapName".' : ' "mapName" is "".',
+        ' Return JSON only: {"path": ["..."], "statement": "...", "mapName": "..."}.',
+      ].join(''),
+    labels: { note: 'Note', formula: 'formula', statement: 'text', quote: 'quote', context: 'Context', now: 'Now in', candidates: 'Candidates', map: 'Map', unnamed: '(unnamed)', outline: "The map's outline", examples: "The learner's corrections", none: '(none)' },
+  },
+} as const;
+
+export function placePrompt(input: PlacementInput): ChatMessage[] {
+  const t = PLACE_TEXT[input.lang];
+  const l = t.labels;
+  const examples = input.examples.length ? input.examples.map((e) => `- ${e.text} → ${e.path.join(' › ')}`).join('\n') : l.none;
   return [
-    system(
-      'answer',
-      `You are a concise tutor helping someone who is reading an AI conversation. Answer the question about the quoted sentence in 2–6 sentences of plain Markdown. Explain in the context of the sentence, not as a generic encyclopedia entry. ${SAME_LANGUAGE}`,
-    ),
+    system('place', t.task(input.itemType, !input.map)),
     {
       role: 'user',
       content: [
-        `Sentence I was reading:\n> ${input.quote}`,
-        input.context ? `I was exploring: ${input.context}` : '',
-        `My question: ${input.question}`,
-      ]
-        .filter(Boolean)
-        .join('\n\n'),
+        `${l.note} (${l[input.itemType]}): ${input.text}`,
+        `${l.context}: …${input.before} [NOTE] ${input.after}…`,
+        `${l.map}: ${input.map || l.unnamed}`,
+        `${l.now}: ${input.now || l.none}`,
+        `${l.candidates}:\n${input.candidates.map((c) => `- ${c}`).join('\n') || l.none}`,
+        `${l.outline}:\n${input.outline || l.none}`,
+        `${l.examples}:\n${examples}`,
+      ].join('\n\n'),
     },
   ];
 }
 
-// ---------------------------------------------------------------- recording suggestion
-
-export const SUGGESTION_KINDS = ['concept', 'instance', 'curiosity'] as const;
-export type SuggestionKind = (typeof SUGGESTION_KINDS)[number];
-
-export interface Suggestion {
-  kind: SuggestionKind;
-  titles: string[]; // 3 question-form candidates worth reviewing
-  summary: string; // 1–3 sentence statement to keep
-  concept?: string; // for instances: the concept this is an example of
+/** Only a statement takes the model's sentence; a formula and a protected quote keep their own words. */
+export function parsePlacement(value: unknown, itemType: ItemType, unnamed: boolean): PlacementReply {
+  const o = obj(value);
+  const path = strList(o, 'path');
+  if (path.length < 1 || path.length > MAX_PATH) throw new LlmError(`Expected 1–${MAX_PATH} titles in "path"`);
+  const statement = itemType === 'statement' ? str(o, 'statement') : '';
+  const mapName = unnamed ? str(o, 'mapName') : '';
+  return { path, statement, mapName };
 }
 
-export interface SuggestInput {
-  question: string;
-  quote: string;
-  answer: string;
-  /** Earlier user decisions, used as examples of what this user keeps or drops. */
-  examples: { kind: SuggestionKind; suggested: string; action: 'accept' | 'edit' | 'delete'; final?: string }[];
-}
+// ---------------------------------------------------------------- outline
 
-export function suggestPrompt(input: SuggestInput): ChatMessage[] {
-  const examples = input.examples.length
-    ? `\n\nThis user's earlier decisions on suggestions (follow their taste; never suggest again what they deleted):\n${input.examples
-        .map((e) => `- [${e.kind}] suggested: ${e.suggested} → ${e.action}${e.final ? `: ${e.final}` : ''}`)
-        .join('\n')}`
-    : '';
+/** Chapters, topics and one more level at most: the subject plus three levels. */
+export const OUTLINE_DEPTH = 3;
+const OUTLINE_MAX_NODES = 200;
+
+/** One real outline per language: the model sees what a subject's own outline looks like, not a template. */
+const OUTLINE_EXAMPLE = {
+  zh: '{"outline": [{"title": "极限与连续", "children": [{"title": "数列极限", "children": []}, {"title": "函数极限", "children": []}, {"title": "连续性", "children": []}]}, {"title": "导数与微分", "children": [{"title": "导数的定义", "children": []}, {"title": "求导法则", "children": []}, {"title": "高阶导数", "children": []}]}, {"title": "不定积分", "children": [{"title": "换元积分法", "children": []}, {"title": "分部积分法", "children": []}]}]}（只示意前三章）',
+  en: '{"outline": [{"title": "Limits and continuity", "children": [{"title": "Limits of sequences", "children": []}, {"title": "Limits of functions", "children": []}, {"title": "Continuity", "children": []}]}, {"title": "Derivatives", "children": [{"title": "Definition of the derivative", "children": []}, {"title": "Differentiation rules", "children": []}, {"title": "Higher derivatives", "children": []}]}, {"title": "Integrals", "children": [{"title": "Substitution", "children": []}, {"title": "Integration by parts", "children": []}]}]} (first three chapters only)',
+} as const;
+
+const OUTLINE_TEXT = {
+  zh: {
+    task: (toc: boolean) =>
+      [
+        '你为学习者的一张知识导图铺出这门学科的大纲：章、章下的知识点，知识点下最多再分一层。标题是这门学科里真实的章节和知识点名称：简短的名词，不是问句，不编号，语言与导图名称一致。不要写"概述""简介""总结""应用""方法"这类放在任何学科都成立的空标题。大纲只有结构，不写公式、结论或解释。',
+        toc ? '按学习者粘贴的教材目录来：它的章和节就是大纲，顺序不变，标题缩成名词。' : '按这门学科的标准课程或教材来覆盖：大约 6–12 章，每章 2–8 个知识点。',
+        '学习者已有的知识点放得进去时，用它的原标题。',
+        `例如"高等数学"的大纲开头是：${OUTLINE_EXAMPLE.zh}。`,
+        '只返回 JSON：{"outline": [{"title": "...", "children": [{"title": "...", "children": []}]}]}。',
+      ].join(''),
+    labels: { subject: '导图名称', existing: '已有的知识点', toc: '教材目录', none: '（无）' },
+  },
+  en: {
+    task: (toc: boolean) =>
+      [
+        "You lay out a subject as the outline of a learner's knowledge map: chapters, their topics, and at most one level below a topic. Titles are the subject's real chapter and topic names: short nouns, never questions, no numbering, in the language of the map's name. Never use titles that would fit any subject, such as Overview, Introduction, Summary, Applications or Methods. The outline holds structure only: no formulas, statements or explanations.",
+        toc ? ' Follow the table of contents the learner pasted: its chapters and sections become the outline, in its order, titles shortened to nouns.' : ' Cover the subject as a standard course or textbook does: about 6–12 chapters with 2–8 topics each.',
+        " Where one of the learner's existing sections fits, use its exact title.",
+        ` For example, the outline of "Calculus" begins: ${OUTLINE_EXAMPLE.en}.`,
+        ' Return JSON only: {"outline": [{"title": "...", "children": [{"title": "...", "children": []}]}]}.',
+      ].join(''),
+    labels: { subject: 'Map', existing: 'Existing sections', toc: 'Table of contents', none: '(none)' },
+  },
+} as const;
+
+export function outlinePrompt(input: { lang: PromptLang; subject: string; existing: string[]; toc?: string }): ChatMessage[] {
+  const t = OUTLINE_TEXT[input.lang];
+  const l = t.labels;
   return [
-    system(
-      'suggest',
-      `Decide what, if anything, is worth keeping from a Q&A for later study. Classify the question:
-- "concept": a concept or mechanism. Keep transferable structure (parts, roles, causes), not a literal definition.
-- "instance": a specific example or fact (a model, product, paper). Keep at most that it is an example of a concept; drop fast-changing facts like organizations, dates, capabilities.
-- "curiosity": one-off curiosity (a name's origin, trivia). Suggest not keeping.
-Return JSON only: {"kind": "...", "titles": [three questions worth reviewing, each better than the original question], "summary": "1–3 sentence statement of what to keep", "concept": "only for instance: the concept name"}.
-${SAME_LANGUAGE}${examples}`,
-    ),
-    { role: 'user', content: `Question: ${input.question}\n\nContext sentence:\n> ${input.quote}\n\nAnswer:\n${input.answer}` },
+    system('outline', t.task(!!input.toc)),
+    {
+      role: 'user',
+      content: [`${l.subject}: ${input.subject}`, `${l.existing}:\n${input.existing.map((e) => `- ${e}`).join('\n') || l.none}`, ...(input.toc ? [`${l.toc}:\n${input.toc}`] : [])].join('\n\n'),
+    },
   ];
 }
 
-export function parseSuggestion(value: unknown): Suggestion {
+/** Titles that fit any subject: an outline made of them is a template, not this subject's. */
+const GENERIC_TITLES = new Set(
+  'overview introduction scope history terminology landscape foundations principles concepts models frameworks core topics structure processes relationships variations methods inquiry analysis design measurement applications cases practice summary conclusion basics advanced topics 概述 简介 引言 绪论 总结 小结 应用 方法 基础 概念 原理 框架 实践 案例 历史 术语'
+    .split(' ')
+    .concat(['core topics', 'advanced topics']),
+);
+const hasCjk = (s: string) => /[㐀-鿿]/.test(s);
+
+/**
+ * A usable outline: at most a quarter of its titles generic, and its titles in the
+ * script of the map's name (a Chinese name takes Chinese titles, a Latin one Latin).
+ */
+function checkOutline(outline: OutlineNode[], subject: string): void {
+  const titles: string[] = [];
+  const walk = (ns: OutlineNode[]) => ns.forEach((n) => (titles.push(n.title), walk(n.children)));
+  walk(outline);
+  const generic = titles.filter((t) => GENERIC_TITLES.has(t.trim().toLowerCase()));
+  if (generic.length * 4 > titles.length) throw new LlmError(`The outline is a generic template (${generic.slice(0, 4).join(', ')}), not this subject's`);
+  const cjk = titles.filter(hasCjk).length;
+  const wantCjk = hasCjk(subject);
+  if (wantCjk ? cjk * 2 < titles.length : cjk * 2 > titles.length) throw new LlmError(`The outline's titles are not in the language of "${subject}"`);
+}
+
+export function parseOutline(value: unknown, subject: string): OutlineNode[] {
+  let count = 0;
+  const nodes = (list: unknown, depth: number): OutlineNode[] => {
+    if (!Array.isArray(list)) throw new LlmError('Expected a list of outline nodes');
+    if (depth > OUTLINE_DEPTH && list.length) throw new LlmError(`The outline is deeper than ${OUTLINE_DEPTH} levels`);
+    return list.map((item) => {
+      const o = obj(item);
+      if (++count > OUTLINE_MAX_NODES) throw new LlmError(`The outline has more than ${OUTLINE_MAX_NODES} nodes`);
+      return { title: str(o, 'title'), children: o.children === undefined ? [] : nodes(o.children, depth + 1) };
+    });
+  };
+  const outline = nodes(obj(value).outline, 1);
+  if (!outline.length) throw new LlmError('The outline is empty');
+  checkOutline(outline, subject);
+  return outline;
+}
+
+// ---------------------------------------------------------------- asking about a selection (the floating window)
+
+export interface AskTurn {
+  question: string;
+  answer: string;
+}
+
+export interface AskInput {
+  lang: PromptLang;
+  selection: string; // what the learner selected, as Markdown
+  before: string; // the conversation just around it
+  after: string;
+  pageTitle: string;
+  turns: AskTurn[]; // earlier questions in this window, with their answers
+  question: string;
+}
+
+const ASK_TEXT = {
+  zh: {
+    task: '学习者在和 AI 的对话里选中了一段内容，就它提一个小问题。像一位耐心的老师那样，围绕选中的内容直接回答：先给结论，再用一两句解释为什么，一般 2–6 句，不要客套，不要标题。公式写成 $...$（单独成行的写成 $$...$$）。学习者追问时接着前面的回答说。用中文回答。',
+    selected: '选中的内容',
+    context: '上下文',
+    page: '页面',
+  },
+  en: {
+    task: 'A learner selected a passage in a conversation with an AI and asks a short question about it. Answer like a patient teacher, about the selection: the answer first, then a sentence or two on why; usually 2–6 sentences, no pleasantries, no headings. Write formulas as $...$ (a displayed one as $$...$$). When the learner follows up, build on your earlier answers. Answer in English.',
+    selected: 'Selected',
+    context: 'Context',
+    page: 'Page',
+  },
+} as const;
+
+/** The selection and its context go first; then each question of this window, with the answers given so far. */
+export function askPrompt(input: AskInput): ChatMessage[] {
+  const t = ASK_TEXT[input.lang];
+  const intro = [`${t.selected}:\n${input.selection}`, `${t.context}: …${input.before.trim()} [SELECTED] ${input.after.trim()}…`, `${t.page}: ${input.pageTitle}`].join('\n\n');
+  const turns = [...input.turns, { question: input.question, answer: '' }];
+  return [
+    system('ask', t.task),
+    ...turns.flatMap((turn, i): ChatMessage[] => [
+      { role: 'user', content: i === 0 ? `${intro}\n\n${turn.question}` : turn.question },
+      ...(turn.answer ? [{ role: 'assistant' as const, content: turn.answer }] : []),
+    ]),
+  ];
+}
+
+// ---------------------------------------------------------------- is the learner stuck? (every 5 new questions in a map)
+
+export const STUCK_KINDS = ['circling', 'stuck', 'offTarget', 'phrasing'] as const satisfies readonly StuckKind[];
+
+export interface StuckInput {
+  lang: PromptLang;
+  map: string; // the map's name, '' when unnamed
+  asks: { text: string; conversation: string; window: boolean }[]; // oldest first; `conversation` tells conversations apart
+  sections: string[]; // the map's topics, "chapter › topic"
+}
+
+export type StuckReply =
+  | { stuck: false }
+  | { stuck: true; kind: StuckKind; section: number; explanation: string; question: string; evidence: number[] }; // section: 0-based, -1 for none; evidence: 0-based
+
+const STUCK_TEXT = {
+  zh: {
+    task: [
+      '你在旁边看一位学习者向 AI 提问，帮他发现自己是不是卡住了。下面是他在一张知识导图里最近的提问（按时间编号，按对话分段，“浮窗”是他针对页面上选中内容问的），后面是这张导图里的知识点（编号）。',
+      '判断这些提问是否显出下面一种情况：circling（同一个点换着说法反复问，一直没弄懂）；stuck（被前面某个没弄懂的知识点挡住，后面的问题都绕不过去）；offTarget（问的和他真正不懂的地方不是一回事，问不到点子上）；phrasing（不会组织问题，问得含糊、宽泛，得不到有用的回答）。一步步往下学、每个问题都有进展，就是没有卡住；拿不准时也算没有卡住。',
+      '卡住时："kind" 是上面四个词之一（提问里没有具体内容、只有“这个”“还是不懂”时是 phrasing）；"section" 是提问里真正提到的知识点编号，提问没提到任何知识点时填 0，不要猜；"explanation" 最多三句短句（共约 80 字），温和地说：这些问题显出了什么、可能卡在哪一步、先弄清什么；只说问题，不评价他本人（不说“你没懂”“没吃透”），不写提问编号，不打分；"question" 是一个他可以直接发给 AI 的更好的问法，具体、能回答，只用他问过的内容，不编造他没提过的主题；看不出具体主题时，写成带〔…〕空位的句式让他自己填；"evidence" 是体现这一点的提问编号。',
+      '只返回 JSON：卡住时 {"stuck": true, "kind": "...", "section": 0, "explanation": "...", "question": "...", "evidence": [1]}，没有卡住时 {"stuck": false}。用中文写。',
+    ].join(''),
+    map: '导图',
+    unnamed: '（未命名）',
+    asks: '提问',
+    conversation: (n: number) => `对话 ${n}`,
+    window: '（浮窗）',
+    sections: '知识点',
+    none: '（无）',
+  },
+  en: {
+    task: [
+      "You watch over a learner's questions to an AI and help them notice when they are stuck. Below are their latest questions in one knowledge map (numbered in order, grouped by conversation; \"window\" marks a question about something they selected on the page), then the map's topics (numbered).",
+      ' Decide whether the questions show one of these: circling (asking about the same point again and again in other words, never getting it); stuck (held up by an earlier topic they have not understood, so the later questions cannot get past it); offTarget (asking about something other than what they actually do not understand); phrasing (questions too vague or broad to get a useful answer). Moving on step by step with each question making progress is not stuck; when unsure, it is not stuck.',
+      ' When stuck: "kind" is one of the four words above (questions with no content, only "this" or "still don\'t get it", are phrasing); "section" is the number of a topic the questions actually mention, 0 when they mention none; never guess; "explanation" is at most three short sentences (about 50 words in all) saying gently what the questions show, which step may be holding them up and what to get clear first; talk about the questions, never about the person ("you don\'t understand"), no question numbers, no scores; "question" is a better question they can send to the AI as it is, concrete and answerable, built only from what they asked and never inventing a topic they did not mention; when no topic is clear, write it as a pattern with [...] blanks for them to fill in; "evidence" lists the numbers of the questions that show it.',
+      ' Return JSON only: when stuck {"stuck": true, "kind": "...", "section": 0, "explanation": "...", "question": "...", "evidence": [1]}, otherwise {"stuck": false}. Write in English.',
+    ].join(''),
+    map: 'Map',
+    unnamed: '(unnamed)',
+    asks: 'Questions',
+    conversation: (n: number) => `Conversation ${n}`,
+    window: ' (window)',
+    sections: 'Topics',
+    none: '(none)',
+  },
+} as const;
+
+export function stuckPrompt(input: StuckInput): ChatMessage[] {
+  const t = STUCK_TEXT[input.lang];
+  const lines: string[] = [];
+  let conversation: string | undefined;
+  let n = 0;
+  input.asks.forEach((a, i) => {
+    if (a.conversation !== conversation) {
+      conversation = a.conversation;
+      lines.push(`${t.conversation(++n)}`);
+    }
+    lines.push(`[${i + 1}] ${a.text.replace(/\s+/g, ' ').trim()}${a.window ? t.window : ''}`);
+  });
+  const sections = input.sections.map((s, i) => `[${i + 1}] ${s}`).join('\n') || t.none;
+  return [
+    system('stuck', t.task),
+    { role: 'user', content: `${t.map}: ${input.map || t.unnamed}\n\n${t.asks}:\n${lines.join('\n')}\n\n${t.sections}:\n${sections}` },
+  ];
+}
+
+const number = (v: unknown, min: number, max: number, what: string): number => {
+  if (typeof v !== 'number' || !Number.isInteger(v) || v < min || v > max) throw new LlmError(`Unexpected ${what} ${String(v)}`);
+  return v;
+};
+
+export function parseStuck(value: unknown, askCount: number, sectionCount: number): StuckReply {
   const o = obj(value);
-  const kind = oneOf(o, 'kind', SUGGESTION_KINDS);
+  if (typeof o.stuck !== 'boolean') throw new LlmError('Expected boolean "stuck"');
+  if (!o.stuck) return { stuck: false };
+  const evidence = o.evidence;
+  if (!Array.isArray(evidence) || !evidence.length) throw new LlmError('Expected a non-empty "evidence" list');
   return {
-    kind,
-    titles: strList(o, 'titles', 3),
-    summary: str(o, 'summary'),
-    ...(kind === 'instance' ? { concept: str(o, 'concept') } : {}),
+    stuck: true,
+    kind: oneOf(o, 'kind', STUCK_KINDS),
+    section: number(o.section, 0, sectionCount, 'section') - 1,
+    explanation: str(o, 'explanation'),
+    question: str(o, 'question'),
+    evidence: [...new Set(evidence.map((e) => number(e, 1, askCount, 'question number') - 1))].sort((x, y) => x - y),
   };
 }
 
-// ---------------------------------------------------------------- distill
+// ---------------------------------------------------------------- a written report on a map's questions (only when asked)
 
-export interface Distillation {
-  titles: string[];
-  summary: string;
+export interface ReportInput {
+  lang: PromptLang;
+  map: string;
+  today: string; // "2026-11-06"
+  outline: string[]; // "chapter › topic (3 notes)", in map order
+  asks: { when: string; where: string; text: string; conversation: string }[]; // oldest first
+  stuck: { when: string; kind: StuckKind; topic: string }[]; // what the checks noticed, oldest first
 }
 
-export function distillPrompt(markdown: string): ChatMessage[] {
-  return [
-    system(
-      'distill',
-      `Distill a passage the user saved. Return JSON only: {"titles": [three questions this passage answers, each worth reviewing later], "summary": "1–3 sentence statement of the transferable point"}. Keep formulas in LaTeX. ${SAME_LANGUAGE}`,
-    ),
-    { role: 'user', content: markdown },
-  ];
-}
+const REPORT_TEXT = {
+  zh: {
+    task: [
+      '你根据一位学习者在一张知识导图里提过的问题，为他写一份分析报告。用 Markdown（可以用少量简单 HTML），以文字分析为主，300–600 字：最多四个小节，每节一两段，宁短勿长；用“你”称呼他，语气温和、直接。页面已经显示了标题，开头不要写标题，小标题用 ### 。',
+      '可以写这些方面，按材料取舍，不必每项都写，也不必用固定标题：他最近在问什么、从问题里看出哪些已经理解了、哪些还没落地（引用一两个他的原话作依据）；他的提问习惯，以及每个习惯的一个具体改法；接下来先学什么、怎么安排。',
+      '只写问题里看得出来的结论，材料少就直说看不出来。评价的是问题，不是人：不说“你笨”“没吃透”“基础差”这类话。不打分，不写百分比或掌握程度，不画能力地图，不做表格评级，不出题。公式写成 $...$。只返回报告正文。',
+    ].join(''),
+    map: '导图',
+    unnamed: '（未命名）',
+    today: '今天',
+    outline: '导图结构',
+    asks: '提问（按时间，按对话分段）',
+    conversation: (n: number) => `对话 ${n}`,
+    stuck: '之前的检查注意到',
+    kinds: { circling: '绕圈子', stuck: '被前面的知识点挡住', offTarget: '问不到点子上', phrasing: '问题不好组织' },
+    none: '（无）',
+  },
+  en: {
+    task: [
+      "Write an analysis report for a learner, based on the questions they asked in one knowledge map. Use Markdown (a little simple HTML is fine), mostly prose, 200–400 words: at most four short sections of one or two paragraphs each, shorter rather than longer; address them as \"you\", warm and direct. The page already shows a title: do not start with one; use ### for any subheadings.",
+      ' You may cover, as the material allows and without fixed headings: what they have been asking about lately; what the questions show they already understand and what has not landed yet (quote one or two of their own questions as evidence); their questioning habits, each with one concrete way to improve; what to learn next and how to go about it.',
+      ' Only state what the questions show; when there is too little to tell, say so. Judge the questions, never the person (no "you are slow", "weak basics"). No scores, no percentages or mastery levels, no ability maps, no rating tables, no quiz questions. Write formulas as $...$. Return the report text only.',
+    ].join(''),
+    map: 'Map',
+    unnamed: '(unnamed)',
+    today: 'Today',
+    outline: "The map's outline",
+    asks: 'Questions (in order, grouped by conversation)',
+    conversation: (n: number) => `Conversation ${n}`,
+    stuck: 'Earlier checks noticed',
+    kinds: { circling: 'going in circles', stuck: 'held up by an earlier topic', offTarget: 'asking off target', phrasing: 'struggling to phrase the question' },
+    none: '(none)',
+  },
+} as const;
 
-export function parseDistillation(value: unknown): Distillation {
-  const o = obj(value);
-  return { titles: strList(o, 'titles', 3), summary: str(o, 'summary') };
-}
-
-// ---------------------------------------------------------------- judge (quiz me)
-
-export const VERDICTS = ['pass', 'partial', 'fail'] as const;
-
-export interface Judgement {
-  verdict: (typeof VERDICTS)[number];
-  feedback: string;
-}
-
-export function judgePrompt(input: { question: string; expected: string; answer: string }): ChatMessage[] {
-  return [
-    system(
-      'judge',
-      `You check a learner's recall. Compare their answer with the expected answer on meaning, not wording. "pass": the key points are there and correct. "partial": some key points missing or vague. "fail": wrong or mostly missing. Return JSON only: {"verdict": "pass" | "partial" | "fail", "feedback": "one or two sentences naming what was missing or wrong"}. ${SAME_LANGUAGE}`,
-    ),
-    { role: 'user', content: `Question: ${input.question}\n\nExpected answer:\n${input.expected}\n\nLearner's answer:\n${input.answer}` },
-  ];
-}
-
-export function parseJudgement(value: unknown): Judgement {
-  const o = obj(value);
-  return { verdict: oneOf(o, 'verdict', VERDICTS), feedback: str(o, 'feedback') };
-}
-
-// ---------------------------------------------------------------- apply (use it to solve a problem)
-
-export function problemPrompt(input: { question: string; statement: string }): ChatMessage[] {
-  return [
-    system(
-      'problem',
-      `Write one short problem (2–4 sentences) that the learner can only solve by using the knowledge below: a concrete situation, case or small calculation, not a request to restate the knowledge. Do not include the answer or hints. Reply with the problem only, in plain Markdown, formulas in LaTeX. ${SAME_LANGUAGE}`,
-    ),
-    { role: 'user', content: `Knowledge question: ${input.question}\n\nKnowledge:\n${input.statement}` },
-  ];
-}
-
-export function applyJudgePrompt(input: { problem: string; statement: string; answer: string }): ChatMessage[] {
-  return [
-    system(
-      'judgeApply',
-      `You check whether a learner used a piece of knowledge correctly to solve a problem. "pass": the solution is correct and uses the knowledge. "partial": on the right track but incomplete or with a slip. "fail": wrong, or the knowledge is not used. Return JSON only: {"verdict": "pass" | "partial" | "fail", "feedback": "one or two sentences: what was right, what was missing or wrong"}. ${SAME_LANGUAGE}`,
-    ),
-    { role: 'user', content: `Problem:\n${input.problem}\n\nKnowledge it needs:\n${input.statement}\n\nLearner's solution:\n${input.answer}` },
-  ];
-}
-
-// ---------------------------------------------------------------- explain it to me
-
-export interface PointCheck {
-  verdict: (typeof VERDICTS)[number];
-  feedback: string;
-}
-
-export interface ExplanationCheck {
-  feedback: string;
-  points: PointCheck[]; // one per point, in the order given
-}
-
-export function explainPrompt(input: { topic: string; points: { title: string; statement: string }[]; explanation: string }): ChatMessage[] {
-  return [
-    system(
-      'explain',
-      `A learner explains a topic in their own words, as if teaching it. Check the explanation against each numbered point. "pass": the point is explained correctly. "partial": touched on but incomplete or vague. "fail": missing or wrong. Judge meaning, not wording; do not require the points' exact phrasing. Return JSON only: {"feedback": "two or three sentences on the explanation as a whole", "points": [{"point": 1, "verdict": "pass" | "partial" | "fail", "feedback": "one sentence: what was missing or wrong, or what was good"}]} with every point exactly once. ${SAME_LANGUAGE}`,
-    ),
-    {
-      role: 'user',
-      content: `Topic: ${input.topic}\n\nPoints to cover:\n${input.points.map((p, i) => `[${i + 1}] ${p.title} — ${p.statement}`).join('\n')}\n\nExplanation:\n${input.explanation}`,
-    },
-  ];
-}
-
-export function parseExplanationCheck(value: unknown, pointCount: number): ExplanationCheck {
-  const o = obj(value);
-  const list = o.points;
-  if (!Array.isArray(list)) throw new LlmError('Expected "points" to be a list');
-  const byPoint = new Map<number, PointCheck>();
-  for (const item of list) {
-    const p = obj(item);
-    const n = p.point;
-    if (typeof n !== 'number' || n < 1 || n > pointCount || byPoint.has(n)) throw new LlmError(`Unexpected point ${String(n)}`);
-    byPoint.set(n, { verdict: oneOf(p, 'verdict', VERDICTS), feedback: str(p, 'feedback') });
+export function reportPrompt(input: ReportInput): ChatMessage[] {
+  const t = REPORT_TEXT[input.lang];
+  const lines: string[] = [];
+  let conversation: string | undefined;
+  let n = 0;
+  for (const a of input.asks) {
+    if (a.conversation !== conversation) {
+      conversation = a.conversation;
+      lines.push(t.conversation(++n));
+    }
+    lines.push(`- [${a.when} · ${a.where}] ${a.text.replace(/\s+/g, ' ').trim()}`);
   }
-  if (byPoint.size !== pointCount) throw new LlmError(`Expected ${pointCount} points, got ${byPoint.size}`);
-  return { feedback: str(o, 'feedback'), points: Array.from({ length: pointCount }, (_, i) => byPoint.get(i + 1)!) };
-}
-
-// ---------------------------------------------------------------- one-minute script
-
-export function oneMinutePrompt(input: { topic: string; points: { title: string; statement: string }[] }): ChatMessage[] {
+  const stuck = input.stuck.map((x) => `- ${x.when}: ${t.kinds[x.kind]}${x.topic ? ` (${x.topic})` : ''}`).join('\n') || t.none;
   return [
-    system(
-      'oneMinute',
-      `Write a script the learner can say out loud in about one minute (about 150 English words, or about 250 Chinese characters) that explains the topic using the points below. Start with the core answer in one sentence, then the key points in a natural order, and end with one sentence on when it applies or its limits. Plain spoken sentences: no headings, no lists, no Markdown. Do not add facts beyond the points. ${SAME_LANGUAGE}`,
-    ),
-    { role: 'user', content: `Topic: ${input.topic}\n\nPoints:\n${input.points.map((p) => `- ${p.title} — ${p.statement}`).join('\n')}` },
-  ];
-}
-
-// ---------------------------------------------------------------- concept tags (learning diagnosis)
-
-export interface AskTagging {
-  domain: string; // empty when the question has no concepts
-  concepts: string[];
-}
-
-export function tagPrompt(input: { asks: string[]; known: { domain: string; names: string[] }[] }): ChatMessage[] {
-  const known = input.known.length ? input.known.map((d) => `${d.domain}: ${d.names.join('; ')}`).join('\n') : '(none yet)';
-  return [
-    system(
-      'tag',
-      `A learner asked an AI the numbered questions below. For each, name the knowledge domain (such as "Linear algebra" or "Matrix calculus") and the 1–3 specific concepts it is about (such as "Transpose properties" or "Order of matrix multiplication"): teachable units, not the whole domain and not the exercise itself. Reuse a known concept or domain name exactly when it fits; otherwise give a short new name at the same granularity. A question that is not about learnable knowledge (chit-chat, formatting or writing requests) gets "domain": "" and no concepts. Return JSON only: {"tags": [{"ask": 1, "domain": "...", "concepts": ["..."]}]} with every question exactly once. Names in the language of the questions.\n\nKnown concepts by domain:\n${known}`,
-    ),
-    { role: 'user', content: input.asks.map((a, i) => `[${i + 1}] ${a}`).join('\n') },
-  ];
-}
-
-export function parseTags(value: unknown, askCount: number): AskTagging[] {
-  const list = obj(value).tags;
-  if (!Array.isArray(list)) throw new LlmError('Expected "tags" to be a list');
-  const byAsk = new Map<number, AskTagging>();
-  for (const item of list) {
-    const t = obj(item);
-    const n = t.ask;
-    if (typeof n !== 'number' || n < 1 || n > askCount || byAsk.has(n)) throw new LlmError(`Unexpected ask ${String(n)}`);
-    const concepts = Array.isArray(t.concepts) && t.concepts.length === 0 ? [] : strList(t, 'concepts');
-    byAsk.set(n, { domain: concepts.length ? str(t, 'domain') : '', concepts });
-  }
-  if (byAsk.size !== askCount) throw new LlmError(`Expected ${askCount} tagged questions, got ${byAsk.size}`);
-  return Array.from({ length: askCount }, (_, i) => byAsk.get(i + 1)!);
-}
-
-// ---------------------------------------------------------------- prerequisite graph
-
-export interface GraphAddition {
-  concepts: string[];
-  edges: { from: string; to: string }[];
-}
-
-export function prereqPrompt(input: { domain: string; existing: string[]; existingEdges: { from: string; to: string }[]; required: string[] }): ChatMessage[] {
-  const isNew = input.existing.length === 0;
-  return [
-    system(
-      'prereq',
-      `You build the prerequisite graph of a knowledge domain, used to find the foundations a learner is missing. Concepts are specific, teachable units. An edge {"from": A, "to": B} means A must be understood before B. ${
-        isNew
-          ? 'This is a new domain: give its core concepts from the foundations up (about 10–30 in total), including every required concept by its exact name.'
-          : 'Extend the existing graph: add every required concept by its exact name, plus only the missing prerequisites that connect them to the existing concepts.'
-      } Refer to existing concepts by their exact names. No cycles. Return JSON only: {"concepts": ["names of the concepts you add"], "edges": [{"from": "...", "to": "..."}]}. Names in the language of the required concepts.`,
-    ),
+    system('report', t.task),
     {
       role: 'user',
       content: [
-        `Domain: ${input.domain}`,
-        isNew ? '' : `Existing concepts: ${input.existing.join('; ')}`,
-        isNew || !input.existingEdges.length ? '' : `Existing edges:\n${input.existingEdges.map((e) => `${e.from} -> ${e.to}`).join('\n')}`,
-        `Required concepts: ${input.required.join('; ')}`,
-      ]
-        .filter(Boolean)
-        .join('\n\n'),
+        `${t.map}: ${input.map || t.unnamed}`,
+        `${t.today}: ${input.today}`,
+        `${t.outline}:\n${input.outline.join('\n') || t.none}`,
+        `${t.asks}:\n${lines.join('\n')}`,
+        `${t.stuck}:\n${stuck}`,
+      ].join('\n\n'),
     },
   ];
 }
 
-/** Validates a graph addition: every required concept is present, every edge joins known concepts. Cycles are checked by the caller on the merged graph. */
-export function parseGraphAddition(value: unknown, existing: string[], required: string[], key: (name: string) => string): GraphAddition {
-  const o = obj(value);
-  const concepts = Array.isArray(o.concepts) && o.concepts.length === 0 ? [] : strList(o, 'concepts');
-  if (!Array.isArray(o.edges)) throw new LlmError('Expected "edges" to be a list');
-  const known = new Set([...existing, ...concepts].map(key));
-  const edges = o.edges.map((e) => {
-    const x = obj(e);
-    const edge = { from: str(x, 'from'), to: str(x, 'to') };
-    for (const end of [edge.from, edge.to]) if (!known.has(key(end))) throw new LlmError(`Edge names an unknown concept "${end}"`);
-    if (key(edge.from) === key(edge.to)) throw new LlmError(`"${edge.from}" cannot be its own prerequisite`);
-    return edge;
-  });
-  for (const r of required) if (!known.has(key(r))) throw new LlmError(`Graph is missing the required concept "${r}"`);
-  return { concepts, edges };
-}
-
-// ---------------------------------------------------------------- circling: the concept behind a run of questions
-
-export function circlingPrompt(input: { asks: string[]; known: { domain: string; names: string[] }[] }): ChatMessage[] {
-  const known = input.known.length ? input.known.map((d) => `${d.domain}: ${d.names.join('; ')}`).join('\n') : '(none yet)';
-  return [
-    system(
-      'circling',
-      `A learner asked these questions one after another in one conversation, rephrasing without getting unstuck. Answered one by one each looks fine; looked at together they may share one more fundamental concept which, once understood, resolves all of them (for example, layout conventions behind confusion about transposes and dimensions in matrix derivatives). Name that concept as a teachable unit, with its domain; reuse a known name exactly when it fits. If there is no single underlying concept, return an empty concept. Return JSON only: {"domain": "...", "concept": "..."}. Names in the language of the questions.\n\nKnown concepts by domain:\n${known}`,
-    ),
-    { role: 'user', content: input.asks.map((a, i) => `[${i + 1}] ${a}`).join('\n') },
-  ];
-}
-
-export function parseCircling(value: unknown): { domain: string; concept: string } | null {
-  const o = obj(value);
-  if (typeof o.concept === 'string' && !o.concept.trim()) return null;
-  return { domain: str(o, 'domain'), concept: str(o, 'concept') };
-}
-
-// ---------------------------------------------------------------- diagnosis: confirm with a quiz, then a systematic review
-
-export interface DiagnosisContext {
-  domain: string;
-  concept: string;
-  prerequisites: string[]; // what the concept rests on, foundations first
-  evidence: string[]; // the learner's own questions
-}
-
-const contextText = (c: DiagnosisContext) =>
-  [
-    `Domain: ${c.domain}`,
-    `Concept: ${c.concept}`,
-    c.prerequisites.length ? `It rests on: ${c.prerequisites.join('; ')}` : '',
-    `The learner's own questions:\n${c.evidence.map((e) => `- ${e}`).join('\n')}`,
-  ]
-    .filter(Boolean)
-    .join('\n\n');
-
-export function diagnosisQuizPrompt(input: DiagnosisContext): ChatMessage[] {
-  return [
-    system(
-      'diagnosisQuiz',
-      `From a learner's questions we suspect a gap in one concept. Write 3 to 5 short questions that check that concept itself (not the learner's original problems): each answerable in a sentence or a small calculation, together about two minutes. Give the expected answer for each. Return JSON only: {"items": [{"question": "...", "expected": "..."}]}. Formulas in LaTeX. Same language as the learner's questions.`,
-    ),
-    { role: 'user', content: contextText(input) },
-  ];
-}
-
-export function parseDiagnosisQuiz(value: unknown): { question: string; expected: string }[] {
-  const items = obj(value).items;
-  if (!Array.isArray(items) || items.length < 3 || items.length > 5) throw new LlmError('Expected 3 to 5 quiz items');
-  return items.map((i) => {
-    const o = obj(i);
-    return { question: str(o, 'question'), expected: str(o, 'expected') };
-  });
-}
-
-export function diagnosisJudgePrompt(input: { concept: string; items: { question: string; expected: string }[]; answers: string[] }): ChatMessage[] {
-  return [
-    system(
-      'diagnosisJudge',
-      `Check a learner's answers to a short quiz on one concept. Judge each on meaning, not wording. "pass": correct. "partial": partly right. "fail": wrong or empty. Return JSON only: {"results": [{"item": 1, "verdict": "pass" | "partial" | "fail", "feedback": "one sentence"}]} with every item exactly once. Same language as the questions.`,
-    ),
-    {
-      role: 'user',
-      content: `Concept: ${input.concept}\n\n${input.items
-        .map((it, i) => `[${i + 1}] Question: ${it.question}\nExpected: ${it.expected}\nAnswer: ${input.answers[i] ?? ''}`)
-        .join('\n\n')}`,
-    },
-  ];
-}
-
-export function parseDiagnosisJudgement(value: unknown, count: number): PointCheck[] {
-  const list = obj(value).results;
-  if (!Array.isArray(list)) throw new LlmError('Expected "results" to be a list');
-  const byItem = new Map<number, PointCheck>();
-  for (const r of list) {
-    const o = obj(r);
-    const n = o.item;
-    if (typeof n !== 'number' || n < 1 || n > count || byItem.has(n)) throw new LlmError(`Unexpected item ${String(n)}`);
-    byItem.set(n, { verdict: oneOf(o, 'verdict', VERDICTS), feedback: str(o, 'feedback') });
-  }
-  if (byItem.size !== count) throw new LlmError(`Expected ${count} results, got ${byItem.size}`);
-  return Array.from({ length: count }, (_, i) => byItem.get(i + 1)!);
-}
-
-export function systematicReviewPrompt(input: DiagnosisContext): ChatMessage[] {
-  return [
-    system(
-      'review',
-      `A learner keeps asking scattered questions that all come from not having one concept straight. Instead of answering them one by one, lay out a systematic review of that concept as 3 to 8 cards, ordered from the most basic idea up to the concept itself, so that the learner's questions answer themselves along the way. Each card: a question worth reviewing and a 1–3 sentence statement answering it. Return JSON only: {"cards": [{"question": "...", "summary": "..."}]}. Formulas in LaTeX. Same language as the learner's questions.`,
-    ),
-    { role: 'user', content: contextText(input) },
-  ];
-}
-
-export function parseReviewCards(value: unknown): { question: string; summary: string }[] {
-  const cards = obj(value).cards;
-  if (!Array.isArray(cards) || cards.length < 1) throw new LlmError('Expected "cards" to be a non-empty list');
-  return cards.map((c) => {
-    const o = obj(c);
-    return { question: str(o, 'question'), summary: str(o, 'summary') };
-  });
-}
-
-// ---------------------------------------------------------------- organize (whole page / paste)
-
-export interface CandidateCard {
-  question: string;
-  summary: string;
-  quote: string; // verbatim excerpt from the text, used as provenance
-}
-
-export const MAX_CANDIDATES = 12;
-
-export function organizePrompt(text: string): ChatMessage[] {
-  return [
-    system(
-      'organize',
-      `The user gives you an AI conversation (or part of one) as text. Split it into question-and-answer turns, then propose cards worth keeping for later study: transferable concepts, mechanisms and conclusions, not filler, not fast-changing facts. At most ${MAX_CANDIDATES} cards; zero is fine. Return JSON only: {"cards": [{"question": "a question worth reviewing", "summary": "1–3 sentence statement answering it", "quote": "a short excerpt copied verbatim from the text that supports it"}]}. Keep formulas in LaTeX. ${SAME_LANGUAGE}`,
-    ),
-    { role: 'user', content: text },
-  ];
-}
-
-export function parseCandidates(value: unknown): CandidateCard[] {
-  const cards = obj(value).cards;
-  if (!Array.isArray(cards)) throw new LlmError('Expected "cards" to be a list');
-  return cards.map((c) => {
-    const o = obj(c);
-    return { question: str(o, 'question'), summary: str(o, 'summary'), quote: str(o, 'quote') };
-  });
+/** The report as written; a reply wrapped in a code fence is unwrapped. An empty one is an error. */
+export function parseReport(reply: string): string {
+  const text = reply.replace(/^```(?:markdown|md)?\s*\n([\s\S]*?)\n```\s*$/i, '$1').trim();
+  if (!text) throw new LlmError('The model returned an empty report');
+  return text;
 }

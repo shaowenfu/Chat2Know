@@ -1,0 +1,7 @@
+[
+  { "subject": "高等数学", "expected": ["极限", "导数", "积分", "级数"] },
+  { "subject": "线性代数", "expected": ["矩阵", "行列式", "特征值", "向量空间"] },
+  { "subject": "深度学习", "expected": ["神经网络", "优化", "卷积", "注意力"] },
+  { "subject": "概率论", "expected": ["随机变量", "分布", "期望", "大数定律"] },
+  { "subject": "Linear algebra", "expected": ["matri", "determinant", "eigen", "vector space"] }
+]

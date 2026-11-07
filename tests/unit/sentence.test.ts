@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { sentenceRange } from '@/src/capture/sentence';
-import { prepareAskDraft } from '@/src/capture/ask';
 
 function select(text: Node, start: number, end: number): Range {
   const r = document.createRange();
@@ -40,27 +39,5 @@ describe('sentenceRange', () => {
     r.setStart(document.getElementById('a')!.firstChild!, 5);
     r.setEnd(document.getElementById('b')!.firstChild!, 3);
     expect(sentenceRange(r)).toBe(r);
-  });
-});
-
-describe('prepareAskDraft', () => {
-  it('captures the term, its sentence and the anchor', () => {
-    document.title = 'Chat';
-    document.body.innerHTML = '<p>Intro here. Softmax turns scores into weights. Then sum.</p>';
-    const t = document.querySelector('p')!.firstChild!;
-    const at = t.textContent!.indexOf('Softmax');
-    const sel = document.getSelection()!;
-    sel.removeAllRanges();
-    sel.addRange(select(t, at, at + 7));
-    const draft = prepareAskDraft(document, 'https://x.dev/c')!;
-    expect(draft.term).toBe('Softmax');
-    expect(draft.capture.quote.exact).toBe('Softmax turns scores into weights.');
-    expect(draft.capture.markdown).toBe('Softmax turns scores into weights.');
-    expect(draft.capture.url).toBe('https://x.dev/c');
-  });
-
-  it('returns null without a selection', () => {
-    document.getSelection()!.removeAllRanges();
-    expect(prepareAskDraft(document, 'https://x.dev')).toBeNull();
   });
 });

@@ -1,0 +1,585 @@
+<!doctype html>
+<html lang="zh-CN" data-lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chat2Know · 和 AI 聊着学，一键记进知识导图</title>
+<meta name="description" content="Chat2Know 是一个浏览器插件：和 AI 聊天学习时，选中一段，一下记进你的知识导图，放到哪由它来定；你在一个地方绕圈子时，它在侧栏轻声提醒。免费开源，数据只在你的浏览器里。">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Chat2Know · 和 AI 聊着学，一键记进知识导图">
+<meta property="og:description" content="选中 AI 回答里的一段，一下记进知识导图；卡住时，侧栏轻声提醒。免费开源，本地优先，自带模型。">
+<meta property="og:url" content="https://shaowenfu.github.io/Chat2Know/">
+<meta property="og:image" content="https://shaowenfu.github.io/Chat2Know/og.png">
+<link rel="canonical" href="https://shaowenfu.github.io/Chat2Know/">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" type="image/png" sizes="32x32" href="icon-32.png">
+<link rel="apple-touch-icon" href="icon-128.png">
+<style>
+:root {
+  --bg: #fafaf8;
+  --bg-soft: #f4f3ef;
+  --surface: #ffffff;
+  --ink: #1b1b19;
+  --ink-2: #3a3935;
+  --muted: #5f5e58;
+  --grey: #8f8c82;
+  --line: #e3e1da;
+  --line-strong: #d6d3ca;
+  --branch: #c9c6bc;
+  --accent: #2b57d9;
+  --accent-ink: #1e3fa3;
+  --accent-soft: #eaf0ff;
+  --highlight: #cfe0ff;
+  --quote: #7a4fb5;
+  --stuck: #b4480f;
+  --stuck-ink: #8a3409;
+  --stuck-soft: #fcebdd;
+  --sans: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans SC', 'Segoe UI', system-ui, sans-serif;
+  --serif: 'Songti SC', 'STSong', 'Noto Serif SC', 'SimSun', Georgia, serif;
+  --mono: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--sans); font-size: 16px; line-height: 1.7; }
+a { color: var(--accent); }
+a:hover { color: var(--accent-ink); }
+img { display: block; }
+
+/* One language at a time: every text exists in both. */
+html[data-lang="zh"] .en, html[data-lang="en"] .zh { display: none !important; }
+
+.wrap { width: 100%; max-width: 1120px; margin: 0 auto; padding: 0 24px; }
+@media (max-width: 640px) { .wrap { padding: 0 16px; } }
+
+/* ---------- header */
+.top { position: sticky; top: 0; z-index: 10; background: rgba(250, 250, 248, 0.92); backdrop-filter: blur(8px); border-bottom: 1px solid var(--line); }
+.top .wrap { height: 60px; display: flex; align-items: center; gap: 24px; }
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 17px; color: var(--ink); text-decoration: none; }
+.brand img { width: 26px; height: 26px; border-radius: 6px; }
+.nav { display: flex; gap: 20px; font-size: 14px; }
+.nav a { color: var(--ink-2); text-decoration: none; }
+.nav a:hover { color: var(--ink); }
+.grow { flex: 1; }
+.lang { display: flex; border: 1px solid var(--line-strong); border-radius: 999px; padding: 2px; background: var(--surface); }
+.lang button { border: 0; background: none; font: inherit; font-size: 12.5px; padding: 3px 10px; border-radius: 999px; color: var(--muted); cursor: pointer; }
+html[data-lang="zh"] .lang [data-set="zh"], html[data-lang="en"] .lang [data-set="en"] { background: var(--ink); color: #fff; }
+.gh { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; color: var(--ink); text-decoration: none; }
+@media (max-width: 760px) { .nav { display: none; } }
+
+/* ---------- buttons */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 46px; padding: 0 22px; border-radius: 10px; font-size: 15px; font-weight: 600; text-decoration: none; white-space: nowrap; }
+.btn.primary { background: var(--ink); color: #fff; }
+.btn.primary:hover { background: #33322e; color: #fff; }
+.btn.secondary { background: var(--surface); color: var(--ink); border: 1px solid var(--line-strong); }
+.btn.secondary:hover { border-color: var(--ink); color: var(--ink); }
+
+/* ---------- hero */
+.hero { padding: 72px 0 40px; }
+.hero h1 { margin: 0; max-width: 820px; font-size: clamp(32px, 5vw, 52px); line-height: 1.2; letter-spacing: -0.01em; }
+.hero h1 em { font-style: normal; background: linear-gradient(transparent 62%, var(--highlight) 62%); }
+.lede { margin: 20px 0 0; max-width: 680px; font-size: clamp(16px, 2vw, 19px); color: var(--ink-2); }
+.ctas { margin-top: 32px; display: flex; flex-wrap: wrap; gap: 12px; }
+.fine { margin-top: 16px; font-size: 13.5px; color: var(--muted); }
+@media (max-width: 640px) { .hero { padding: 44px 0 24px; } .ctas .btn { flex: 1 1 100%; } }
+
+/* ---------- the hero demo: a chat page with the bar, and the side panel */
+.demo { margin-top: 48px; border: 1px solid var(--line-strong); border-radius: 14px; background: var(--surface); box-shadow: 0 24px 60px rgba(27, 27, 25, 0.10); overflow: hidden; }
+.chrome { height: 38px; display: flex; align-items: center; gap: 7px; padding: 0 14px; border-bottom: 1px solid var(--line); background: var(--bg-soft); }
+.chrome i { width: 11px; height: 11px; border-radius: 50%; background: #dcd9d0; }
+.chrome span { margin-left: 14px; font-size: 12px; color: var(--muted); background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 1px 12px; }
+.demo-body { display: grid; grid-template-columns: minmax(0, 1fr) 340px; min-height: 440px; }
+.chat { position: relative; padding: 36px 40px 96px; font-size: 15px; line-height: 1.9; color: var(--ink-2); }
+.chat .q { margin: 0 0 18px auto; max-width: 300px; padding: 8px 14px; border-radius: 14px; background: var(--bg-soft); color: var(--ink); font-size: 14px; }
+.chat h4 { margin: 0 0 58px; font-size: 15px; color: var(--ink); }
+.chat .with-bar { position: relative; }
+.chat p { margin: 0 0 12px; }
+.sel { background: var(--highlight); color: var(--ink); }
+.bar { position: absolute; top: -50px; left: 36px; display: flex; gap: 2px; padding: 4px; border-radius: 10px; background: var(--ink); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22); white-space: nowrap; }
+.bar b { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: 7px; font-size: 13px; font-weight: 500; color: #fff; }
+.bar b:first-child { background: rgba(255, 255, 255, 0.12); }
+.bar b.k { color: #e2d3ff; }
+.bar b.a { color: #a9c0ff; }
+.bar svg { width: 14px; height: 14px; }
+.toast { position: absolute; left: 40px; bottom: 28px; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; max-width: calc(100% - 80px); padding: 10px 16px; border-radius: 10px; background: var(--ink); color: #fff; font-size: 13px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2); }
+.toast u { color: #a9c0ff; text-decoration: underline; }
+.panel { border-left: 1px solid var(--line); background: var(--bg); display: flex; flex-direction: column; font-size: 13px; }
+.panel-head { height: 48px; display: flex; align-items: center; justify-content: space-between; padding: 0 16px; border-bottom: 1px solid var(--line); font-weight: 700; font-size: 14px; }
+.panel-head > span:last-child { font-weight: 400; font-size: 12.5px; color: var(--accent); }
+.tree { padding: 16px 16px 16px 18px; display: flex; flex-direction: column; gap: 6px; }
+.chip { align-self: flex-start; display: inline-flex; gap: 8px; align-items: center; }
+.chip > b { padding: 3px 12px; border-radius: 14px; background: var(--ink); color: #fff; font-size: 13px; }
+.chip > span { color: var(--muted); font-size: 12px; }
+.br { border-left: 1.5px solid var(--branch); padding-left: 14px; display: flex; flex-direction: column; gap: 6px; }
+.row { display: flex; justify-content: space-between; gap: 8px; }
+.row > span:last-child { color: var(--muted); font-size: 12px; }
+.row.ch { font-weight: 700; }
+.row.grey { color: var(--grey); }
+.row.grey > span:last-child { color: var(--grey); }
+.row.stuck { outline: 2px solid var(--stuck); outline-offset: 1px; border-radius: 6px; padding: 0 6px; margin: 0 -6px; }
+.item { padding: 6px 10px; border-radius: 6px; background: var(--surface); border: 1px solid var(--line); line-height: 1.5; }
+.item.formula { font-family: var(--serif); font-style: italic; }
+.item.new { border: 1.5px solid var(--accent); background: var(--accent-soft); display: flex; justify-content: space-between; gap: 8px; }
+.item.new > small { color: var(--accent); font-size: 11.5px; white-space: nowrap; }
+.item.quote { border: 1.5px solid var(--quote); font-family: var(--serif); }
+.item.outline { border: 1.5px dashed #b9b6ac; color: var(--grey); background: transparent; }
+@media (max-width: 900px) {
+  .demo-body { grid-template-columns: 1fr; }
+  .panel { border-left: 0; border-top: 1px solid var(--line); }
+}
+@media (max-width: 640px) {
+  .chat { padding: 24px 18px 120px; }
+  .toast { left: 18px; max-width: calc(100% - 36px); }
+}
+
+/* ---------- sections */
+section.block { padding: 88px 0; border-top: 1px solid var(--line); }
+@media (max-width: 640px) { section.block { padding: 56px 0; } }
+.eyebrow { font-size: 13px; font-weight: 600; letter-spacing: 0.06em; color: var(--accent); text-transform: uppercase; }
+h2 { margin: 8px 0 0; font-size: clamp(26px, 3.6vw, 36px); line-height: 1.25; }
+.sub { margin: 14px 0 0; max-width: 680px; color: var(--ink-2); font-size: 17px; }
+.split { margin-top: 44px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 48px; align-items: center; }
+.split.flip > :first-child { order: 2; }
+@media (max-width: 900px) { .split { grid-template-columns: 1fr; gap: 28px; } .split.flip > :first-child { order: 0; } }
+.points { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 18px; }
+.points li { padding-left: 18px; border-left: 3px solid var(--line-strong); }
+.points > li > b { display: block; font-size: 17px; }
+.points > li > span { color: var(--ink-2); font-size: 15px; }
+
+/* three actions */
+.three { margin-top: 44px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
+@media (max-width: 900px) { .three { grid-template-columns: 1fr; } }
+.card { border: 1px solid var(--line); border-radius: 14px; background: var(--surface); padding: 24px; display: flex; flex-direction: column; gap: 14px; }
+.card h3 { margin: 0; display: flex; align-items: center; gap: 10px; font-size: 20px; }
+.tag { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px; border-radius: 8px; background: var(--ink); color: #fff; font-size: 13px; font-weight: 500; }
+.tag.k { color: #e2d3ff; }
+.tag.a { color: #a9c0ff; }
+.tag svg { width: 14px; height: 14px; }
+.card p { margin: 0; color: var(--ink-2); font-size: 15px; }
+.mini { margin-top: auto; padding: 14px; border-radius: 10px; background: var(--bg); border: 1px solid var(--line); font-size: 13px; display: flex; flex-direction: column; gap: 8px; }
+.mini .from { color: var(--muted); font-size: 12px; }
+.mini .arrow { color: var(--grey); text-align: center; font-size: 12px; }
+.ask { display: flex; flex-direction: column; gap: 8px; }
+.ask .quote { padding: 6px 9px; border-radius: 6px; background: var(--bg-soft); border-left: 3px solid var(--branch); color: var(--ink-2); }
+.ask .qq { align-self: flex-end; padding: 6px 10px; border-radius: 10px; background: #f1f0ec; }
+.ask .btns { display: flex; gap: 6px; flex-wrap: wrap; }
+.ask .btns > i { font-style: normal; height: 24px; padding: 0 8px; border: 1px solid var(--line-strong); border-radius: 6px; background: var(--surface); font-size: 11.5px; display: inline-flex; align-items: center; }
+.ask .btns > i.k { color: var(--quote); }
+
+/* legend */
+.legend { margin-top: 18px; display: flex; flex-wrap: wrap; gap: 10px 20px; font-size: 13.5px; color: var(--ink-2); }
+.legend > span { display: inline-flex; align-items: center; gap: 8px; }
+.sw { width: 22px; height: 14px; border-radius: 4px; background: var(--surface); border: 1.5px solid var(--ink); }
+.sw.q { border-color: var(--quote); }
+.sw.o { border: 1.5px dashed #b9b6ac; background: transparent; }
+.sw.s { border: 2px solid var(--stuck); }
+
+/* the map visual */
+.frame { border: 1px solid var(--line-strong); border-radius: 14px; background: var(--bg); box-shadow: 0 18px 44px rgba(27, 27, 25, 0.08); overflow: hidden; font-size: 13px; }
+
+/* stuck card */
+.stuck-card { margin: 16px; padding: 14px; border-radius: 12px; background: var(--surface); border: 1.5px solid var(--stuck); display: flex; flex-direction: column; gap: 10px; }
+.stuck-card > b { font-size: 14px; }
+.stuck-card p { margin: 0; font-size: 12.5px; line-height: 1.7; color: var(--ink-2); }
+.try { padding: 10px; border-radius: 8px; background: var(--stuck-soft); display: flex; flex-direction: column; gap: 4px; }
+.try > small { color: var(--stuck-ink); font-weight: 600; font-size: 11.5px; }
+.try > span { font-size: 13px; line-height: 1.6; }
+.stuck-card .btns { display: flex; gap: 6px; }
+.stuck-card .btns > i { font-style: normal; height: 32px; padding: 0 12px; border-radius: 8px; display: inline-flex; align-items: center; font-size: 12.5px; border: 1px solid var(--line-strong); background: var(--surface); white-space: nowrap; }
+.stuck-card .btns > i:first-child { flex: 1; justify-content: center; border: 0; background: var(--stuck); color: #fff; font-weight: 500; }
+.stuck-card .btns > i:last-child { border: 0; background: none; color: var(--ink-2); }
+
+/* questions and report */
+.qr { display: grid; grid-template-columns: 220px minmax(0, 1fr); min-height: 330px; }
+.qlist { border-right: 1px solid var(--line); background: var(--surface); padding: 14px; display: flex; flex-direction: column; gap: 0; }
+.qlist .search { height: 30px; border: 1px solid var(--line-strong); border-radius: 7px; padding: 0 10px; display: flex; align-items: center; color: var(--grey); font-size: 12px; margin-bottom: 8px; }
+.qlist > div { padding: 8px 0; border-bottom: 1px solid #eeece6; display: flex; flex-direction: column; gap: 2px; font-size: 12.5px; }
+.qlist > div:last-child { border-bottom: 0; }
+.qlist > div > small { color: var(--muted); font-size: 11px; }
+.qlist small em { font-style: normal; color: var(--accent); }
+.report { padding: 18px 22px; display: flex; flex-direction: column; gap: 8px; }
+.report .rh { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.report .rh > b { font-size: 15px; }
+.report .rh > small { color: var(--muted); font-size: 11.5px; }
+.report .rh > i { margin-left: auto; font-style: normal; height: 28px; padding: 0 12px; border-radius: 7px; background: var(--ink); color: #fff; font-size: 12px; display: inline-flex; align-items: center; white-space: nowrap; }
+.report h5 { margin: 6px 0 0; font-size: 13.5px; }
+.report p { margin: 0; font-size: 12.5px; line-height: 1.75; color: #2a2925; }
+@media (max-width: 640px) { .qr { grid-template-columns: 1fr; } .qlist { border-right: 0; border-bottom: 1px solid var(--line); } }
+
+/* sites and models */
+.chips { margin-top: 28px; display: flex; flex-wrap: wrap; gap: 10px; }
+.chips > span { padding: 8px 16px; border-radius: 999px; background: var(--surface); border: 1px solid var(--line); font-size: 14.5px; }
+
+/* privacy */
+.trio { margin-top: 40px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
+@media (max-width: 900px) { .trio { grid-template-columns: 1fr; } }
+.trio > div { padding: 22px; border-radius: 14px; background: var(--surface); border: 1px solid var(--line); }
+.trio > div > b { display: block; font-size: 17px; margin-bottom: 6px; }
+.trio > div > span { color: var(--ink-2); font-size: 15px; }
+
+/* install */
+.steps { margin: 40px 0 0; padding: 0; list-style: none; counter-reset: s; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
+@media (max-width: 900px) { .steps { grid-template-columns: 1fr; } }
+.steps li { counter-increment: s; padding: 22px; border-radius: 14px; background: var(--surface); border: 1px solid var(--line); }
+.steps li::before { content: counter(s); display: inline-flex; width: 30px; height: 30px; border-radius: 50%; background: var(--ink); color: #fff; font-weight: 700; align-items: center; justify-content: center; margin-bottom: 12px; }
+.steps > li > b { display: block; font-size: 17px; margin-bottom: 6px; }
+.steps > li > span { color: var(--ink-2); font-size: 15px; }
+code { font-family: var(--mono); font-size: 0.9em; background: var(--bg-soft); padding: 1px 6px; border-radius: 5px; }
+
+/* faq */
+.faq { margin-top: 36px; display: flex; flex-direction: column; gap: 10px; max-width: 820px; }
+.faq details { border: 1px solid var(--line); border-radius: 12px; background: var(--surface); padding: 0 20px; }
+.faq summary { cursor: pointer; padding: 16px 0; font-weight: 600; list-style: none; display: flex; justify-content: space-between; gap: 16px; }
+.faq summary::-webkit-details-marker { display: none; }
+.faq summary::after { content: '+'; color: var(--muted); font-weight: 400; font-size: 20px; line-height: 1; }
+.faq details[open] summary::after { content: '−'; }
+.faq p { margin: 0 0 16px; color: var(--ink-2); font-size: 15px; }
+
+/* closing and footer */
+.closing { text-align: center; }
+.closing h2 { margin: 0 auto; max-width: 720px; }
+.closing .ctas { justify-content: center; }
+footer { border-top: 1px solid var(--line); padding: 32px 0 48px; font-size: 13.5px; color: var(--muted); }
+footer .wrap { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center; }
+footer a { color: var(--muted); }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="#"><img src="icon-128.png" alt="" width="26" height="26">Chat2Know</a>
+    <nav class="nav" aria-label="页面导航">
+      <a href="#actions"><span class="zh">功能</span><span class="en">Features</span></a>
+      <a href="#stuck"><span class="zh">卡住提醒</span><span class="en">Getting unstuck</span></a>
+      <a href="#privacy"><span class="zh">隐私</span><span class="en">Privacy</span></a>
+      <a href="#install"><span class="zh">安装</span><span class="en">Install</span></a>
+    </nav>
+    <div class="grow"></div>
+    <div class="lang" role="group" aria-label="Language">
+      <button type="button" data-set="zh">中文</button>
+      <button type="button" data-set="en">EN</button>
+    </div>
+    <a class="gh" href="https://github.com/shaowenfu/Chat2Know" aria-label="GitHub">
+      <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+    </a>
+  </div>
+</header>
+
+<main>
+  <section class="hero">
+    <div class="wrap">
+      <h1>
+        <span class="zh">和 AI 聊着学，<em>选中一段</em>，一下记进你的知识导图</span>
+        <span class="en">Learn by chatting with AI. <em>Select a line</em>, and it lands on your knowledge map.</span>
+      </h1>
+      <p class="lede">
+        <span class="zh">Chat2Know 是一个浏览器插件。记笔记只要一次点击，放到导图的哪里由它来定；你在一个地方绕圈子时，它在侧栏轻声提醒你可能卡在哪、怎么问更好。</span>
+        <span class="en">Chat2Know is a browser extension. Recording a note takes one click, and it decides where on your map the note belongs. When you start going in circles, it points out in the side panel where you may be stuck and how to ask better.</span>
+      </p>
+      <div class="ctas">
+        <a class="btn primary" href="https://github.com/shaowenfu/Chat2Know/releases/latest">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m0 0l-5-5m5 5l5-5M5 21h14"/></svg>
+          <span class="zh">免费下载 Chrome 插件</span><span class="en">Download for Chrome, free</span>
+        </a>
+        <a class="btn secondary" href="#install"><span class="zh">5 分钟装好</span><span class="en">Set up in 5 minutes</span></a>
+      </div>
+      <p class="fine">
+        <span class="zh">开源（AGPL-3.0）· Chrome、Edge、Brave、Arc · 用你自己的模型和 Key · 数据只在你的浏览器里</span>
+        <span class="en">Open source (AGPL-3.0) · Chrome, Edge, Brave, Arc · Your own model and key · Your data stays in your browser</span>
+      </p>
+
+      <div class="demo" role="img" aria-label="Chat2Know on an AI chat page: a selection with the Note / Keep words / Ask bar, and the knowledge map in the side panel">
+        <div class="chrome"><i></i><i></i><i></i><span>chat.deepseek.com</span></div>
+        <div class="demo-body">
+          <div class="chat">
+            <div class="q"><span class="zh">幂指函数怎么求导？</span><span class="en">How do I differentiate x to the power x?</span></div>
+            <h4><span class="zh">对数求导法</span><span class="en">Logarithmic differentiation</span></h4>
+            <p class="with-bar">
+              <span class="bar">
+              <b><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span class="zh">记下</span><span class="en">Note</span></b>
+              <b class="k"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7 3v6c0 4-3 7-7 9-4-2-7-5-7-9V6z"/></svg><span class="zh">保护原文</span><span class="en">Keep words</span></b>
+              <b class="a"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg><span class="zh">提问</span><span class="en">Ask</span></b>
+            </span>
+              <span class="zh">适用于<span class="sel">幂指函数 y = u(x)<sup>v(x)</sup>：先两边取对数，再对两边求导</span>，最后乘回 y。</span>
+              <span class="en">It works for <span class="sel">functions like y = u(x)<sup>v(x)</sup>: take logs of both sides, then differentiate both sides</span>, and multiply back by y.</span>
+            </p>
+            <p>
+              <span class="zh">例如 y = x<sup>x</sup>，ln y = x ln x，于是 y′ = x<sup>x</sup>(ln x + 1)。</span>
+              <span class="en">For y = x<sup>x</sup>: ln y = x ln x, so y′ = x<sup>x</sup>(ln x + 1).</span>
+            </p>
+
+            <div class="toast">
+              <span><span class="zh">已记到 <b>高等数学 › 求导法则 › 对数求导</b></span><span class="en">Added to <b>Calculus › Differentiation › Log differentiation</b></span></span>
+              <u><span class="zh">改位置</span><span class="en">Move</span></u>
+              <u><span class="zh">撤销</span><span class="en">Undo</span></u>
+            </div>
+          </div>
+          <aside class="panel">
+            <div class="panel-head"><span><span class="zh">高等数学 ▾</span><span class="en">Calculus ▾</span></span><span><span class="zh">展开全页 ↗</span><span class="en">Full map ↗</span></span></div>
+            <div class="tree">
+              <div class="chip"><b><span class="zh">高等数学</span><span class="en">Calculus</span></b><span><span class="zh">12 条</span><span class="en">12 items</span></span></div>
+              <div class="br">
+                <div class="row ch"><span><span class="zh">极限与连续</span><span class="en">Limits</span></span><span>4</span></div>
+                <div class="row ch"><span><span class="zh">求导法则</span><span class="en">Differentiation</span></span><span>6</span></div>
+                <div class="br">
+                  <div class="row"><span><span class="zh">链式法则</span><span class="en">Chain rule</span></span><span>2</span></div>
+                  <div class="row"><span><span class="zh">对数求导</span><span class="en">Log differentiation</span></span><span>2</span></div>
+                  <div class="br">
+                    <div class="item formula">(x<sup>x</sup>)′ = x<sup>x</sup>(ln x + 1)</div>
+                    <div class="item new"><span><span class="zh">幂指函数先两边取对数，再两边求导。</span><span class="en">For u(x)<sup>v(x)</sup>, take logs of both sides, then differentiate.</span></span><small><span class="zh">刚记下</span><span class="en">just added</span></small></div>
+                  </div>
+                  <div class="row grey"><span><span class="zh">隐函数求导</span><span class="en">Implicit differentiation</span></span><span><span class="zh">还没学</span><span class="en">not yet</span></span></div>
+                </div>
+                <div class="row grey"><span><span class="zh">不定积分</span><span class="en">Integrals</span></span><span><span class="zh">还没学</span><span class="en">not yet</span></span></div>
+              </div>
+            </div>
+          </aside>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="actions">
+    <div class="wrap">
+      <div class="eyebrow"><span class="zh">选中之后</span><span class="en">After you select</span></div>
+      <h2><span class="zh">三个动作，都只要一次点击</span><span class="en">Three actions, one click each</span></h2>
+      <p class="sub">
+        <span class="zh">在你勾选的 AI 网站上选中文字，上方出现一个小条。没选中时，聊天页面上什么都不会出现。</span>
+        <span class="en">Select text on an AI site you ticked and a small bar appears above it. Until you select, nothing appears on the chat page.</span>
+      </p>
+      <div class="three">
+        <article class="card">
+          <h3><span class="tag"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span class="zh">记下</span><span class="en">Note</span></span></h3>
+          <p><span class="zh">长段话压成一句，公式就只是公式。只选了一个术语，就记成"术语：一句话解释"。</span><span class="en">A long passage becomes one sentence; a formula stays a formula. A bare term becomes "term: a one-line explanation".</span></p>
+          <div class="mini">
+            <span class="from"><span class="zh">选中的</span><span class="en">Selected</span></span>
+            <span><span class="zh">一个 n 阶方阵可逆，当且仅当它的行列式不等于零；这也等价于它的秩等于 n，以及齐次方程 Ax = 0 只有零解。</span><span class="en">An n×n matrix is invertible if and only if its determinant is non-zero; this is also equivalent to its rank being n, and to Ax = 0 having only the zero solution.</span></span>
+            <span class="arrow">↓</span>
+            <div class="item"><span class="zh">n 阶方阵可逆 ⇔ det A ≠ 0 ⇔ 秩为 n ⇔ Ax = 0 只有零解。</span><span class="en">A is invertible ⇔ det A ≠ 0 ⇔ rank n ⇔ Ax = 0 has only the zero solution.</span></div>
+          </div>
+        </article>
+        <article class="card">
+          <h3><span class="tag k"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7 3v6c0 4-3 7-7 9-4-2-7-5-7-9V6z"/></svg><span class="zh">保护原文</span><span class="en">Keep words</span></span></h3>
+          <p><span class="zh">有些话一个字都不能改：一句金句、一个定义的原话。保护后原样进入导图，模型只决定放在哪，只有你能编辑。</span><span class="en">Some lines must not change by a word: a slogan, a definition as written. Kept words go into the map exactly, the model only chooses where, and only you can edit them.</span></p>
+          <div class="mini">
+            <span class="from"><span class="zh">导图里</span><span class="en">On the map</span></span>
+            <div class="item quote"><span class="zh">矩阵不是一张数表，而是线性变换在一组基下的样子。</span><span class="en">A matrix is not a table of numbers; it is what a linear map looks like in a basis.</span></div>
+            <span class="from"><span class="zh">紫色外框加衬线字，一眼分清。</span><span class="en">A purple border and a serif face set it apart.</span></span>
+          </div>
+        </article>
+        <article class="card">
+          <h3><span class="tag a"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg><span class="zh">提问</span><span class="en">Ask</span></span></h3>
+          <p><span class="zh">没看懂就地问。小窗口贴着选中的内容，回答边写边出，可以追问；有用的回答一键记到导图，对话本身不保存。</span><span class="en">Didn't get it? Ask right there. A small window beside the selection answers as it writes, takes follow-ups, and sends a useful answer to the map in one click. The conversation itself isn't kept.</span></p>
+          <div class="mini ask">
+            <span class="quote"><span class="zh">幂指函数 y = u(x)<sup>v(x)</sup></span><span class="en">y = u(x)<sup>v(x)</sup></span></span>
+            <span class="qq"><span class="zh">为什么不能直接套幂函数的公式？</span><span class="en">Why not use the power rule?</span></span>
+            <span><span class="zh">幂函数公式要求指数是常数，这里指数也含 x，所以要先取对数……</span><span class="en">The power rule needs a constant exponent; here the exponent depends on x too, so take logs first…</span></span>
+            <span class="btns"><i><span class="zh">＋ 记到导图</span><span class="en">＋ Add to map</span></i><i class="k"><span class="zh">保护原文</span><span class="en">Keep words</span></i><i><span class="zh">复制</span><span class="en">Copy</span></i></span>
+          </div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="map">
+    <div class="wrap">
+      <div class="eyebrow"><span class="zh">知识导图</span><span class="en">The map</span></div>
+      <h2><span class="zh">导图自己长出来，你只管学</span><span class="en">The map grows while you learn</span></h2>
+      <div class="split">
+        <ul class="points">
+          <li><b><span class="zh">放到对的地方</span><span class="en">In the right place</span></b><span><span class="zh">记下的内容立刻出现，再由模型放进打开的那张导图里对应的章和知识点。放错了，提示条里一点"改位置"，以后它会照你的习惯来。</span><span class="en">A note appears at once, then the model files it under the right chapter and topic of the map you opened. If it's wrong, click Move in the toast; later notes follow your habits.</span></span></li>
+          <li><b><span class="zh">导图是你的</span><span class="en">Your maps</span></b><span><span class="zh">一门课一张，由你新建、由你打开。插件从不自己建图、换图或改你起的名字；没起名的导图会按内容命名一次。</span><span class="en">One per subject, created and opened by you. Chat2Know never creates or switches maps, or renames one you named; an unnamed map is named once from its notes.</span></span></li>
+          <li><b><span class="zh">一眼看出学了多少</span><span class="en">See how far you've come</span></b><span><span class="zh">铺上这门课的大纲（或你的教材目录），还没学到的知识点是灰色的；灰色越少，学得越全。</span><span class="en">Lay out the course outline (or your textbook's contents): topics you haven't learned yet are grey. The less grey, the more you've covered.</span></span></li>
+          <li><b><span class="zh">像思维导图一样编辑</span><span class="en">Edit like a mind map</span></b><span><span class="zh">双击改字、Enter 新建、Tab 调层级、拖动、撤销；每一条都能通过 ↗ 跳回原来的对话。</span><span class="en">Double-click to edit, Enter for a new topic, Tab to change level, drag, undo; every note jumps back to its conversation with ↗.</span></span></li>
+        </ul>
+        <div>
+          <div class="frame">
+            <div class="panel-head"><span><span class="zh">线性代数 ▾</span><span class="en">Linear algebra ▾</span></span><span style="font-weight:400;font-size:12.5px;color:var(--accent)"><span class="zh">展开全页 ↗</span><span class="en">Full map ↗</span></span></div>
+            <div class="tree">
+              <div class="chip"><b><span class="zh">线性代数</span><span class="en">Linear algebra</span></b><span><span class="zh">9 条</span><span class="en">9 items</span></span></div>
+              <div class="br">
+                <div class="row ch"><span><span class="zh">矩阵</span><span class="en">Matrices</span></span><span>5</span></div>
+                <div class="br">
+                  <div class="row"><span><span class="zh">矩阵的本质</span><span class="en">What a matrix is</span></span><span>2</span></div>
+                  <div class="br">
+                    <div class="item quote"><span class="zh">矩阵不是一张数表，而是线性变换在一组基下的样子。</span><span class="en">A matrix is not a table of numbers; it is what a linear map looks like in a basis.</span></div>
+                    <div class="item"><span class="zh">矩阵乘法对应变换的复合。</span><span class="en">Matrix multiplication is composition of maps.</span></div>
+                  </div>
+                  <div class="row"><span><span class="zh">转置</span><span class="en">Transpose</span></span><span>3</span></div>
+                  <div class="br"><div class="item formula">(AB)<sup>T</sup> = B<sup>T</sup>A<sup>T</sup></div></div>
+                </div>
+                <div class="row ch"><span><span class="zh">行列式</span><span class="en">Determinants</span></span><span>2</span></div>
+                <div class="row grey"><span><span class="zh">特征值与特征向量</span><span class="en">Eigenvalues</span></span><span><span class="zh">还没学</span><span class="en">not yet</span></span></div>
+                <div class="br"><div class="item outline"><span class="zh">特征多项式</span><span class="en">Characteristic polynomial</span></div></div>
+              </div>
+            </div>
+          </div>
+          <div class="legend">
+            <span><i class="sw"></i><span class="zh">你记下的</span><span class="en">Your notes</span></span>
+            <span><i class="sw q"></i><span class="zh">原文</span><span class="en">Kept words</span></span>
+            <span><i class="sw o"></i><span class="zh">大纲里还没学到</span><span class="en">Not learned yet</span></span>
+            <span><i class="sw s"></i><span class="zh">可能卡住的地方</span><span class="en">Where you may be stuck</span></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="stuck">
+    <div class="wrap">
+      <div class="eyebrow"><span class="zh">提问教练</span><span class="en">A coach for your questions</span></div>
+      <h2><span class="zh">在一个地方绕圈子时，它会轻声提醒</span><span class="en">When you go in circles, it says so, gently</span></h2>
+      <div class="split flip">
+        <ul class="points">
+          <li><b><span class="zh">每 5 个问题看一次</span><span class="en">A look every 5 questions</span></b><span><span class="zh">你在 AI 网站上和浮窗里问的问题，按当时打开的导图记下。每满 5 个，模型按顺序读最近 30 个，看你是不是在绕圈子、被前面的知识点挡住、问不到点子上，或者不知道怎么问。</span><span class="en">The questions you ask on AI sites and in the Ask window are recorded into the map open at the time. Every 5, the model reads the latest 30 in order: are you going in circles, held up by an earlier topic, asking off target, or unsure how to ask?</span></span></li>
+          <li><b><span class="zh">只在侧栏，不打断聊天</span><span class="en">Only in the side panel</span></b><span><span class="zh">提醒卡告诉你可能卡在哪、先弄清什么，再给一个可以直接复制的更好的问法；对应的知识点在导图上描橙。点"不用"，这张导图今天就不再提。</span><span class="en">The card says where you may be stuck, what to get clear first, and gives a better question to copy; the topic is outlined in orange. "Not now" keeps that map quiet for the day.</span></span></li>
+          <li><b><span class="zh">提问记录与分析报告</span><span class="en">Your questions, and a report</span></b><span><span class="zh">全页的"提问"里能搜索、筛选、删除每一个问题。想看的时候点一下，模型就根据一张导图里的提问写一份文字分析：理解得怎样、提问习惯怎么改、接下来学什么。不打分。</span><span class="en">The Questions page lets you search, filter and delete every question. When you want, one click has the model write an analysis of a map's questions: what has landed, how to ask better, what to learn next. No scores.</span></span></li>
+        </ul>
+        <div class="frame">
+          <div class="panel-head"><span><span class="zh">线性代数 ▾</span><span class="en">Linear algebra ▾</span></span><span style="font-weight:400;font-size:12.5px;color:var(--accent)"><span class="zh">展开全页 ↗</span><span class="en">Full map ↗</span></span></div>
+          <div class="stuck-card">
+            <b><span class="zh">好像在「矩阵乘法」这里绕了几圈</span><span class="en">Going in circles around “Matrix multiplication”?</span></b>
+            <p><span class="zh">几个问题都在换着说法问同一件事：为什么 AB ≠ BA。可能卡在乘法的定义"行乘列"上。先用一个具体例子把它算一遍，后面会容易很多。</span><span class="en">Several questions ask the same thing in other words: why AB ≠ BA. The definition, row times column, may be what's missing. Working one concrete example through will make the rest easier.</span></p>
+            <div class="try"><small><span class="zh">可以这样问</span><span class="en">Try asking</span></small><span><span class="zh">"用一个 2×2 的例子，一步步算出 AB 和 BA，指出是哪一步让它们不一样。"</span><span class="en">"With one 2×2 example, compute AB and BA step by step and show which step makes them differ."</span></span></div>
+            <div class="btns"><i><span class="zh">复制这个问题</span><span class="en">Copy this question</span></i><i><span class="zh">看看我问过的</span><span class="en">What I asked</span></i><i><span class="zh">不用</span><span class="en">Not now</span></i></div>
+          </div>
+          <div class="tree" style="padding-top:4px">
+            <div class="br">
+              <div class="row ch"><span><span class="zh">矩阵</span><span class="en">Matrices</span></span><span>8</span></div>
+              <div class="br">
+                <div class="row stuck"><span><span class="zh">矩阵乘法</span><span class="en">Matrix multiplication</span></span><span>1</span></div>
+                <div class="row"><span><span class="zh">转置</span><span class="en">Transpose</span></span><span>3</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="frame" style="margin-top:48px">
+        <div class="qr">
+          <div class="qlist">
+            <span class="search"><span class="zh">搜索提问</span><span class="en">Search questions</span></span>
+            <div><small><span class="zh">11月2日 14:12 · DeepSeek</span><span class="en">Nov 2, 14:12 · DeepSeek</span></small><span class="zh">为什么 2×3 的矩阵不能乘 2×3 的矩阵？</span><span class="en">Why can't a 2×3 matrix multiply a 2×3 one?</span></div>
+            <div><small><span class="zh">11月2日 14:09 · DeepSeek</span><span class="en">Nov 2, 14:09 · DeepSeek</span></small><span class="zh">矩阵乘法的顺序为什么不能换？</span><span class="en">Why can't I swap the order?</span></div>
+            <div><small><span class="zh">11月2日 14:05 · <em>浮窗</em></span><span class="en">Nov 2, 14:05 · <em>Ask window</em></span></small><span class="zh">AB 的第 i 行第 j 列是怎么算的？</span><span class="en">How is entry (i, j) of AB computed?</span></div>
+          </div>
+          <div class="report">
+            <div class="rh"><b><span class="zh">线性代数 · 分析报告</span><span class="en">Linear algebra · Report</span></b><small><span class="zh">11月2日 14:30 生成</span><span class="en">Made Nov 2, 14:30</span></small><i><span class="zh">生成新报告</span><span class="en">New report</span></i></div>
+            <h5><span class="zh">理解得怎么样</span><span class="en">What has landed</span></h5>
+            <p><span class="zh">转置的性质你已经能问到点子上。矩阵乘法的问题反复出现在不同对话里，多是"为什么维度对不上"，说明"行乘列"的定义还没有真正落地。</span><span class="en">You already ask sharp questions about the transpose. Questions about multiplication keep coming back across conversations, mostly "why don't the sizes match", so row-times-column hasn't quite landed yet.</span></p>
+            <h5><span class="zh">提问习惯</span><span class="en">How you ask</span></h5>
+            <p><span class="zh">你常先问"为什么"再问"怎么算"。先要一个具体的数值例子，往往更快。</span><span class="en">You often ask "why" before "how". Asking for one concrete numeric example first is usually faster.</span></p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="block" id="sites">
+    <div class="wrap">
+      <div class="eyebrow"><span class="zh">在哪里用</span><span class="en">Where it works</span></div>
+      <h2><span class="zh">你常用的 AI，你自己的模型</span><span class="en">The AI sites you use, the model you choose</span></h2>
+      <p class="sub"><span class="zh">在这些网站上选中即用；其他网页上选中文字按 Alt+S 或右键也能记。归位、提问和提醒用的是你填的模型：任意兼容 OpenAI 格式的接口，比如 DeepSeek、OpenAI、Kimi。没配模型也能记，只是要你自己拖到位置上。</span><span class="en">Select and go on these sites; on any other page, select text and press Alt+S or right-click. Placement, answers and hints use the model you enter: any OpenAI-compatible endpoint, such as DeepSeek, OpenAI or Kimi. Without a model, recording still works and you drag notes into place.</span></p>
+      <div class="chips"><span>ChatGPT</span><span>Claude</span><span>Gemini</span><span>DeepSeek</span><span>Kimi</span><span><span class="zh">豆包</span><span class="en">Doubao</span></span></div>
+    </div>
+  </section>
+
+  <section class="block" id="privacy">
+    <div class="wrap">
+      <div class="eyebrow"><span class="zh">隐私</span><span class="en">Privacy</span></div>
+      <h2><span class="zh">本地优先，没有账号，没有服务器</span><span class="en">Local first: no account, no server</span></h2>
+      <div class="trio">
+        <div><b><span class="zh">数据只在你的浏览器里</span><span class="en">Your data stays in your browser</span></b><span><span class="zh">导图、提问、报告和设置都存在浏览器本地。没有统计，没有追踪。</span><span class="en">Maps, questions, reports and settings live in your browser. No analytics, no tracking.</span></span></div>
+        <div><b><span class="zh">只发给你选的模型</span><span class="en">Sent only to your model</span></b><span><span class="zh">离开浏览器的只有一次模型调用需要的内容，用你自己的 Key 发给你配置的服务商。Key 不写日志、不进导出。</span><span class="en">Only what a model call needs leaves your browser, sent with your own key to the provider you set. The key is never logged or exported.</span></span></div>
+        <div><b><span class="zh">权限只要必需的</span><span class="en">Only the access it needs</span></b><span><span class="zh">从不申请"读取所有网站"，只在你勾选的网站上运行。提问记录可以随时关掉，记录时图标显示 REC。</span><span class="en">It never asks to read every site, only the ones you tick. Question recording can be turned off at any time; a REC badge shows while it's on.</span></span></div>
+      </div>
+      <p class="sub"><a href="https://github.com/shaowenfu/Chat2Know/blob/main/PRIVACY.md"><span class="zh">读完整的隐私说明 →</span><span class="en">Read the full privacy policy →</span></a></p>
+    </div>
+  </section>
+
+  <section class="block" id="install">
+    <div class="wrap">
+      <div class="eyebrow"><span class="zh">安装</span><span class="en">Install</span></div>
+      <h2><span class="zh">三步装好，五分钟</span><span class="en">Three steps, five minutes</span></h2>
+      <ol class="steps">
+        <li><b><span class="zh">下载并解压</span><span class="en">Download and unzip</span></b><span><span class="zh">在 <a href="https://github.com/shaowenfu/Chat2Know/releases/latest">最新发布</a> 下载 <code>chat2know-…-chrome.zip</code>，解压到一个固定的文件夹。</span><span class="en">Get <code>chat2know-…-chrome.zip</code> from the <a href="https://github.com/shaowenfu/Chat2Know/releases/latest">latest release</a> and unzip it into a folder you keep.</span></span></li>
+        <li><b><span class="zh">加载到浏览器</span><span class="en">Load it</span></b><span><span class="zh">打开 <code>chrome://extensions</code>，打开右上角的"开发者模式"，点"加载已解压的扩展程序"，选中那个文件夹。</span><span class="en">Open <code>chrome://extensions</code>, turn on Developer mode, click Load unpacked and pick that folder.</span></span></li>
+        <li><b><span class="zh">打开侧栏</span><span class="en">Open the side panel</span></b><span><span class="zh">点工具栏上的 Chat2Know 图标，按首屏三步：填模型、勾网站、建一张导图。</span><span class="en">Click the Chat2Know icon and follow the first screen: your model, your sites, your first map.</span></span></li>
+      </ol>
+      <p class="sub"><a href="https://github.com/shaowenfu/Chat2Know/blob/main/docs/install.md"><span class="zh">带截图的详细步骤 →</span><span class="en">Step-by-step guide with screenshots →</span></a></p>
+
+      <div class="faq">
+        <details>
+          <summary><span class="zh">要花钱吗？</span><span class="en">Does it cost anything?</span></summary>
+          <p><span class="zh">插件免费、开源（AGPL-3.0）。模型调用按你自己的服务商计费，用你自己的 Key；不配模型也能记笔记。</span><span class="en">The extension is free and open source (AGPL-3.0). Model calls are billed by your own provider, on your own key; recording works without a model.</span></p>
+        </details>
+        <details>
+          <summary><span class="zh">支持 Safari 或 Firefox 吗？</span><span class="en">Does it work in Safari or Firefox?</span></summary>
+          <p><span class="zh">暂时不支持。在 Mac 上可以装 Chrome、Edge、Brave 或 Arc 来用，和 Safari 并存，不影响原来的浏览器。</span><span class="en">Not yet. On a Mac, install Chrome, Edge, Brave or Arc alongside Safari.</span></p>
+        </details>
+        <details>
+          <summary><span class="zh">它会替我做题或者给我打分吗？</span><span class="en">Will it quiz me or grade me?</span></summary>
+          <p><span class="zh">不会。它不出题、不打分、不排复习计划。它只帮你把学到的记清楚，在你卡住时提醒一句；报告也只在你点了之后才写。</span><span class="en">No. No quizzes, no scores, no review schedules. It keeps what you learn in order and speaks up when you seem stuck; a report is written only when you ask.</span></p>
+        </details>
+        <details>
+          <summary><span class="zh">提问会被上传吗？</span><span class="en">Are my questions uploaded?</span></summary>
+          <p><span class="zh">提问只存在你的浏览器里。每 5 个问题检查一次时，最近的提问会发给你配置的模型；不想要可以在设置里关掉提问记录，记笔记照常可用。</span><span class="en">Your questions are stored only in your browser. For the check every 5 questions, the latest ones are sent to the model you configured; turn question recording off in settings if you prefer, and recording notes still works.</span></p>
+        </details>
+        <details>
+          <summary><span class="zh">支持哪些模型？</span><span class="en">Which models work?</span></summary>
+          <p><span class="zh">任意兼容 OpenAI 格式的接口：填接口地址、模型名和 Key 即可，比如 DeepSeek、OpenAI、Kimi。嵌入模型可选，能让归位更准。</span><span class="en">Any OpenAI-compatible endpoint: enter its base URL, model and key, such as DeepSeek, OpenAI or Kimi. An embedding model is optional and makes placement more accurate.</span></p>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <section class="block closing">
+    <div class="wrap">
+      <h2><span class="zh">下一次和 AI 聊着学，把要学的都留在一张导图上</span><span class="en">Next time you learn with an AI, keep it all on one map</span></h2>
+      <div class="ctas">
+        <a class="btn primary" href="https://github.com/shaowenfu/Chat2Know/releases/latest"><span class="zh">免费下载</span><span class="en">Download, free</span></a>
+        <a class="btn secondary" href="https://github.com/shaowenfu/Chat2Know"><span class="zh">在 GitHub 上查看</span><span class="en">View on GitHub</span></a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>Chat2Know · AGPL-3.0</span>
+    <a href="https://github.com/shaowenfu/Chat2Know">GitHub</a>
+    <a href="https://github.com/shaowenfu/Chat2Know/blob/main/PRIVACY.md"><span class="zh">隐私说明</span><span class="en">Privacy</span></a>
+    <a href="https://github.com/shaowenfu/Chat2Know/blob/main/CHANGELOG.md"><span class="zh">更新日志</span><span class="en">Changelog</span></a>
+    <a href="https://github.com/shaowenfu/Chat2Know/issues"><span class="zh">反馈问题</span><span class="en">Report an issue</span></a>
+  </div>
+</footer>
+
+<script>
+(function () {
+  var KEY = 'chat2know.site.lang';
+  var root = document.documentElement;
+  var TITLES = {
+    zh: 'Chat2Know · 和 AI 聊着学，一键记进知识导图',
+    en: 'Chat2Know · Learn with AI, one click to your knowledge map'
+  };
+  function set(lang, remember) {
+    root.setAttribute('data-lang', lang);
+    root.setAttribute('lang', lang === 'zh' ? 'zh-CN' : 'en');
+    document.title = TITLES[lang];
+    if (remember) {
+      try { localStorage.setItem(KEY, lang); } catch (e) { /* storage blocked: the switch still works for this visit */ }
+    }
+  }
+  var saved = null;
+  try { saved = localStorage.getItem(KEY); } catch (e) { /* storage blocked */ }
+  var fromUrl = /[?&]lang=(zh|en)\b/.exec(location.search);
+  var browser = (navigator.language || '').toLowerCase().indexOf('zh') === 0 ? 'zh' : 'en';
+  set(fromUrl ? fromUrl[1] : saved || browser, false);
+  document.querySelectorAll('.lang button').forEach(function (b) {
+    b.addEventListener('click', function () { set(b.getAttribute('data-set'), true); });
+  });
+})();
+</script>
+</body>
+</html>

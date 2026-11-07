@@ -32,15 +32,15 @@ export type Handlers = {
   [K in MessageType]?: (payload: Req<K>, sender: Browser.runtime.MessageSender) => Res<K> | Promise<Res<K>>;
 };
 
-/** Register handlers for a subset of message types. Unknown types are ignored. */
-export function onMessages(handlers: Handlers): void {
+/** Register handlers for a subset of message types. Unknown types are ignored. `before` runs ahead of every handler. */
+export function onMessages(handlers: Handlers, before: () => Promise<void> = () => Promise.resolve()): void {
   browser.runtime.onMessage.addListener((message: unknown, sender, sendResponse) => {
     if (!isEnvelope(message)) return;
     const handler = handlers[message.type] as
       | ((payload: unknown, sender: Browser.runtime.MessageSender) => unknown)
       | undefined;
     if (!handler) return;
-    Promise.resolve()
+    before()
       .then(() => handler(message.payload, sender))
       .then(
         (data) => sendResponse({ ok: true, data } satisfies Result<unknown>),

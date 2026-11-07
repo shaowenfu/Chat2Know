@@ -11,7 +11,7 @@ export const MOCK_KEY = 'test-key';
 export interface RecordedRequest {
   path: string;
   authorization: string | undefined;
-  body: { model: string; messages?: { role: string; content: string }[]; input?: string[] };
+  body: { model: string; messages?: { role: string; content: string }[]; input?: string[]; stream?: boolean };
 }
 
 export interface MockLlm {
@@ -27,151 +27,120 @@ const read = (req: IncomingMessage) =>
     req.on('end', () => resolve(data));
   });
 
-function between(text: string, start: string, end = '\n'): string {
-  const at = text.indexOf(start);
-  if (at < 0) return '';
-  const rest = text.slice(at + start.length);
-  const stop = rest.indexOf(end);
-  return (stop < 0 ? rest : rest.slice(0, stop)).trim();
-}
-
-/**
- * What the mock "knows" about prerequisites, per domain, and which words in a
- * question point to which concept. Enough structure for diagnosis tests:
- * transpose, multiplication order and trace all rest on "Matrix operation rules".
- */
-const MOCK_GRAPH: Record<string, [string, string][]> = {
-  'Linear algebra': [
-    ['Matrix basics', 'Matrix operation rules'],
-    ['Matrix operation rules', 'Transpose properties'],
-    ['Matrix operation rules', 'Matrix multiplication order'],
-    ['Matrix operation rules', 'Trace properties'],
-  ],
-  'Matrix calculus': [
-    ['Derivative basics', 'Layout conventions'],
-    ['Layout conventions', 'Matrix derivatives'],
-  ],
-};
-const MOCK_TAGS: [RegExp, string, string][] = [
-  [/transpose|转置/i, 'Linear algebra', 'Transpose properties'],
-  [/multipl|乘法/i, 'Linear algebra', 'Matrix multiplication order'],
-  [/trace|迹/i, 'Linear algebra', 'Trace properties'],
-  [/derivative|gradient|求导|梯度/i, 'Matrix calculus', 'Matrix derivatives'],
-  [/layout|布局/i, 'Matrix calculus', 'Layout conventions'],
+/** Words in a question that point to a topic title (besides the title itself). */
+const MOCK_TOPICS: [RegExp, string][] = [
+  [/transpose|转置/i, '转置'],
+  [/multipl|乘法/i, '矩阵乘法'],
+  [/trace|迹/i, '迹'],
+  [/inverse|逆/i, '逆矩阵'],
 ];
 
-function tagReply(user: string): string {
-  const tags = [...user.matchAll(/^\[(\d+)\] (.*)$/gm)].map(([, n, text]) => {
-    const hits = MOCK_TAGS.filter(([re]) => re.test(text!));
-    return { ask: Number(n), domain: hits[0]?.[1] ?? '', concepts: [...new Set(hits.filter((h) => h[1] === hits[0]![1]).map((h) => h[2]))] };
-  });
-  return JSON.stringify({ tags });
+/** Numbered lines "[n] text" under a header, in either language. */
+const list = (text: string, headers: string[]) => {
+  const part = text.split(new RegExp(`^(?:${headers.join('|')}):\\n`, 'm'))[1]?.split('\n\n')[0] ?? '';
+  return [...part.matchAll(/^\[(\d+)\] (.*)$/gm)].map(([, n, t]) => ({ n: Number(n), text: t!, last: t!.split(' › ').at(-1)! }));
+};
+
+/** A short report that counts the questions it read; it tries a script, which the page must drop. */
+function reportReply(user: string): string {
+  const count = (user.match(/^- \[/gm) ?? []).length;
+  return [
+    '## 概况',
+    '',
+    `你在这张导图里问了 ${count} 个问题，集中在 **转置**。`,
+    '',
+    '## 接下来',
+    '',
+    '- 先手算一遍 $(AB)^T = B^T A^T$。',
+    '- 再看 [逆矩阵](https://zh.wikipedia.org/wiki/逆矩阵)。',
+    '',
+    '<script>alert(1)</script><p onclick="alert(2)">不打分。</p>',
+  ].join('\n');
 }
 
-function prereqReply(user: string): string {
-  const domain = between(user, 'Domain:');
-  const existing = new Set(between(user, 'Existing concepts:').split('; ').filter(Boolean));
-  const required = between(user, 'Required concepts:').split('; ').filter(Boolean);
-  const graph = MOCK_GRAPH[domain] ?? [];
-  const names = [...new Set([...graph.flat(), ...required])];
-  const concepts = names.filter((n) => !existing.has(n));
-  // Unknown required concepts hang under the domain's first concept.
-  const extra = required.filter((r) => !graph.flat().includes(r) && graph.length).map((r) => [graph[0]![0], r] as [string, string]);
-  const edges = [...graph, ...extra].map(([from, to]) => ({ from, to }));
-  return JSON.stringify({ concepts, edges: existing.size ? edges.filter((e) => concepts.includes(e.to)) : edges });
+/** Stuck when 3 or more questions are about the same topic (the most specific title first): circling there. */
+function stuckReply(user: string): string {
+  const asks = list(user, ['Questions', '提问']);
+  const topics = list(user, ['Topics', '知识点']).sort((a, b) => b.last.length - a.last.length);
+  for (const t of topics) {
+    const about = asks.filter((q) => q.text.includes(t.last) || MOCK_TOPICS.some(([re, title]) => title === t.last && re.test(q.text)));
+    if (about.length >= 3) {
+      return JSON.stringify({
+        stuck: true,
+        kind: 'circling',
+        section: t.n,
+        explanation: `最近 ${about.length} 个问题都在问「${t.last}」。先把它的定义弄清楚，后面会容易很多。`,
+        question: `用一个具体的例子，一步步讲清楚「${t.last}」是怎么算的。`,
+        evidence: about.map((q) => q.n),
+      });
+    }
+  }
+  return JSON.stringify({ stuck: false });
 }
 
-function chatReply(task: string, user: string): string {
+/** Where the mock files a note, by words in it: first match wins. */
+const MOCK_PLACES: [RegExp, string, string[]][] = [
+  [/attention|softmax/i, '深度学习', ['注意力机制']],
+  [/\^T|\^\{T\}|\\top|transpose|转置/i, '线性代数', ['矩阵', '转置']],
+  [/\\det|determinant|行列式/i, '线性代数', ['行列式']],
+];
+
+/** The prompt in either language: "Note (formula): …" or "笔记 (公式): …", and "Map: …" / "导图: …". */
+function placeReply(user: string): string {
+  const m = /^(?:Note|笔记) \((formula|text|quote|公式|文字|原文)\): (.*)$/m.exec(user);
+  const [type, text] = [m?.[1] ?? 'formula', m?.[2] ?? ''];
+  const unnamed = /^(?:Map|导图): (?:\(unnamed\)|（未命名）)$/m.test(user);
+  // The mock's place for the note: the map name it would give, and the path below the map.
+  const [, mapName, path] = MOCK_PLACES.find(([re]) => re.test(text)) ?? [null, '线性代数', ['其他']];
+  // A statement keeps its first sentence.
+  const statement = type === 'text' || type === '文字' ? (text.split(/(?<=[.。])\s*/)[0] ?? text) : '';
+  return JSON.stringify({ path, statement, mapName: unnamed ? mapName : '' });
+}
+
+const MOCK_OUTLINE = [
+  { title: '向量与向量空间', children: [] },
+  { title: '矩阵', children: [{ title: '矩阵乘法', children: [] }, { title: '转置', children: [] }, { title: '逆矩阵', children: [] }, { title: '秩', children: [] }] },
+  { title: '行列式', children: [] },
+  { title: '线性方程组', children: [] },
+  { title: '特征值与特征向量', children: [] },
+  { title: '二次型', children: [] },
+];
+
+/** A pasted table of contents: each unindented line a chapter, indented lines its topics; else the standard outline. */
+function outlineReply(user: string): string {
+  const toc = user.split(/(?:Table of contents|教材目录):\n/)[1];
+  if (!toc && /^(?:Map|导图名称): 深度学习$/m.test(user)) {
+    return JSON.stringify({ outline: ['神经网络', '注意力机制', '优化', '正则化'].map((title) => ({ title, children: [] })) });
+  }
+  if (!toc) return JSON.stringify({ outline: MOCK_OUTLINE });
+  const outline: { title: string; children: { title: string; children: [] }[] }[] = [];
+  for (const line of toc.split('\n').filter((l) => l.trim())) {
+    const title = line.trim().replace(/^[\d.]+\s*/, '');
+    if (/^\s/.test(line) && outline.length) outline.at(-1)!.children.push({ title, children: [] });
+    else outline.push({ title, children: [] });
+  }
+  return JSON.stringify({ outline });
+}
+
+/** A short answer about the selection, echoing the question and how many came before it (follow-ups see the earlier turns). */
+function askReply(user: string, earlier: number): string {
+  const selected = /^(?:Selected|选中的内容):\n(.*)$/m.exec(user)?.[1] ?? '';
+  const question = user.trim().split('\n').at(-1)!;
+  return `About “${selected}”: ${question}\n\nThe scaling keeps $QK^\\top$ small: divide by $\\sqrt{d_k}$. (turn ${earlier + 1})`;
+}
+
+export function chatReply(task: string, user: string): string {
   switch (task) {
     case 'ping':
       return 'OK';
-    case 'answer':
-      return `Mock answer to: ${between(user, 'My question:')}`;
-    case 'suggest': {
-      const q = between(user, 'Question:');
-      if (/internvl/i.test(q))
-        return JSON.stringify({
-          kind: 'instance',
-          titles: ['Which concept is InternVL3.5 an example of?', 'What makes InternVL3.5 a VLM?', 'Where does InternVL3.5 fit?'],
-          summary: 'InternVL3.5 is an example of a VLM.',
-          concept: 'VLM',
-        });
-      if (/name|由来/i.test(q))
-        return JSON.stringify({ kind: 'curiosity', titles: ['Why this name?', 'Name origin?', 'Who named it?'], summary: 'A naming detail.' });
-      return JSON.stringify({
-        kind: 'concept',
-        titles: [`What parts make up ${q.replace(/\?$/, '')}?`, `Why does ${q.replace(/\?$/, '')} work?`, `When is ${q.replace(/\?$/, '')} used?`],
-        summary: `Mock statement about ${q}`,
-      });
-    }
-    case 'distill': {
-      const first = user.split(/(?<=[.。!?])\s/)[0]!.slice(0, 120);
-      return JSON.stringify({ titles: ['What is the key idea?', 'Why does it hold?', 'How is it applied?'], summary: `Distilled: ${first}` });
-    }
-    case 'problem':
-      return `Problem: use this to solve a case. ${between(user, 'Knowledge question:')}`;
-    case 'judgeApply':
-    case 'judge': {
-      // Pass when the learner's answer (or solution) shares a 4+ letter word with the expected answer.
-      const words = (s: string) => new Set(s.toLowerCase().match(/[a-z]{4,}/g) ?? []);
-      const apply = task === 'judgeApply';
-      const expected = words(between(user, apply ? 'Knowledge it needs:\n' : 'Expected answer:\n', '\n\n'));
-      const hit = [...words(between(user, apply ? "Learner's solution:\n" : "Learner's answer:\n", '\u0000'))].some((w) => expected.has(w));
-      return JSON.stringify(hit ? { verdict: 'pass', feedback: 'Covers the key point.' } : { verdict: 'fail', feedback: 'Misses the key point.' });
-    }
-    case 'explain': {
-      // A point passes when the explanation shares a 4+ letter word with its statement.
-      const words = (s: string) => new Set(s.toLowerCase().match(/[a-z]{4,}/g) ?? []);
-      const said = words(between(user, 'Explanation:\n', '\u0000'));
-      const points = [...user.matchAll(/^\[(\d+)\] .*? — (.*)$/gm)].map(([, n, statement]) => {
-        const hit = [...words(statement!)].some((w) => said.has(w));
-        return { point: Number(n), verdict: hit ? 'pass' : 'fail', feedback: hit ? 'Explained.' : 'Missing.' };
-      });
-      return JSON.stringify({ feedback: 'Mock overall feedback.', points });
-    }
-    case 'oneMinute':
-      return `In one minute: ${between(user, 'Topic:')} comes down to ${user.match(/^- /gm)?.length ?? 0} points.`;
-    case 'tag':
-      return tagReply(user);
-    case 'prereq':
-      return prereqReply(user);
-    case 'diagnosisQuiz': {
-      const concept = between(user, 'Concept:');
-      return JSON.stringify({
-        items: [1, 2, 3].map((n) => ({ question: `Quiz ${n} on ${concept}?`, expected: `${concept} answer ${n}: order reverses` })),
-      });
-    }
-    case 'diagnosisJudge': {
-      // An answer passes when it shares a 4+ letter word with its expected answer.
-      const words = (s: string) => new Set(s.toLowerCase().match(/[a-z]{4,}/g) ?? []);
-      const results = [...user.matchAll(/^\[(\d+)\] Question: .*\nExpected: (.*)\nAnswer: (.*)$/gm)].map(([, n, expected, answer]) => {
-        const hit = [...words(answer!)].some((w) => words(expected!).has(w));
-        return { item: Number(n), verdict: hit ? 'pass' : 'fail', feedback: hit ? 'Right.' : 'Not quite.' };
-      });
-      return JSON.stringify({ results });
-    }
-    case 'review': {
-      const concept = between(user, 'Concept:');
-      const base = between(user, 'It rests on:').split('; ').filter(Boolean);
-      return JSON.stringify({
-        cards: [...base, concept].map((c) => ({ question: `What is ${c}?`, summary: `${c} explained from the ground up.` })),
-      });
-    }
-    case 'circling':
-      return JSON.stringify(/derivative|求导|dimension|维度/i.test(user) ? { domain: 'Matrix calculus', concept: 'Layout conventions' } : { domain: '', concept: '' });
-    case 'organize': {
-      // One card per substantial paragraph, quoting its first sentence verbatim.
-      const cards = user
-        .split(/\n\s*\n/)
-        .map((p) => p.trim())
-        .filter((p) => p.length > 40 && !p.startsWith('```') && !p.startsWith('|'))
-        .slice(0, 5)
-        .map((p) => {
-          const first = p.split(/(?<=[.。!?！？])\s*/)[0]!;
-          return { question: `What does this say: ${first.split(/\s+/).slice(0, 4).join(' ')}?`, summary: first, quote: first };
-        });
-      return JSON.stringify({ cards });
-    }
+    case 'stuck':
+      return stuckReply(user);
+    case 'report':
+      return reportReply(user);
+    case 'outline':
+      return outlineReply(user);
+    case 'place':
+      return placeReply(user);
     default:
       return `Unknown task ${task}`;
   }
@@ -207,6 +176,19 @@ export async function startMockLlm(): Promise<MockLlm> {
     const user = body.messages?.filter((m) => m.role === 'user').map((m) => m.content).join('\n') ?? '';
     if (user.includes('FAIL_MODEL')) return send(500, { error: { message: 'Mock failure' } });
     const task = /\[task:(\w+)\]/.exec(systemMsg)?.[1] ?? 'ping';
+    if (task === 'ask') {
+      // The floating window streams: the answer goes out in small server-sent pieces.
+      const last = body.messages!.filter((m) => m.role === 'user').at(-1)!.content;
+      const first = body.messages!.find((m) => m.role === 'user')!.content;
+      const answer = askReply(`${first}\n${last}`, body.messages!.filter((m) => m.role === 'assistant').length);
+      if (!body.stream) return send(200, { choices: [{ message: { role: 'assistant', content: answer } }] });
+      res.writeHead(200, { 'content-type': 'text/event-stream' });
+      for (const piece of answer.match(/[\s\S]{1,12}/g)!) {
+        res.write(`data: ${JSON.stringify({ choices: [{ delta: { content: piece } }] })}\n\n`);
+        await new Promise((r) => setTimeout(r, last.includes('SLOW') ? 200 : 10));
+      }
+      return res.end('data: [DONE]\n\n');
+    }
     send(200, { choices: [{ message: { role: 'assistant', content: chatReply(task, user) } }] });
   });
   await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));

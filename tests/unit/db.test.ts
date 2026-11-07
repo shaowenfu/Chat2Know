@@ -1,17 +1,13 @@
 import 'fake-indexeddb/auto';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import Dexie from 'dexie';
 import { Chat2KnowDB } from '@/src/db/schema';
 import { Hlc } from '@/src/db/hlc';
-import { Repository, parseExport } from '@/src/db/repository';
-import type { CapturedSelection } from '@/src/capture/selection';
+import { Repository } from '@/src/db/repository';
+import { UserError } from '@/src/errors';
+import { isGrey, itemCount, type MapTree } from '@/src/graph/tree';
 
 let seq = 0;
-const capture = (markdown: string, exact = markdown): CapturedSelection => ({
-  markdown,
-  quote: { exact, prefix: 'before ', suffix: ' after' },
-  url: 'https://example.com/chat',
-  pageTitle: 'Example chat',
-});
 
 function setup(name: string) {
   let t = 1_700_000_000_000;
@@ -20,119 +16,150 @@ function setup(name: string) {
   return { db, repo: new Repository(db, new Hlc('dev1', now), now) };
 }
 
-describe('Repository', () => {
+/** The tree as indented titles; items show their LaTeX, the unplaced group shows as [unplaced]. */
+const outline = (t: MapTree, indent = ''): string[] => [
+  `${indent}${t.node.role === 'unplaced' ? '[unplaced]' : t.node.latex ?? t.node.title}`,
+  ...t.children.flatMap((c) => outline(c, `${indent}  `)),
+];
+
+const source = { url: 'https://chatgpt.com/c/1', pageTitle: 'Chat', quoteExact: 'x', quotePrefix: '', quoteSuffix: '', capturedAt: 1 };
+
+describe('the map', () => {
   let db: Chat2KnowDB;
   let repo: Repository;
-
-  beforeEach(() => ({ db, repo } = setup('repo')));
+  beforeEach(() => ({ db, repo } = setup('map')));
   afterEach(() => db.delete());
 
-  it('captures a node with its source and logs both writes', async () => {
-    const view = await repo.capture('knowledge', capture('## Attention\n\nWeights inputs.'));
-    expect(view).toMatchObject({ type: 'knowledge', title: 'Attention', status: 'draft', body: '## Attention\n\nWeights inputs.' });
-    expect(view.sources[0]).toMatchObject({ nodeId: view.id, quoteExact: '## Attention\n\nWeights inputs.', quotePrefix: 'before ' });
-    const log = await db.oplog.toArray();
-    expect(log.map((e) => [e.entity, e.op])).toEqual([
-      ['nodes', 'put'],
-      ['sources', 'put'],
+  async function linearAlgebra() {
+    const { node: subject } = await repo.addSubject('线性代数');
+    const { node: matrix } = await repo.addSection(subject.id, '矩阵');
+    const { node: transpose } = await repo.addSection(matrix.id, '转置');
+    const { node: inverse } = await repo.addSection(matrix.id, '逆矩阵');
+    const { node: f1 } = await repo.addItem({ parentId: transpose.id }, { itemType: 'formula', title: '', latex: '(AB)^T = B^T A^T', source });
+    const { node: f2 } = await repo.addItem({ parentId: transpose.id }, { itemType: 'formula', title: '', latex: '(A^T)^T = A' });
+    return { subject, matrix, transpose, inverse, f1, f2 };
+  }
+
+  it('builds a subject tree in order, with sources on items and grey derived', async () => {
+    const { subject, matrix, transpose, inverse } = await linearAlgebra();
+    await repo.addSection(matrix.id, '矩阵乘法', 'outline', transpose.id);
+    const tree = await repo.subjectTree(subject.id);
+    expect(outline(tree)).toEqual(['线性代数', '  矩阵', '    矩阵乘法', '    转置', '      (AB)^T = B^T A^T', '      (A^T)^T = A', '    逆矩阵']);
+    expect(tree.children[0]!.children[1]!.children[0]!.node.source).toEqual(source);
+    expect(itemCount(tree)).toBe(2);
+    const [multiply, , inv] = tree.children[0]!.children;
+    expect([isGrey(multiply!), isGrey(inv!), isGrey(tree)]).toEqual([true, true, false]);
+    expect(inv!.node.id).toBe(inverse.id);
+    expect((await repo.listSubjects()).map((s) => s.title)).toEqual(['线性代数']);
+    expect((await repo.pathOf(transpose.id)).map((n) => n.title)).toEqual(['线性代数', '矩阵', '转置']);
+  });
+
+  it('puts unplaced items in one "待归位" group per subject', async () => {
+    const { node: subject } = await repo.addSubject('线性代数');
+    const a = await repo.addItem({ unplacedIn: subject.id }, { itemType: 'statement', title: 'det A ≠ 0 iff A is invertible' });
+    const b = await repo.addItem({ unplacedIn: subject.id }, { itemType: 'formula', title: '', latex: 'A^{-1}A = I' });
+    expect(a.node.parentId).toBe(b.node.parentId);
+    expect(outline(await repo.subjectTree(subject.id))).toEqual(['线性代数', '  [unplaced]', '    det A ≠ 0 iff A is invertible', '    A^{-1}A = I']);
+    // Undoing the first item also takes away the group it created.
+    await repo.undo(b.group);
+    await repo.undo(a.group);
+    expect(outline(await repo.subjectTree(subject.id))).toEqual(['线性代数']);
+  });
+
+  it('moves nodes, within a subject and into another with the whole subtree', async () => {
+    const { subject, matrix, transpose, inverse, f1, f2 } = await linearAlgebra();
+    await repo.move(f2.id, transpose.id, f1.id);
+    await repo.move(inverse.id, matrix.id, transpose.id);
+    expect(outline(await repo.subjectTree(subject.id))).toEqual(['线性代数', '  矩阵', '    逆矩阵', '    转置', '      (A^T)^T = A', '      (AB)^T = B^T A^T']);
+
+    const { node: other } = await repo.addSubject('矩阵分析');
+    await repo.move(transpose.id, other.id);
+    expect(outline(await repo.subjectTree(other.id))).toEqual(['矩阵分析', '  转置', '    (A^T)^T = A', '    (AB)^T = B^T A^T']);
+    expect((await repo.node(f1.id)).subjectId).toBe(other.id);
+  });
+
+  it('refuses moves into a node itself, under an item, or deeper than 4 levels', async () => {
+    const { subject, matrix, transpose, f1 } = await linearAlgebra();
+    await expect(repo.move(matrix.id, transpose.id)).rejects.toThrow('into itself');
+    await expect(repo.move(transpose.id, f1.id)).rejects.toThrow('Items have no children');
+    const { node: deep } = await repo.addSection(transpose.id, '性质');
+    await expect(repo.addSection(deep.id, 'too deep')).rejects.toBeInstanceOf(UserError);
+    const { node: other } = await repo.addSection(subject.id, '其他');
+    await expect(repo.move(other.id, deep.id)).rejects.toThrow('error.mapTooDeep');
+    await expect(repo.move(subject.id, other.id)).rejects.toThrow('cannot be moved');
+  });
+
+  it('edits mark the text as the user’s own', async () => {
+    const { f1 } = await linearAlgebra();
+    await repo.edit(f1.id, { latex: '(AB)^\\top = B^\\top A^\\top' });
+    expect(await repo.node(f1.id)).toMatchObject({ latex: '(AB)^\\top = B^\\top A^\\top', editedByUser: true });
+  });
+
+  it('merges a section into another', async () => {
+    const { subject, matrix, transpose, inverse } = await linearAlgebra();
+    await repo.addItem({ parentId: inverse.id }, { itemType: 'statement', title: '可逆当且仅当 det A ≠ 0' });
+    await repo.mergeSections(transpose.id, inverse.id);
+    expect(outline(await repo.subjectTree(subject.id))).toEqual(['线性代数', '  矩阵', '    逆矩阵', '      可逆当且仅当 det A ≠ 0', '      (AB)^T = B^T A^T', '      (A^T)^T = A']);
+    await expect(repo.mergeSections(matrix.id, transpose.id)).rejects.toThrow('deleted');
+  });
+
+  it('deleting a section moves what is below it up into its place; restore puts it back', async () => {
+    const { subject, matrix, transpose } = await linearAlgebra();
+    await repo.addSection(subject.id, '行列式');
+    await repo.remove(matrix.id);
+    expect(outline(await repo.subjectTree(subject.id))).toEqual(['线性代数', '  转置', '    (AB)^T = B^T A^T', '    (A^T)^T = A', '  逆矩阵', '  行列式']);
+    await repo.remove(transpose.id);
+    await repo.restore(matrix.id);
+    // The items moved again when 转置 was deleted; that later write stays.
+    expect(outline(await repo.subjectTree(subject.id))).toEqual(['线性代数', '  矩阵', '    逆矩阵', '  (AB)^T = B^T A^T', '  (A^T)^T = A', '  行列式']);
+    await expect(repo.restore(matrix.id)).rejects.toThrow('No deletion');
+  });
+
+  it('deleting a subject deletes its map; items are soft deleted', async () => {
+    const { subject, f1 } = await linearAlgebra();
+    await repo.remove(f1.id);
+    expect((await repo.node(f1.id)).deletedAt).toBeDefined();
+    await repo.remove(subject.id);
+    expect(await repo.listSubjects()).toEqual([]);
+    await expect(repo.subjectTree(subject.id)).rejects.toThrow('No subject');
+    await repo.restore(subject.id);
+    expect(outline(await repo.subjectTree(subject.id))).toHaveLength(5);
+  });
+
+  it('undoes every map write, latest first, and never undoes an undo', async () => {
+    const { subject } = await linearAlgebra();
+    const before = outline(await repo.subjectTree(subject.id));
+    const { node: s } = await repo.addSection(subject.id, '行列式');
+    await repo.edit(s.id, { title: '行列式与秩' });
+    await repo.move(s.id, subject.id, (await repo.subjectTree(subject.id)).children[0]!.node.id);
+    await repo.remove(s.id);
+    for (let i = 0; i < 4; i++) expect(await repo.undo()).not.toBeNull();
+    expect(outline(await repo.subjectTree(subject.id))).toEqual(before);
+    expect(await db.nodes.get(s.id)).toBeUndefined();
+    // Keeps going back through the earlier writes.
+    await repo.undo();
+    expect(outline(await repo.subjectTree(subject.id))).toEqual(before.filter((l) => !l.includes('(A^T)^T')));
+  });
+
+  it('undoing a group keeps nodes that changed since', async () => {
+    const { subject, transpose } = await linearAlgebra();
+    const added = await repo.addItem({ parentId: transpose.id }, { itemType: 'statement', title: 'Aᵀ swaps rows and columns' });
+    await repo.edit(added.node.id, { title: 'Transpose swaps rows and columns' });
+    await repo.undo(added.group);
+    expect((await repo.node(added.node.id)).title).toBe('Transpose swaps rows and columns');
+    expect(await repo.undo(added.group)).toBeNull();
+    expect(itemCount(await repo.subjectTree(subject.id))).toBe(3);
+  });
+
+  it('logs every node write with its before and after row', async () => {
+    const { node } = await repo.addSubject('线性代数');
+    await repo.edit(node.id, { title: '线代' });
+    const log = await db.oplog.orderBy('id').toArray();
+    expect(log.map((e) => [e.action, e.before?.title ?? null, e.after?.title])).toEqual([
+      ['addSubject', null, '线性代数'],
+      ['edit', '线性代数', '线代'],
     ]);
-    expect(log[0]!.id < log[1]!.id).toBe(true);
-  });
-
-  it('lists live nodes newest first and hides soft-deleted ones', async () => {
-    const a = await repo.capture('knowledge', capture('first'));
-    const b = await repo.capture('idea', capture('second'));
-    expect((await repo.listNodes()).map((n) => n.id)).toEqual([b.id, a.id]);
-    await repo.deleteNode(b.id);
-    expect((await repo.listNodes()).map((n) => n.id)).toEqual([a.id]);
-    expect((await db.nodes.get(b.id))?.deletedAt).toBeTypeOf('number');
-    expect((await db.oplog.where('entityId').equals(b.id).toArray()).map((e) => e.op)).toEqual(['put', 'delete']);
-  });
-
-  it('round-trips export and import without loss', async () => {
-    await repo.capture('knowledge', capture('Formula $E=mc^2$\n\n| a | b |\n| --- | --- |\n| 1 | 2 |'));
-    const deleted = await repo.capture('idea', capture('gone'));
-    await repo.deleteNode(deleted.id);
-    await repo.addPreference({ questionType: 'instance', suggestion: 'Who made X — Y', userAction: 'delete' });
-    const exported = await repo.exportData();
-
-    const other = setup('import');
-    const json = JSON.stringify(exported);
-    expect(await other.repo.importData(json)).toEqual({ nodes: 2, edges: 0, sources: 2, reviews: 0, preferences: 1 });
-    const reexported = await other.repo.exportData();
-    expect({ ...reexported, exportedAt: 0 }).toEqual({ ...exported, exportedAt: 0 });
-    await other.db.delete();
-  });
-
-  it('import is idempotent', async () => {
-    await repo.capture('knowledge', capture('x'));
-    const file = await repo.exportData();
-    await repo.importData(file);
-    await repo.importData(file);
-    expect(await db.nodes.count()).toBe(1);
-  });
-
-  it('later local writes sort after imported clocks', async () => {
-    const file = await repo.exportData();
-    file.nodes.push({ id: 'n1', type: 'knowledge', title: 't', status: 'draft', askCount: 0, createdAt: 1, updatedAt: Hlc.format(9_999_999_999_999, 5, 'other') });
-    await repo.importData(file);
-    const view = await repo.capture('knowledge', capture('y'));
-    expect(view.updatedAt > file.nodes[0]!.updatedAt).toBe(true);
-  });
-});
-
-describe('askLater', () => {
-  let db: Chat2KnowDB;
-  let repo: Repository;
-  beforeEach(() => ({ db, repo } = setup('ask')));
-  afterEach(() => db.delete());
-
-  const ask = (term: string, question: string, url = 'https://example.com/chat') =>
-    repo.askLater({ term, question, capture: { ...capture(`${term} is in this sentence.`), url } });
-
-  it('creates an open question node with its sentence as source', async () => {
-    const res = await ask('VLM', 'What is VLM?');
-    expect(res).toMatchObject({ askCount: 1, merged: false });
-    const node = await db.nodes.get(res.nodeId);
-    expect(node).toMatchObject({ type: 'question', status: 'open', title: 'What is VLM?', originalAsk: 'What is VLM?', term: 'VLM', askCount: 1 });
-  });
-
-  it('allows saving without a question and filling it in later', async () => {
-    const { nodeId } = await ask('softmax', '');
-    expect(await db.nodes.get(nodeId)).toMatchObject({ title: '' });
-    expect((await db.nodes.get(nodeId))!.originalAsk).toBeUndefined();
-    await repo.updateQuestion(nodeId, 'Why softmax here?');
-    expect(await db.nodes.get(nodeId)).toMatchObject({ title: 'Why softmax here?', originalAsk: 'Why softmax here?' });
-  });
-
-  it('merges repeated asks about the same open term and counts them', async () => {
-    const first = await ask('VLM', '');
-    await ask('vlm', 'What is a VLM?', 'https://other.dev/page');
-    const third = await ask('VLM ', 'ignored, first question wins');
-    expect(third).toEqual({ nodeId: first.nodeId, askCount: 3, merged: true });
-    expect(await db.nodes.get(first.nodeId)).toMatchObject({ title: 'What is a VLM?', askCount: 3 });
-    expect(await db.sources.where('nodeId').equals(first.nodeId).count()).toBe(3);
-  });
-
-  it('ask now never merges into an older open question', async () => {
-    const first = await ask('VLM', 'What is VLM?');
-    const now = await repo.askLater({ term: 'VLM', question: 'Why VLM?', capture: capture('VLM again.') }, { merge: false });
-    expect(now).toMatchObject({ merged: false, askCount: 1 });
-    expect(now.nodeId).not.toBe(first.nodeId);
-  });
-
-  it('starts a new question once the old one is resolved', async () => {
-    const first = await ask('VLM', '');
-    await repo.deleteNode(first.nodeId);
-    expect((await ask('VLM', '')).merged).toBe(false);
-  });
-
-  it('lists open questions on a page for underlining, ignoring the hash', async () => {
-    const { nodeId } = await ask('VLM', '');
-    await ask('LLM', '', 'https://elsewhere.dev');
-    expect(await repo.questionsForUrl('https://example.com/chat#section')).toEqual([
-      { nodeId, term: 'VLM', quote: { exact: 'VLM is in this sentence.', prefix: 'before ', suffix: ' after' } },
-    ]);
+    expect(log.map((e) => e.id)).toEqual(log.map((e) => e.after!.updatedAt));
   });
 });
 
@@ -142,21 +169,20 @@ describe('recorded questions', () => {
   beforeEach(() => ({ db, repo } = setup('asks')));
   afterEach(() => db.delete());
 
-  it('stores asks newest first, outside the oplog and the export', async () => {
-    await repo.recordAsk({ site: 'chatgpt', conversationUrl: 'https://chatgpt.com/c/1#x', text: 'why transpose?' });
-    await repo.recordAsk({ site: 'chatgpt', conversationUrl: 'https://chatgpt.com/c/2', text: 'what is a trace?' });
+  it('stores asks newest first, outside the oplog', async () => {
+    await repo.recordAsk({ site: 'chatgpt', conversationUrl: 'https://chatgpt.com/c/1#x', text: 'why transpose?', via: 'site' });
+    await repo.recordAsk({ site: 'chatgpt', conversationUrl: 'https://chatgpt.com/c/2', text: 'what is a trace?', via: 'site' });
     expect((await repo.listAsks()).map((a) => [a.text, a.conversationUrl])).toEqual([
       ['what is a trace?', 'https://chatgpt.com/c/2'],
       ['why transpose?', 'https://chatgpt.com/c/1'],
     ]);
     expect(await db.oplog.count()).toBe(0);
-    expect(Object.keys(await repo.exportData())).not.toContain('asks');
   });
 
   it('deletes one ask, a whole conversation, or everything', async () => {
-    const a = await repo.recordAsk({ site: 'kimi', conversationUrl: 'https://www.kimi.com/chat/1', text: 'a' });
-    await repo.recordAsk({ site: 'kimi', conversationUrl: 'https://www.kimi.com/chat/1', text: 'b' });
-    await repo.recordAsk({ site: 'kimi', conversationUrl: 'https://www.kimi.com/chat/2', text: 'c' });
+    const a = await repo.recordAsk({ site: 'kimi', conversationUrl: 'https://www.kimi.com/chat/1', text: 'a', via: 'site' });
+    await repo.recordAsk({ site: 'kimi', conversationUrl: 'https://www.kimi.com/chat/1', text: 'b', via: 'site' });
+    await repo.recordAsk({ site: 'kimi', conversationUrl: 'https://www.kimi.com/chat/2', text: 'c', via: 'site' });
     await repo.deleteAsk(a.id);
     expect((await repo.listAsks()).map((x) => x.text)).toEqual(['c', 'b']);
     await repo.deleteConversationAsks('https://www.kimi.com/chat/1#top');
@@ -166,37 +192,33 @@ describe('recorded questions', () => {
   });
 });
 
-describe('schema migration', () => {
-  it('upgrades v1 databases, defaulting askCount to 0', async () => {
-    const name = `migrate-${seq++}`;
-    const { default: Dexie } = await import('dexie');
+describe('upgrading the database', () => {
+  it('a v1 database keeps its map and questions; the gap tables go', async () => {
+    const name = `upgrade-${Date.now()}`;
     const v1 = new Dexie(name);
-    v1.version(1).stores({ nodes: 'id, type, status, createdAt' });
-    await v1.table('nodes').add({ id: 'old', type: 'knowledge', title: 'x', status: 'draft', createdAt: 1, updatedAt: 'a' });
-    v1.close();
-    const db = new Chat2KnowDB(name);
-    expect(await db.nodes.get('old')).toMatchObject({ askCount: 0 });
-    expect(await db.inbox.count()).toBe(0);
-    await db.delete();
-  });
-
-  it('imports v1 exports that lack askCount', async () => {
-    const { db, repo } = setup('legacy');
-    await repo.importData({
-      format: 'chat2know', version: 1, exportedAt: 0, edges: [], sources: [], reviews: [],
-      nodes: [{ id: 'n', type: 'knowledge', title: 't', status: 'draft', createdAt: 1, updatedAt: 'a' }],
+    v1.version(1).stores({
+      nodes: 'id, subjectId, parentId, kind',
+      oplog: 'id, group, entityId, undoes',
+      placements: 'id, at',
+      embeddings: 'nodeId',
+      asks: 'id, sentAt, conversationUrl',
+      askTags: 'id, askId, sectionId',
+      prereqEdges: 'id, from, to',
+      gaps: 'id, sectionId, status',
     });
-    expect(await db.nodes.get('n')).toMatchObject({ askCount: 0 });
-    await db.delete();
-  });
-});
+    await v1.table('nodes').add({ id: 's', subjectId: 's', kind: 'subject', order: 'a0', title: '线性代数', origin: 'user', createdAt: 0, updatedAt: '' });
+    await v1.table('asks').add({ id: 'q', site: 'chatgpt', conversationUrl: 'https://chatgpt.com/c/1', text: 'why?', sentAt: 1, taggedAt: 2 });
+    await v1.table('gaps').add({ id: 'g', sectionId: 's', status: 'suspected' });
+    v1.close();
 
-describe('parseExport', () => {
-  it('rejects foreign or malformed files', () => {
-    expect(() => parseExport('{}')).toThrow('error.notExport');
-    expect(() => parseExport({ format: 'chat2know', version: 99 })).toThrow('error.exportVersion');
-    expect(() => parseExport({ format: 'chat2know', version: 1, nodes: [{}], edges: [], sources: [], reviews: [] })).toThrow('error.invalidExport');
-    expect(() => parseExport('not json')).toThrow();
+    const db = new Chat2KnowDB(name);
+    await db.open();
+    expect(db.verno).toBe(3);
+    expect(await db.nodes.count()).toBe(1);
+    expect((await db.asks.toArray()).map((a) => a.text)).toEqual(['why?']);
+    expect(db.tables.map((t) => t.name).sort()).toEqual(['asks', 'embeddings', 'nodes', 'oplog', 'placements', 'reports', 'stuckChecks']);
+    expect(await db.asks.where('mapId').equals('s').count()).toBe(0); // old questions belong to no map
+    await db.delete();
   });
 });
 

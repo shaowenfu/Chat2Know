@@ -23,7 +23,7 @@ const hasTexSource = (node: HTMLElement) =>
   TEX_ATTRS.some((a) => node.hasAttribute?.(a)) &&
   (node.querySelector('.katex, math, svg') !== null || /(?:^|\s)math-(?:inline|display|block)(?:\s|$)/.test(node.className ?? ''));
 
-function isMathRoot(node: HTMLElement): boolean {
+export function isMathRoot(node: HTMLElement): boolean {
   if (hasTexSource(node)) return true;
   if (node.classList?.contains('katex-display')) return true;
   if (node.classList?.contains('katex')) return !node.parentElement?.classList.contains('katex-display');
@@ -31,7 +31,7 @@ function isMathRoot(node: HTMLElement): boolean {
   return false;
 }
 
-function isDisplayMath(node: HTMLElement): boolean {
+export function isDisplayMath(node: HTMLElement): boolean {
   return (
     node.classList.contains('katex-display') ||
     node.querySelector('.katex-display') !== null ||
@@ -49,7 +49,7 @@ function bareTex(source: string): string {
   return (m ? (m[1] ?? m[2] ?? m[3] ?? m[4])! : s).trim();
 }
 
-function texOf(node: HTMLElement): string | null {
+export function texOf(node: HTMLElement): string | null {
   for (const attr of TEX_ATTRS) {
     const source = node.getAttribute(attr);
     if (source?.trim()) return bareTex(source);

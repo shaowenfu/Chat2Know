@@ -1,0 +1,138 @@
+{
+  "_about": "Hand-labelled question sequences for the stuck check (S3). Each case is one map's latest questions, oldest first; a question's conversation tells conversations apart, `window` marks one asked in the floating window. `expected.stuck` is the label; when stuck, `kind` is the expected kind and `topic` a word the named topic should contain (empty when no topic fits).",
+  "cases": [
+    {
+      "name": "circling on matrix multiplication",
+      "map": "线性代数",
+      "sections": ["矩阵", "矩阵 › 矩阵乘法", "矩阵 › 转置", "矩阵 › 逆矩阵", "行列式"],
+      "asks": [
+        { "text": "矩阵乘法 AB 怎么算？", "conversation": "c1" },
+        { "text": "为什么 AB 不等于 BA？", "conversation": "c1" },
+        { "text": "能再解释一下为什么矩阵乘法不能交换吗", "conversation": "c1" },
+        { "text": "AB 和 BA 到底有什么区别，还是没懂", "conversation": "c2" },
+        { "text": "矩阵乘法交换律为什么不成立？举个例子", "conversation": "c2" },
+        { "text": "为什么 AB≠BA，用最简单的话说", "conversation": "c2", "window": true }
+      ],
+      "expected": { "stuck": true, "kind": "circling", "topic": "乘法" }
+    },
+    {
+      "name": "stuck behind the definition of the derivative",
+      "map": "高等数学",
+      "sections": ["极限与连续", "极限与连续 › 函数极限", "导数与微分", "导数与微分 › 导数的定义", "导数与微分 › 求导法则", "导数与微分 › 链式法则"],
+      "asks": [
+        { "text": "链式法则怎么用", "conversation": "c1" },
+        { "text": "复合函数求导为什么要乘内层导数", "conversation": "c1" },
+        { "text": "导数到底是什么意思，为什么是 Δy/Δx 的极限", "conversation": "c1" },
+        { "text": "f'(x) 和 dy/dx 是一回事吗", "conversation": "c2" },
+        { "text": "为什么求导法则里 (uv)' = u'v + uv'，我连导数定义都没太懂", "conversation": "c2" },
+        { "text": "极限 lim h→0 (f(x+h)-f(x))/h 怎么理解", "conversation": "c2" }
+      ],
+      "expected": { "stuck": true, "kind": "stuck", "topic": "定义" }
+    },
+    {
+      "name": "vague phrasing",
+      "map": "深度学习",
+      "sections": ["神经网络", "神经网络 › 反向传播", "注意力机制", "优化", "优化 › 学习率", "正则化"],
+      "asks": [
+        { "text": "这个怎么理解", "conversation": "c1" },
+        { "text": "还是不懂", "conversation": "c1" },
+        { "text": "能讲简单点吗", "conversation": "c1" },
+        { "text": "那个是什么意思", "conversation": "c1" },
+        { "text": "我还是没搞明白这块", "conversation": "c1" }
+      ],
+      "expected": { "stuck": true, "kind": "phrasing", "topic": "" }
+    },
+    {
+      "name": "off target: asks about code while the trouble is the math",
+      "map": "Machine learning",
+      "sections": ["Linear models", "Linear models › Gradient descent", "Linear models › Loss functions", "Probability", "Probability › Bayes' theorem"],
+      "asks": [
+        { "text": "Why does my gradient descent loop in numpy diverge?", "conversation": "c1" },
+        { "text": "Should I use a for loop or vectorize the update?", "conversation": "c1" },
+        { "text": "Is np.dot or @ faster for the gradient?", "conversation": "c1" },
+        { "text": "It still diverges with float64, is it a numpy bug?", "conversation": "c1" },
+        { "text": "Which numpy version handles big learning rates?", "conversation": "c2" }
+      ],
+      "expected": { "stuck": true, "kind": "offTarget", "topic": "Gradient" }
+    },
+    {
+      "name": "circling on attention, English",
+      "map": "Transformers",
+      "sections": ["Attention", "Attention › Scaled dot-product attention", "Attention › Multi-head attention", "Positional encoding"],
+      "asks": [
+        { "text": "Why do we divide by sqrt(d_k) in attention?", "conversation": "c1" },
+        { "text": "What goes wrong if we don't scale QK^T?", "conversation": "c1" },
+        { "text": "I still don't see why the scaling matters", "conversation": "c2" },
+        { "text": "Can you explain the sqrt(d_k) scaling once more, simpler?", "conversation": "c2", "window": true },
+        { "text": "Why exactly sqrt(d_k) and not d_k?", "conversation": "c3" }
+      ],
+      "expected": { "stuck": true, "kind": "circling", "topic": "Scaled" }
+    },
+    {
+      "name": "steady progress through a chapter",
+      "map": "线性代数",
+      "sections": ["矩阵", "矩阵 › 矩阵乘法", "矩阵 › 转置", "矩阵 › 逆矩阵", "行列式", "行列式 › 行列式的性质"],
+      "asks": [
+        { "text": "矩阵乘法怎么算？", "conversation": "c1" },
+        { "text": "转置有哪些性质？", "conversation": "c1" },
+        { "text": "(AB)^T 为什么等于 B^T A^T？", "conversation": "c1" },
+        { "text": "什么样的矩阵可逆？", "conversation": "c2" },
+        { "text": "怎么用初等变换求逆矩阵？", "conversation": "c2" },
+        { "text": "行列式和可逆有什么关系？", "conversation": "c2" }
+      ],
+      "expected": { "stuck": false }
+    },
+    {
+      "name": "different topics, each answered",
+      "map": "概率论",
+      "sections": ["随机变量", "随机变量 › 期望", "随机变量 › 方差", "常见分布", "常见分布 › 正态分布", "条件概率"],
+      "asks": [
+        { "text": "期望的线性性质怎么证明？", "conversation": "c1" },
+        { "text": "方差为什么是 E(X²)−(EX)²？", "conversation": "c1" },
+        { "text": "正态分布的 68-95-99.7 规则是什么", "conversation": "c2" },
+        { "text": "条件概率和独立有什么关系", "conversation": "c2" },
+        { "text": "贝叶斯公式能举个例子吗", "conversation": "c3" }
+      ],
+      "expected": { "stuck": false }
+    },
+    {
+      "name": "follow-ups that go deeper, not circling",
+      "map": "深度学习",
+      "sections": ["神经网络", "神经网络 › 反向传播", "神经网络 › 激活函数", "优化", "优化 › Adam"],
+      "asks": [
+        { "text": "反向传播的基本思路是什么", "conversation": "c1" },
+        { "text": "那链式法则在反向传播里具体怎么用到每一层", "conversation": "c1" },
+        { "text": "ReLU 的导数在 0 处怎么处理", "conversation": "c1" },
+        { "text": "梯度消失和激活函数选择有什么关系", "conversation": "c1" },
+        { "text": "Adam 比 SGD 好在哪里", "conversation": "c2" }
+      ],
+      "expected": { "stuck": false }
+    },
+    {
+      "name": "same topic but making progress",
+      "map": "Calculus",
+      "sections": ["Integrals", "Integrals › Integration by parts", "Integrals › Substitution", "Series"],
+      "asks": [
+        { "text": "When should I use integration by parts?", "conversation": "c1" },
+        { "text": "How do I choose u and dv?", "conversation": "c1" },
+        { "text": "Can you check my work: ∫ x e^x dx = x e^x − e^x + C?", "conversation": "c1" },
+        { "text": "What about ∫ x² e^x dx, do I apply it twice?", "conversation": "c1" },
+        { "text": "Is there a shortcut for repeated parts, like the tabular method?", "conversation": "c2" }
+      ],
+      "expected": { "stuck": false }
+    },
+    {
+      "name": "window questions about different selections",
+      "map": "注意力机制",
+      "sections": ["注意力", "注意力 › 自注意力", "注意力 › 多头注意力", "位置编码"],
+      "asks": [
+        { "text": "这里的 Q、K、V 分别是什么", "conversation": "c1", "window": true },
+        { "text": "多头的“头”指的是什么", "conversation": "c1", "window": true },
+        { "text": "位置编码为什么用正弦函数", "conversation": "c1", "window": true },
+        { "text": "自注意力的复杂度为什么是 n²", "conversation": "c1" },
+        { "text": "掩码在解码器里起什么作用", "conversation": "c1" }
+      ],
+      "expected": { "stuck": false }
+    }
+  ]
+}

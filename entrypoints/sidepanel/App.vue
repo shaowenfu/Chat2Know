@@ -1,263 +1,324 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, provide, ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { browser } from 'wxt/browser';
-import { i18n } from '#i18n';
-import { onMessages, sendMessage } from '@/src/messaging';
-import type { InboxItem, NodeView, QuizItem } from '@/src/db/types';
-import type { RecordingSettings } from '@/src/recording/settings';
-import type { AskView, Stats } from '@/src/db/repository';
-import type { DiagnosisView } from '@/src/services/confirm';
-import type { PublicSettings } from '@/src/llm/settings';
-import AskQueue from './components/AskQueue.vue';
-import CardList from './components/CardList.vue';
-import LearnView from './components/LearnView.vue';
-import OrganizeView from './components/OrganizeView.vue';
-import PlacementPrompt from './components/PlacementPrompt.vue';
-import QuizView from './components/QuizView.vue';
-import SettingsView from './components/SettingsView.vue';
-import { NOTIFY, errorText } from './notify';
-import { PLACE } from './placement';
-import { GAPS, type GapState } from './gaps';
-import type { Placement } from '@/src/services/placement';
+import { i18n } from '@/src/i18n';
+import { isEnvelope, sendMessage, type SubjectSummary } from '@/src/messaging';
+import { errorText } from '@/src/errors';
+import type { MapNode } from '@/src/db/types';
+import { itemCount, type MapTree } from '@/src/graph/tree';
+import MapBranch from '@/src/ui/MapBranch.vue';
+import ContextMenu from '@/src/ui/ContextMenu.vue';
+import { provideMap } from '@/src/ui/map-context';
+import { useMapEditing, type AddingItem } from '@/src/ui/map-editing';
+import OutlineOffer from '@/src/ui/OutlineOffer.vue';
+import MapSwitcher from '@/src/ui/MapSwitcher.vue';
+import FirstScreen from '@/src/ui/FirstScreen.vue';
+import type { OutlineNode } from '@/src/graph/tree';
+import StuckCardView from '@/src/ui/StuckCard.vue';
+import type { StuckCard } from '@/src/services/stuck';
 
-type View = 'queue' | 'cards' | 'quiz' | 'learn' | 'settings' | 'organize-page' | 'organize-paste';
-const view = ref<View>('cards');
+/** An item recorded this recently is marked "刚记下". */
+const JUST_MS = 10 * 60_000;
+const NOTICE_MS = 4000;
+const EXPANDED_KEY = 'chat2know.expanded';
 
-const nodes = ref<NodeView[]>([]);
-const inbox = ref<InboxItem[]>([]);
-const settings = ref<PublicSettings | null>(null);
-const due = ref<QuizItem[]>([]);
-const stats = ref<Stats>({ masteredThisWeek: 0, earlierWeeks: [0, 0, 0], due: 0, mustKnow: 0, openQuestions: 0 });
-const asks = ref<AskView[]>([]);
-const recording = ref<RecordingSettings>({ origins: [], paused: false, excluded: [] });
-const analysis = ref<{ pending: number; lastError?: string }>({ pending: 0 });
-const diagnoses = ref<DiagnosisView[]>([]);
-const suspected = computed(() => diagnoses.value.filter((d) => d.status === 'suspected').length);
-/** Diagnoses mark their concept's card on the map: possible gap, weak spot, or strengthened. */
-provide(
-  GAPS,
-  computed(() => {
-    const marks = new Map<string, GapState>();
-    for (const d of diagnoses.value) {
-      if (d.concept.nodeId) marks.set(d.concept.nodeId, d.remediated ? 'remediated' : d.status === 'confirmed' ? 'confirmed' : 'suspected');
-    }
-    return marks;
-  }),
-);
-const toolbarUnavailable = ref(false);
-const notice = ref<{ text: string; error: boolean } | null>(null);
-const fileInput = ref<HTMLInputElement | null>(null);
+const subjects = ref<SubjectSummary[]>([]);
+/** The map the user opened; the panel always shows it. */
+const currentId = ref<string>();
+const tree = ref<MapTree>();
+const configured = ref(true);
+const error = ref('');
+const notice = ref<{ text: string; group: string }>();
+const menu = ref<{ node: MapNode; x: number; y: number }>();
+const loaded = ref(false);
+const outlineOffer = ref<{ outline?: OutlineNode[] }>();
+const stuckMarks = ref(new Set<string>());
+const stuckCard = ref<StuckCard>();
 
-let noticeTimer: ReturnType<typeof setTimeout> | undefined;
-function notify(text: string, error = false) {
-  notice.value = { text, error };
-  clearTimeout(noticeTimer);
-  noticeTimer = setTimeout(() => (notice.value = null), error ? 8000 : 4000);
-}
-provide(NOTIFY, notify);
+const expanded = ref(new Set<string>(readExpanded()));
+const newestId = ref<string>();
+const editingId = ref<string>();
+const dragging = ref<string>();
+const dropTarget = ref<string>();
+const selectedId = ref<string>();
+const addingTo = ref<AddingItem>();
 
-/** Placement suggestions for the card the user just kept, if any. */
-const placing = ref<{ nodeId: string; placement: Placement } | null>(null);
-provide(PLACE, async (nodeId: string) => {
+const editing = useMapEditing({
+  tree,
+  selectedId,
+  editingId,
+  addingTo,
+  expanded,
+  run,
+  reload: () => load(),
+  removed: (node, group) => showNotice(i18n.t('panel.removed', [node.latex ?? (node.title || i18n.t('map.unnamed'))]), group),
+});
+
+function readExpanded(): string[] {
   try {
-    const placement = await sendMessage('place/suggest', { nodeId });
-    if (placement && (placement.parents.length || placement.duplicate)) placing.value = { nodeId, placement };
-  } catch (err) {
-    notify(errorText(err), true);
-  }
-});
-
-// Ask-later questions live in their own queue; everything else is a card.
-const queue = computed(() => nodes.value.filter((n) => n.type === 'question' && n.status === 'open'));
-const cards = computed(() => nodes.value.filter((n) => n.type !== 'question'));
-const countLabel = computed(() => i18n.t('panel.cardCount', cards.value.length));
-const configured = computed(() => Boolean(settings.value?.baseUrl && settings.value.model && settings.value.hasKey));
-
-const titles = computed(() => new Map(nodes.value.map((n) => [n.id, n.title])));
-
-/** Latest answer per open question. */
-const answers = computed(() => {
-  const map = new Map<string, InboxItem>();
-  for (const item of inbox.value) if (!item.promotedNodeId && !map.has(item.questionNodeId)) map.set(item.questionNodeId, item);
-  return map;
-});
-/** Answers whose question was dismissed: still keepable until they expire. */
-const leftovers = computed(() => {
-  const open = new Set(queue.value.map((q) => q.id));
-  return inbox.value.filter((i) => !i.promotedNodeId && !open.has(i.questionNodeId));
-});
-
-async function refresh() {
-  [nodes.value, inbox.value, settings.value, due.value, stats.value, asks.value, recording.value, analysis.value, diagnoses.value] = await Promise.all([
-    sendMessage('nodes/list', {}),
-    sendMessage('inbox/list', {}),
-    sendMessage('settings/get', {}),
-    sendMessage('quiz/due', {}),
-    sendMessage('stats/get', {}),
-    sendMessage('asks/list', {}),
-    sendMessage('recording/get', {}),
-    sendMessage('analysis/get', {}),
-    sendMessage('diagnosis/list', {}),
-  ]);
-}
-
-async function activate() {
-  try {
-    await sendMessage('page/activate', {});
-    toolbarUnavailable.value = false;
+    return JSON.parse(localStorage.getItem(EXPANDED_KEY) ?? '[]') as string[];
   } catch {
-    // Expected on pages we may not script (chrome://, the store, tabs without activeTab).
-    toolbarUnavailable.value = true;
+    return []; // storage blocked: folds are a convenience
   }
 }
-
-function download(name: string, text: string, type: string) {
-  const url = URL.createObjectURL(new Blob([text], { type }));
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = name;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
-
-const stamp = () => new Date().toISOString().slice(0, 10);
-
-async function exportJson() {
-  download(`chat2know-${stamp()}.json`, await sendMessage('data/exportJson', {}), 'application/json');
-}
-
-async function exportMarkdown() {
-  download(`chat2know-${stamp()}.md`, await sendMessage('data/exportMarkdown', {}), 'text/markdown');
-}
-
-async function exportOpml() {
-  download(`chat2know-${stamp()}.opml`, await sendMessage('data/exportOpml', {}), 'text/x-opml');
-}
-
-async function exportAnki() {
-  download(`chat2know-anki-${stamp()}.csv`, await sendMessage('data/exportAnki', {}), 'text/csv');
-}
-
-async function importJson(event: Event) {
-  const input = event.target as HTMLInputElement;
-  const file = input.files?.[0];
-  input.value = '';
-  if (!file) return;
+function saveExpanded() {
   try {
-    const result = await sendMessage('data/importJson', { json: await file.text() });
-    notify(i18n.t('panel.imported', result.nodes));
-  } catch (err) {
-    notify(i18n.t('panel.importFailed', [errorText(err)]), true);
+    localStorage.setItem(EXPANDED_KEY, JSON.stringify([...expanded.value]));
+  } catch {
+    // storage blocked: folds are a convenience
   }
 }
 
-async function openSource(sourceId: string) {
+const current = computed(() => subjects.value.find((s) => s.id === currentId.value));
+const mapUrl = computed(() => browser.runtime.getURL(`/map.html#${currentId.value ?? ''}`));
+const settingsUrl = browser.runtime.getURL('/map.html#settings');
+
+async function run(action: () => Promise<unknown>) {
   try {
-    await sendMessage('source/open', { sourceId });
+    error.value = '';
+    await action();
   } catch (err) {
-    notify(errorText(err), true);
+    error.value = errorText(err);
   }
 }
 
-const onTabActivated = () => void activate();
+/** The newest item, when it was just recorded, and the path down to it. */
+function newestPath(t: MapTree): MapNode[] {
+  let best: MapNode[] = [];
+  const walk = (n: MapTree, path: MapNode[]) => {
+    if (n.node.kind === 'item') {
+      if (!best.length || n.node.createdAt > best.at(-1)!.createdAt) best = [...path, n.node];
+      return;
+    }
+    n.children.forEach((c) => walk(c, [...path, n.node]));
+  };
+  walk(t, []);
+  return best.length && best.at(-1)!.createdAt > Date.now() - JUST_MS ? best : [];
+}
 
-onMessages({
-  'event/dataChanged': async () => {
-    await refresh();
-    return null;
+async function load() {
+  const [subs, settings] = await Promise.all([sendMessage('map/subjects', {}), sendMessage('settings/get', {})]);
+  configured.value = Boolean(settings.baseUrl && settings.model && settings.hasKey);
+  subjects.value = subs;
+  loaded.value = true;
+  if (!subs.length) {
+    tree.value = undefined;
+    return;
+  }
+  currentId.value = subs.find((s) => s.open)?.id;
+  if (!currentId.value) {
+    tree.value = undefined;
+    return;
+  }
+  tree.value = await sendMessage('map/tree', { subjectId: currentId.value! });
+  const offer = await sendMessage('outline/state', { subjectId: currentId.value! });
+  outlineOffer.value = offer.offer ? { ...(offer.outline ? { outline: offer.outline } : {}) } : undefined;
+  const stuck = await sendMessage('stuck/view', { mapId: currentId.value! });
+  stuckMarks.value = new Set(stuck.marks);
+  // A card the user is in the middle of stays as it is; the orange topic's chapter unfolds so it shows.
+  if (stuck.card?.checkId !== stuckCard.value?.checkId) stuckCard.value = stuck.card;
+  for (const mark of stuck.marks) for (const id of ancestorsOf(tree.value, mark) ?? []) expanded.value.add(id);
+  const path = newestPath(tree.value);
+  newestId.value = path.at(-1)?.id;
+  for (const n of path.slice(1, -1)) expanded.value.add(n.id);
+  for (const c of tree.value.children) if (c.node.role === 'unplaced') expanded.value.add(c.node.id);
+}
+
+/** The ids from the subject down to a node's parent; undefined when the node is not in the tree. */
+function ancestorsOf(t: MapTree, id: string, path: string[] = []): string[] | undefined {
+  if (t.node.id === id) return path;
+  for (const c of t.children) {
+    const hit = ancestorsOf(c, id, [...path, t.node.id]);
+    if (hit) return hit;
+  }
+  return undefined;
+}
+
+const openMap = (id: string) => run(() => sendMessage('maps/open', { id }));
+const createMap = (title: string) => run(() => sendMessage('map/addSubject', { title }));
+
+function showNotice(text: string, group: string) {
+  notice.value = { text, group };
+  setTimeout(() => {
+    if (notice.value?.group === group) notice.value = undefined;
+  }, NOTICE_MS);
+}
+
+provideMap({
+  expanded,
+  stuckMarks,
+  newestId,
+  editingId,
+  dragging,
+  dropTarget,
+  selectedId,
+  addingTo,
+  toggle(id) {
+    if (expanded.value.has(id)) expanded.value.delete(id);
+    else expanded.value.add(id);
+    saveExpanded();
+  },
+  select(node) {
+    selectedId.value = node.id;
+  },
+  dblclick(node) {
+    editingId.value = node.id;
+  },
+  saveAdd: (text) => void editing.saveAdd(text),
+  openItem(node) {
+    if (node.source) void run(() => sendMessage('map/openSource', { itemId: node.id }));
+  },
+  openMenu(event, node) {
+    menu.value = { node, x: Math.min(event.clientX, window.innerWidth - 220), y: Math.min(event.clientY, window.innerHeight - 160) };
+  },
+  drop(targetId) {
+    const id = dragging.value;
+    dragging.value = undefined;
+    dropTarget.value = undefined;
+    if (id && id !== targetId) void run(() => sendMessage('map/moveNode', { id, parentId: targetId }));
+  },
+  saveEdit(node, text) {
+    const value = text.trim();
+    const isFormula = node.kind === 'item' && node.itemType === 'formula';
+    if (!value || value === (isFormula ? node.latex : node.title)) return;
+    void run(() => sendMessage('map/edit', { id: node.id, ...(isFormula ? { latex: value } : { title: value }) }));
   },
 });
 
+function menuMove(targetId: string) {
+  const node = menu.value!.node;
+  menu.value = undefined;
+  void run(() => sendMessage('map/moveNode', { id: node.id, parentId: targetId }));
+}
+function menuEdit() {
+  editingId.value = menu.value!.node.id;
+  menu.value = undefined;
+}
+function menuRemove() {
+  const node = menu.value!.node;
+  menu.value = undefined;
+  void editing.remove(node);
+}
+function menuAddChild() {
+  const node = menu.value!.node;
+  menu.value = undefined;
+  void editing.newChild(node);
+}
+function menuAddItem(itemType: 'formula' | 'statement') {
+  const node = menu.value!.node;
+  menu.value = undefined;
+  editing.startAdd(node.id, itemType);
+}
+function undo(group?: string) {
+  notice.value = undefined;
+  void run(() => sendMessage('map/undo', group ? { group } : {}));
+}
+
+function renameSubject(title: string) {
+  const node = subjectNode.value!;
+  if (editingId.value !== node.id) return;
+  editingId.value = undefined;
+  if (title.trim() && title.trim() !== node.title) void run(() => sendMessage('map/edit', { id: node.id, title }));
+}
+
+function onKey(e: KeyboardEvent) {
+  const typing = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement;
+  if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'z' && !typing) {
+    e.preventDefault();
+    undo();
+    return;
+  }
+  editing.onKey(e);
+}
+
+function onMessage(message: unknown) {
+  if (isEnvelope(message) && message.type === 'event/dataChanged') void run(load);
+}
+
 onMounted(() => {
-  void refresh();
-  void activate();
-  browser.tabs.onActivated.addListener(onTabActivated);
+  void run(load);
+  browser.runtime.onMessage.addListener(onMessage);
+  window.addEventListener('keydown', onKey);
+});
+onUnmounted(() => {
+  browser.runtime.onMessage.removeListener(onMessage);
+  window.removeEventListener('keydown', onKey);
 });
 
-onUnmounted(() => browser.tabs.onActivated.removeListener(onTabActivated));
+const subjectNode = computed(() => tree.value?.node);
 </script>
 
 <template>
-  <main class="panel">
-    <header class="top">
-      <div>
-        <h1>Chat2Know</h1>
-        <p class="tagline">{{ i18n.t('panel.tagline') }}</p>
-      </div>
-      <button
-        type="button"
-        class="gear"
-        :aria-pressed="view === 'settings'"
-        :aria-label="i18n.t('settings.title')"
-        data-testid="open-settings"
-        @click="view = view === 'settings' ? 'cards' : 'settings'"
-      >
-        ⚙
-      </button>
-    </header>
-
-    <p v-if="toolbarUnavailable" class="hint" data-testid="toolbar-unavailable">{{ i18n.t('panel.toolbarUnavailable') }}</p>
-    <p v-if="settings && !configured && view !== 'settings'" class="hint" data-testid="needs-model">
-      {{ i18n.t('settings.needed') }}
-      <button type="button" class="link" @click="view = 'settings'">{{ i18n.t('settings.title') }}</button>
-    </p>
-
-    <p v-if="notice" class="notice" :class="{ error: notice.error }" role="status">{{ notice.text }}</p>
-
-    <PlacementPrompt
-      v-if="placing && view !== 'settings'"
-      :key="placing.nodeId"
-      :node-id="placing.nodeId"
-      :title="titles.get(placing.nodeId) ?? ''"
-      :placement="placing.placement"
-      @done="placing = null"
-    />
-
-    <OrganizeView v-if="view === 'organize-page' || view === 'organize-paste'" :source="view === 'organize-page' ? 'page' : 'paste'" @done="view = 'cards'" />
-
-    <SettingsView v-else-if="view === 'settings' && settings" :key="settings.baseUrl + settings.model" :settings="settings" />
-
-    <template v-else>
-      <nav class="tabs" role="tablist">
-        <button type="button" role="tab" :aria-selected="view === 'queue'" data-testid="tab-queue" @click="view = 'queue'">
-          {{ i18n.t('queue.tab') }}<span v-if="queue.length" class="pill">{{ queue.length }}</span>
-        </button>
-        <button type="button" role="tab" :aria-selected="view === 'cards'" data-testid="tab-cards" @click="view = 'cards'">
-          {{ i18n.t('queue.cardsTab') }}<span v-if="cards.length" class="pill">{{ cards.length }}</span>
-        </button>
-        <button type="button" role="tab" :aria-selected="view === 'quiz'" data-testid="tab-quiz" @click="view = 'quiz'">
-          {{ i18n.t('quiz.tab') }}<span v-if="due.length" class="pill">{{ due.length }}</span>
-        </button>
-        <button type="button" role="tab" :aria-selected="view === 'learn'" data-testid="tab-learn" @click="view = 'learn'">
-          {{ i18n.t('learn.tab') }}<span v-if="suspected" class="pill" data-testid="learn-pill">{{ suspected }}</span>
-        </button>
-      </nav>
-
-      <LearnView v-if="view === 'learn'" :asks="asks" :recording="recording" :analysis="analysis" :diagnoses="diagnoses" :configured="configured" />
-
-      <QuizView v-else-if="view === 'quiz'" :due="due" :configured="configured" :stats="stats" />
-
-      <AskQueue v-else-if="view === 'queue'" :items="queue" :answers="answers" :leftovers="leftovers" :titles="titles" @open-source="openSource" />
-
-      <template v-else>
-        <section class="actions">
-          <span class="count" data-testid="card-count">{{ countLabel }}</span>
-          <details class="menu">
-            <summary data-testid="export-menu">{{ i18n.t('panel.export') }}</summary>
-            <div class="menu-items">
-              <button type="button" data-testid="export-json" @click="exportJson">{{ i18n.t('panel.exportJson') }}</button>
-              <button type="button" data-testid="export-md" @click="exportMarkdown">{{ i18n.t('panel.exportMarkdown') }}</button>
-              <button type="button" data-testid="export-opml" @click="exportOpml">{{ i18n.t('panel.exportOpml') }}</button>
-              <button type="button" data-testid="export-anki" @click="exportAnki">{{ i18n.t('panel.exportAnki') }}</button>
-            </div>
-          </details>
-          <button type="button" data-testid="import-json" @click="fileInput?.click()">{{ i18n.t('panel.importJson') }}</button>
-          <button type="button" data-testid="organize-page" :disabled="!configured" @click="view = 'organize-page'">{{ i18n.t('organize.page') }}</button>
-          <button type="button" data-testid="organize-paste" :disabled="!configured" @click="view = 'organize-paste'">{{ i18n.t('organize.paste') }}</button>
-          <input ref="fileInput" type="file" accept="application/json,.json" hidden data-testid="import-input" @change="importJson">
-        </section>
-        <CardList :cards="cards" :configured="configured" @open-source="openSource" />
-      </template>
+  <main class="panel" data-testid="panel">
+    <template v-if="loaded && !subjects.length">
+      <FirstScreen @created="run(load)" />
     </template>
+
+    <template v-else-if="loaded && !current">
+      <header class="top">
+        <MapSwitcher :subjects="subjects" start-open @open="openMap" @create="createMap" />
+      </header>
+      <p class="pick-map" data-testid="pick-map">{{ i18n.t('panel.pickMap') }}</p>
+    </template>
+
+    <template v-else-if="tree && current">
+      <header class="top">
+        <MapSwitcher :subjects="subjects" @open="openMap" @create="createMap" />
+        <a :href="mapUrl" target="_blank" class="expand">{{ i18n.t('panel.expand') }}</a>
+      </header>
+
+      <div v-if="!configured" class="banner" data-testid="no-model">
+        <span>{{ i18n.t('panel.noModel') }}</span>
+        <a :href="settingsUrl" target="_blank">{{ i18n.t('panel.setUpModel') }}</a>
+      </div>
+      <p v-if="error" class="error" role="alert">{{ error }}</p>
+
+      <StuckCardView v-if="stuckCard && !outlineOffer" :key="stuckCard.checkId" class="stuck-card" :card="stuckCard" @done="stuckCard = undefined; run(load)" />
+      <OutlineOffer v-if="outlineOffer" :key="current.id" :tree="tree" :outline="outlineOffer.outline" @done="run(load)" />
+      <section v-else class="map" role="tree" :aria-label="current.title || i18n.t('map.unnamed')">
+        <div
+          class="chip-row"
+          :class="{ target: dropTarget === subjectNode!.id }"
+          @dragover.prevent="dragging && (dropTarget = subjectNode!.id)"
+          @dragleave="dropTarget === subjectNode!.id && (dropTarget = undefined)"
+          @drop.prevent="dropTarget === subjectNode!.id && (dragging && dragging !== subjectNode!.id) && run(() => sendMessage('map/moveNode', { id: dragging!, parentId: subjectNode!.id }))"
+          @contextmenu.prevent="menu = { node: subjectNode!, x: $event.clientX, y: $event.clientY }"
+        >
+          <input
+            v-if="editingId === subjectNode!.id"
+            class="chip-edit"
+            :value="subjectNode!.title"
+            @keydown.enter.prevent="($event.target as HTMLInputElement).blur()"
+            @keydown.esc.prevent="editingId = undefined"
+            @blur="renameSubject(($event.target as HTMLInputElement).value)"
+          >
+          <span v-else class="chip" :class="{ unnamed: !subjectNode!.title }" @dblclick="editingId = subjectNode!.id">{{ subjectNode!.title || i18n.t('map.unnamed') }}</span>
+          <span class="muted small">{{ itemCount(tree) === 1 ? i18n.t('panel.itemCountOne') : i18n.t('panel.itemCount', [String(itemCount(tree))]) }}</span>
+        </div>
+        <MapBranch v-if="tree.children.length || addingTo?.parentId === tree.node.id" :trees="tree.children" :parent-id="tree.node.id" />
+      </section>
+
+      <footer class="foot">
+        <template v-if="notice">
+          <span>{{ notice.text }}</span>
+          <button v-if="notice.group" type="button" class="link-button" @click="undo(notice.group)">{{ i18n.t('toast.undo') }}</button>
+        </template>
+        <span v-else class="muted">{{ outlineOffer ? i18n.t('outline.footer') : stuckCard ? i18n.t('stuck.footer') : configured ? i18n.t('panel.hint') : i18n.t('panel.hintNoModel') }}</span>
+      </footer>
+    </template>
+
+    <ContextMenu
+      v-if="menu"
+      :node="menu.node"
+      :x="menu.x"
+      :y="menu.y"
+      :subjects="subjects"
+      @close="menu = undefined"
+      @move="menuMove"
+      @edit="menuEdit"
+      @remove="menuRemove"
+      @add-child="menuAddChild"
+      @add-item="menuAddItem"
+    />
   </main>
 </template>

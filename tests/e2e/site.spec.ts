@@ -1,0 +1,307 @@
+/// <reference types="chrome" />
+import { mkdirSync } from 'node:fs';
+import { expect, test } from './fixtures';
+import { configureModel, selectText, send, tabIdOf } from './helpers';
+
+const SITE_PAGES: Record<string, number> = {
+  'chatgpt-zh-softmax.html': 38,
+  'claude-zh-ai-math.html': 9,
+  'deepseek-zh-matrix.html': 7,
+  'gemini-zh-logarithm.html': 1,
+  'kimi-zh-softmax.html': 4,
+  'doubao-zh-softmax.html': 0, // its answer has inline formulas only
+};
+
+test('＋ beside formulas on ticked sites: record, toast, undo, duplicates; nothing on other sites', async ({ context, extensionId, fixtureServer, serviceWorker }) => {
+  const panel = await context.newPage();
+  await panel.goto(`chrome-extension://${extensionId}/sidepanel.html`);
+  const markdown = async () => (await send<string>(panel, 'map/export', { format: 'markdown' })).data;
+
+  const page = await context.newPage();
+  await page.setViewportSize({ width: 1100, height: 760 });
+  await page.goto(`${fixtureServer}/synthetic-chat-katex.html`);
+  expect(await page.locator('chat2know-ui').count()).toBe(0);
+  await send(panel, 'sites/setOrigins', { origins: [fixtureServer] });
+
+  // The open tab gets the script at once: one ＋ per display formula.
+  const plus = page.locator('chat2know-ui button[data-state="add"]');
+  await expect(plus).toHaveCount(1);
+  // No map is open: nothing is stored until the user creates one for this note.
+  await plus.first().click();
+  const toast = page.locator('chat2know-ui .toast');
+  await expect(toast).toContainText('No map is open');
+  expect(await markdown()).toBe('\n');
+  await toast.getByRole('button', { name: 'create a map and add this' }).click();
+  await expect(toast).toContainText('Added to Unnamed map › Unplaced');
+  await expect(page.locator('chat2know-ui button[data-state="added"]')).toHaveText('Added');
+  mkdirSync('tests/e2e/screenshots', { recursive: true });
+  await page.screenshot({ path: 'tests/e2e/screenshots/page-recorded.png' });
+  expect(await markdown()).toContain('- $\\mathrm{Attention}(Q, K, V) = \\mathrm{softmax}\\left(\\frac{QK^\\top}{\\sqrt{d_k}}\\right)V$ ([source]');
+
+  // 撤销 takes the item away; the map the user created stays (empty, so the export leaves it out).
+  await toast.getByRole('button', { name: 'Undo' }).click();
+  await expect(plus).toHaveCount(1);
+  expect(await markdown()).toBe('\n');
+  expect((await send<{ title: string }[]>(panel, 'map/subjects', {})).data.map((m) => m.title)).toEqual(['']);
+
+  await plus.first().click();
+  await expect(toast).toContainText('Added to');
+  // Recorded once already: after a reload the same formula is not added again, unless asked.
+  await page.reload();
+  await page.locator('chat2know-ui button[data-state="add"]').first().click();
+  await expect(toast).toContainText('Already in Unnamed map › Unplaced');
+  await toast.getByRole('button', { name: 'Add anyway' }).click();
+  await expect(toast).toContainText('Added to');
+  expect((await markdown()).match(/\\mathrm\{Attention\}/g)).toHaveLength(2);
+
+  // The selection, as Alt+S and the context menu ask for it: a statement where the last item went.
+  await selectText(page, 'p:has(strong)', 'keeps the softmax from saturating');
+  const tabId = await tabIdOf(panel, page.url());
+  await serviceWorker.evaluate((id) => chrome.tabs.sendMessage(id, { type: 'site/recordSelection', payload: {} }), tabId);
+  await expect(toast).toContainText('Added to Unnamed map › Unplaced');
+  expect(await markdown()).toContain('- keeps the softmax from saturating');
+
+  // Another origin is not ticked: no script there.
+  const other = await context.newPage();
+  await other.goto(`${fixtureServer.replace('127.0.0.1', 'localhost')}/synthetic-chat-katex.html`);
+  await other.waitForTimeout(300);
+  expect(await other.locator('chat2know-ui').count()).toBe(0);
+});
+
+test('the bar over a selection: 记下, 保护原文 word for word, 提问; never in a text box', async ({ context, extensionId, fixtureServer }) => {
+  const panel = await context.newPage();
+  await panel.setViewportSize({ width: 380, height: 820 });
+  await panel.goto(`chrome-extension://${extensionId}/sidepanel.html`);
+  await send(panel, 'sites/setOrigins', { origins: [fixtureServer] });
+  await send(panel, 'map/addSubject', { title: '注意力' });
+  const markdown = async () => (await send<string>(panel, 'map/export', { format: 'markdown' })).data;
+
+  const page = await context.newPage();
+  await page.setViewportSize({ width: 1100, height: 760 });
+  await page.goto(`${fixtureServer}/synthetic-chat-katex.html`);
+  await expect(page.locator('chat2know-ui button[data-state="add"]')).toHaveCount(1); // the script is in
+  const bar = page.locator('chat2know-ui [role="toolbar"]');
+  const toast = page.locator('chat2know-ui .toast');
+
+  // Nothing is drawn until the user selects; one stray character is not a selection.
+  await expect(bar).toHaveCount(0);
+  await selectText(page, '#outro', 'I');
+  await page.waitForTimeout(100);
+  await expect(bar).toHaveCount(0);
+
+  const words = 'attention is a learned, content-based lookup.';
+  await selectText(page, '#outro', words);
+  await expect(bar.getByRole('button')).toHaveText(['Note', 'Keep words', 'Ask']);
+  await expect(bar.getByRole('button', { name: 'Ask' })).toBeEnabled();
+  // The bar sits above the selection.
+  const [barBox, textBox] = [await bar.boundingBox(), await page.locator('#outro').boundingBox()];
+  expect(barBox!.y + barBox!.height).toBeLessThanOrEqual(textBox!.y);
+  mkdirSync('tests/e2e/screenshots', { recursive: true });
+  await page.screenshot({ path: 'tests/e2e/screenshots/page-selection-bar.png' });
+
+  // 保护原文: the words go in exactly as selected; the bar goes away.
+  await bar.getByRole('button', { name: 'Keep words' }).click();
+  await expect(toast).toContainText('Kept word for word in 注意力 › Unplaced');
+  await expect(bar).toHaveCount(0);
+  expect(await markdown()).toContain(`- > ${words} ([source]`);
+
+  // 记下: the same as Alt+S, a statement.
+  await selectText(page, 'p:has(strong)', 'keeps the softmax from saturating');
+  await bar.getByRole('button', { name: 'Note' }).click();
+  await expect(toast).toContainText('Added to 注意力 › Unplaced');
+  expect(await markdown()).toContain('- keeps the softmax from saturating');
+
+  // Esc puts the bar away; collapsing the selection does too.
+  await selectText(page, '#intro', 'Attention lets each token');
+  await expect(bar).toHaveCount(1);
+  await page.keyboard.press('Escape');
+  await expect(bar).toHaveCount(0);
+  await selectText(page, '#intro', 'Attention lets each token');
+  await page.evaluate(() => document.getSelection()!.removeAllRanges());
+  await expect(bar).toHaveCount(0);
+
+  // Text the user selects while typing a question is theirs: no bar.
+  await page.evaluate(() => {
+    const box = document.createElement('textarea');
+    box.id = 'composer';
+    box.value = 'how does scaling help?';
+    document.querySelector('#outro')!.after(box);
+    box.focus();
+    box.select();
+    box.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+  });
+  await page.waitForTimeout(100);
+  await expect(bar).toHaveCount(0);
+
+  // In the side panel the quote has its own border and a serif face (artboard 13).
+  await panel.reload();
+  const quote = panel.locator('.item.quote');
+  await expect(quote.locator('.item-body')).toHaveText(words);
+  expect(await quote.evaluate((el) => [getComputedStyle(el).borderTopColor, getComputedStyle(el.querySelector('.item-body')!).fontFamily])).toEqual([
+    'rgb(122, 79, 181)',
+    expect.stringContaining('Noto Serif SC'),
+  ]);
+  await panel.screenshot({ path: 'tests/e2e/screenshots/panel-quote.png' });
+});
+
+test('提问: a window beside the selection streams a short answer; it goes to the map or is kept word for word; follow-ups; nothing else kept', async ({ context, extensionId, fixtureServer, mockLlm }) => {
+  const panel = await context.newPage();
+  await panel.goto(`chrome-extension://${extensionId}/sidepanel.html`);
+  await send(panel, 'sites/setOrigins', { origins: [fixtureServer] });
+  await send(panel, 'map/addSubject', { title: '注意力' });
+  await configureModel(panel, mockLlm.url, 'wrong-key');
+  const markdown = async () => (await send<string>(panel, 'map/export', { format: 'markdown' })).data;
+
+  const page = await context.newPage();
+  await page.setViewportSize({ width: 1100, height: 760 });
+  await page.goto(`${fixtureServer}/synthetic-chat-katex.html`);
+  await expect(page.locator('chat2know-ui button[data-state="add"]')).toHaveCount(1);
+  const bar = page.locator('chat2know-ui [role="toolbar"]');
+  const win = page.getByRole('dialog', { name: 'Ask · about the selection' });
+  const answers = win.locator('.ask-answer');
+
+  await selectText(page, 'p:has(strong)', 'keeps the softmax from saturating');
+  await bar.getByRole('button', { name: 'Ask' }).click();
+  await expect(win).toBeVisible();
+  await expect(bar).toHaveCount(0);
+  await expect(win.locator('.ask-quote')).toHaveText('keeps the softmax from saturating');
+  await expect(win.getByPlaceholder('What would you like to know?')).toBeFocused();
+  // A provider error shows in the window, as the provider wrote it.
+  await page.keyboard.type('why scale?');
+  await page.keyboard.press('Enter');
+  await expect(answers.first().locator('.ask-error')).toHaveText('HTTP 401: Invalid API key');
+  await page.keyboard.press('Escape');
+  await expect(win).toHaveCount(0);
+
+  await configureModel(panel, mockLlm.url);
+  await selectText(page, 'p:has(strong)', 'keeps the softmax from saturating');
+  await bar.getByRole('button', { name: 'Ask' }).click();
+  await page.keyboard.type('why scale?');
+  await page.keyboard.press('Enter');
+  const first = answers.first();
+  await expect(first.locator('.ask-text')).toContainText('About “keeps the softmax from saturating”: why scale?');
+  await expect(first.locator('.ask-text math')).toHaveCount(2); // typeset, not $…$
+  await expect(first.getByRole('button')).toHaveText(['＋ Add to map', 'Keep words', 'Copy']);
+  mkdirSync('tests/e2e/screenshots', { recursive: true });
+  await page.screenshot({ path: 'tests/e2e/screenshots/page-ask.png' });
+  // The model saw the selection with its context; the question went into the question log.
+  const asked = mockLlm.requests.filter((r) => r.body.messages?.[0]?.content.startsWith('[task:ask]'));
+  expect(asked.at(-1)!.body.stream).toBe(true);
+  expect(asked.at(-1)!.body.messages![1]!.content).toContain('Selected:\nkeeps the softmax from saturating\n\nContext: …ax(QKᵀ/√dₖ)V The scaling factor [SELECTED] when d_k is large.');
+  expect((await send<{ text: string }[]>(panel, 'asks/list', {})).data.map((a) => a.text)).toEqual(['why scale?', 'why scale?']);
+
+  // 记到导图: a statement (one line, formulas as $…$) sourced at the selection; 保护原文: the answer word for word.
+  await first.getByRole('button', { name: '＋ Add to map' }).click();
+  const toast = page.locator('chat2know-ui .toast');
+  await expect(toast).toContainText('Added to 注意力 ›');
+  await expect(first.getByRole('button', { name: 'Added' })).toBeDisabled();
+  await first.getByRole('button', { name: 'Keep words' }).click();
+  await expect(toast).toContainText('Kept word for word in 注意力 ›');
+  await expect.poll(markdown).toContain('- > About “keeps the softmax from saturating”: why scale?\n  >\n  > The scaling keeps $QK^\\top$ small');
+  expect(await markdown()).toContain('- About “keeps the softmax from saturating”: why scale? The scaling keeps $QK^\\top$ small: divide by $\\sqrt{d_k}$. ([source](http');
+
+  // A follow-up carries the earlier turn.
+  await win.getByPlaceholder('Ask a follow-up…').fill('and without it?');
+  await win.getByRole('button', { name: 'Send' }).click();
+  await expect(answers.nth(1).locator('.ask-text')).toContainText('(turn 2)');
+  expect(mockLlm.requests.at(-1)!.body.messages!.map((m) => m.role)).toEqual(['system', 'user', 'assistant', 'user']);
+
+  // Closing mid-answer stops it; nothing of the window is left, and the page works as before.
+  await win.getByPlaceholder('Ask a follow-up…').fill('SLOW one');
+  await win.getByRole('button', { name: 'Send' }).click();
+  await win.getByRole('button', { name: 'Close' }).click();
+  await expect(win).toHaveCount(0);
+  await selectText(page, '#outro', 'attention is a learned');
+  await expect(bar).toHaveCount(1);
+});
+
+test('＋ on the saved pages of the six AI sites', async ({ context, extensionId, fixtureServer }) => {
+  test.setTimeout(90_000); // large saved pages whose external assets are blocked
+  const panel = await context.newPage();
+  await panel.goto(`chrome-extension://${extensionId}/sidepanel.html`);
+  await send(panel, 'sites/setOrigins', { origins: [fixtureServer] });
+  const page = await context.newPage();
+  for (const [file, formulas] of Object.entries(SITE_PAGES)) {
+    await page.goto(`${fixtureServer}/${file}`, { waitUntil: 'domcontentloaded' });
+    await expect(page.locator('chat2know-ui button[data-state="add"]'), file).toHaveCount(formulas);
+  }
+});
+
+test('with a model, the recorded formula moves to its topic and the toast follows; a model error keeps it in Unplaced', async ({ context, extensionId, fixtureServer, mockLlm }) => {
+  const panel = await context.newPage();
+  await panel.goto(`chrome-extension://${extensionId}/sidepanel.html`);
+  await send(panel, 'sites/setOrigins', { origins: [fixtureServer] });
+  await send(panel, 'map/addSubject', { title: '' }); // the user creates a map without a name; it opens
+  await configureModel(panel, mockLlm.url, 'wrong-key');
+  const page = await context.newPage();
+  await page.goto(`${fixtureServer}/synthetic-chat-katex.html`);
+  const toast = page.locator('chat2know-ui .toast');
+
+  await page.locator('chat2know-ui button[data-state="add"]').click();
+  await expect(toast).toContainText('Kept in Unplaced: HTTP 401: Invalid API key');
+  await toast.getByRole('button', { name: 'Undo' }).click();
+
+  await configureModel(panel, mockLlm.url);
+  await page.locator('chat2know-ui button[data-state="add"]').click();
+  await expect(toast).toContainText('Added to 深度学习 › 注意力机制');
+  const md = (await send<string>(panel, 'map/export', { format: 'markdown' })).data;
+  expect(md).toMatch(/^# 深度学习\n\n## 注意力机制\n\n- \$\\mathrm\{Attention\}/);
+  // 撤销 takes back the record and the placement together, with the name it gave the map.
+  await toast.getByRole('button', { name: 'Undo' }).click();
+  await expect.poll(async () => (await send<string>(panel, 'map/export', { format: 'markdown' })).data).toBe('\n');
+});
+
+test('改位置: the picker offers places, searches, and moves the item; the toast says where', async ({ context, extensionId, fixtureServer, mockLlm }) => {
+  const panel = await context.newPage();
+  await panel.goto(`chrome-extension://${extensionId}/sidepanel.html`);
+  const node = (id: string, kind: string, parentId: string | undefined, subjectId: string, title: string) => ({
+    id,
+    subjectId,
+    kind,
+    ...(parentId ? { parentId } : {}),
+    order: `a${id}`,
+    title,
+    origin: 'user',
+    createdAt: 0,
+    updatedAt: '0',
+  });
+  const map = [
+    node('1', 'subject', undefined, '1', '线性代数'),
+    node('2', 'section', '1', '1', '矩阵'),
+    node('3', 'section', '2', '1', '转置'),
+    node('4', 'section', '2', '1', '迹'),
+    node('5', 'subject', undefined, '5', '深度学习'),
+    node('6', 'section', '5', '5', '注意力机制'),
+    node('7', 'section', '5', '5', '优化'),
+  ];
+  await send(panel, 'map/import', { json: JSON.stringify({ format: 'chat2know', version: 2, exportedAt: 0, nodes: map }) });
+  await send(panel, 'maps/open', { id: '5' });
+  await send(panel, 'sites/setOrigins', { origins: [fixtureServer] });
+  await configureModel(panel, mockLlm.url);
+
+  const page = await context.newPage();
+  await page.setViewportSize({ width: 1100, height: 760 });
+  await page.goto(`${fixtureServer}/synthetic-chat-katex.html`);
+  const toast = page.locator('chat2know-ui .toast');
+  await page.locator('chat2know-ui button[data-state="add"]').click();
+  await expect(toast).toContainText('Added to 深度学习 › 注意力机制');
+  await toast.getByRole('button', { name: 'Move' }).click();
+
+  const picker = page.locator('chat2know-ui .picker');
+  await expect(picker).toContainText('Where should it go?');
+  await expect(picker).toContainText('Now in: 注意力机制');
+  // Other places in this map; search reaches every map.
+  await expect(picker.locator('.picker-option')).toHaveText(['深度学习 › 优化']);
+  await page.screenshot({ path: 'tests/e2e/screenshots/page-relocate.png' });
+
+  await picker.getByPlaceholder('Type a topic name').fill('迹');
+  await expect(picker.locator('.picker-option')).toHaveText(['线性代数 › 矩阵 › 迹']);
+  await picker.getByRole('button', { name: 'Move' }).click();
+  await expect(picker).toHaveCount(0);
+  await expect(toast).toContainText('Moved to 线性代数 › 矩阵 › 迹');
+  expect((await send<string>(panel, 'map/export', { format: 'markdown' })).data).toContain('### 迹\n\n- $\\mathrm{Attention}');
+
+  // Undo puts it back where placement had filed it.
+  await toast.getByRole('button', { name: 'Undo' }).click();
+  await expect.poll(async () => (await send<string>(panel, 'map/export', { format: 'markdown' })).data).toContain('## 注意力机制\n\n- $\\mathrm{Attention}');
+});

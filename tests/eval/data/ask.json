@@ -1,0 +1,51 @@
+{
+  "_about": "Questions about a selection, as the floating window sends them (S2). `lang` is the prompt language; `mustMention` are words a right answer contains (any one of each list).",
+  "cases": [
+    {
+      "lang": "zh",
+      "selection": "幂指函数 $y = u(x)^{v(x)}$",
+      "before": "七、对数求导法 适用于",
+      "after": "或连乘连除形式，先取对数再求导。",
+      "pageTitle": "求导法则",
+      "question": "什么是幂指函数？为什么不能直接用幂函数或指数函数的求导公式？",
+      "mustMention": [["底", "指数"], ["对数", "ln"]]
+    },
+    {
+      "lang": "zh",
+      "selection": "$(AB)^T = B^T A^T$",
+      "before": "转置的性质：",
+      "after": "，注意顺序要反过来。",
+      "pageTitle": "线性代数",
+      "question": "为什么顺序要反过来？",
+      "mustMention": [["行", "列", "维度", "形状"]]
+    },
+    {
+      "lang": "en",
+      "selection": "divide by $\\sqrt{d_k}$",
+      "before": "The dot products grow large in magnitude, so we",
+      "after": "to keep the softmax from saturating.",
+      "pageTitle": "Scaled dot-product attention",
+      "question": "What does saturating mean here?",
+      "mustMention": [["gradient"], ["softmax"]]
+    },
+    {
+      "lang": "en",
+      "selection": "L2 regularization",
+      "before": "To reduce overfitting we add",
+      "after": "to the loss, weighted by lambda.",
+      "pageTitle": "Regularization",
+      "question": "How is this different from weight decay?",
+      "mustMention": [["weight decay"], ["Adam", "SGD", "equivalent", "same"]]
+    }
+  ],
+  "followUp": {
+    "lang": "zh",
+    "selection": "$(AB)^T = B^T A^T$",
+    "before": "转置的性质：",
+    "after": "，注意顺序要反过来。",
+    "pageTitle": "线性代数",
+    "first": "为什么顺序要反过来？",
+    "next": "那三个矩阵相乘呢？",
+    "mustMention": [["C^T", "C^{T}", "Cᵀ"]]
+  }
+}

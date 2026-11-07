@@ -1,225 +1,518 @@
-import { UserError } from '@/src/errors';
-import { generateKeyBetween } from 'fractional-indexing';
+import { generateKeyBetween, generateNKeysBetween } from 'fractional-indexing';
 import { monotonicFactory } from 'ulid';
-import type { CapturedSelection } from '@/src/capture/selection';
-import { Hlc } from './hlc';
+import { UserError } from '@/src/errors';
+import { buildTree, byOrder, type MapTree, type OutlineNode } from '@/src/graph/tree';
+import type { Hlc } from './hlc';
 import type { Chat2KnowDB } from './schema';
-import type { Ask, AskTag, Concept, Diagnosis, DiagnosisQuiz, Edge, EdgeKind, Embedding, Entity, InboxItem, KNode, Mastery, NodeView, OpLogEntry, Preference, PrereqEdge, QuizItem, Review, ReviewMode, Source, Verdict } from './types';
-import { DAY_MS, isDue, nextInterval, quizMode } from '@/src/review/schedule';
-import type { TextQuote } from '@/src/capture/text-quote';
-import { titleFromMarkdown } from './title';
-import { conceptKey } from '@/src/graph/prereq';
-
-export const EXPORT_FORMAT = 'chat2know';
-export const EXPORT_VERSION = 1;
-
-export interface ExportFile {
-  format: typeof EXPORT_FORMAT;
-  version: typeof EXPORT_VERSION;
-  exportedAt: number;
-  nodes: KNode[];
-  edges: Edge[];
-  sources: Source[];
-  reviews: Review[];
-  preferences: Preference[];
-}
-
-export interface ImportResult {
-  nodes: number;
-  edges: number;
-  sources: number;
-  reviews: number;
-  preferences: number;
-}
-
-export type CaptureType = Extract<KNode['type'], 'knowledge' | 'idea'>;
-
-export interface AskLaterInput {
-  term: string;
-  question: string;
-  capture: CapturedSelection;
-}
-
-export interface AskLaterResult {
-  nodeId: string;
-  askCount: number;
-  merged: boolean;
-}
-
-/** What the content script needs to underline open questions on a page. */
-export interface PageQuestion {
-  nodeId: string;
-  term: string;
-  quote: TextQuote;
-}
+import type { Ask, Embedding, ItemSource, ItemType, MapNode, Origin, Report, StuckCheck } from './types';
 
 const stripHash = (url: string) => url.replace(/#.*$/, '');
 
-/** Kept knowledge the user must know by heart. Open questions marked "know by heart" wait until they are kept. */
-const isQuizzable = (n: KNode) => n.type === 'knowledge' && n.status !== 'draft' && n.mastery === 'internalize';
+/** The action of a placement the extension made on its own (items waiting in 待归位). */
+export const AUTO_PLACE = 'autoPlace';
 
-interface ReviewSummary {
-  latest: Map<string, Review>;
-  quizzed: Map<string, number>;
-}
+/** Subject + 3 levels of sections. */
+export const MAX_DEPTH = 4;
 
-export interface AskView extends Omit<Ask, 'vector' | 'vectorModel'> {
-  concepts: string[];
-}
-
-export interface Stats {
-  masteredThisWeek: number;
-  /** The north star for the week before this one, then the one before that, and so on (3 weeks). */
-  earlierWeeks: number[];
-  due: number;
-  mustKnow: number;
-  openQuestions: number;
-}
-
-export const INBOX_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-
-/** The user's final decision when keeping an answered question. */
-export interface KeepDecision {
+export interface ItemInput {
+  itemType: ItemType;
   title: string;
-  summary: string;
-  /** For instances: the concept the kept node is an example of. */
-  concept?: string;
+  latex?: string;
+  source?: ItemSource;
+  origin?: Origin;
 }
 
-/**
- * The only write path to the database. Every write also appends to the oplog
- * in the same transaction, so a future sync layer can replay changes.
- */
+/** Where a new item goes: under a structure node, or in a map's "待归位" group (created when missing). */
+export type ItemPlace = { parentId: string } | { unplacedIn: string };
+
+/** A map write: its oplog group (to undo exactly this) and the node it is about. */
+export interface Written {
+  group: string;
+  node: MapNode;
+}
+
+type NewNode = Omit<MapNode, 'id' | 'createdAt' | 'updatedAt'>;
+
+/** Writes of one group: every node write is logged with its whole before and after row. */
+interface Writer {
+  readonly group: string;
+  put(node: MapNode): Promise<MapNode>;
+  create(node: NewNode): Promise<MapNode>;
+  drop(id: string): Promise<void>;
+  /** An entry about no node: an undo is logged even when every node had changed since. */
+  mark(): Promise<void>;
+}
+
+/** Whole rows compared without their write time: an undo restores content under a new time. */
+function sameRow(a: MapNode | null, b: MapNode | null): boolean {
+  const content = (n: MapNode | null) => (n ? JSON.stringify(Object.entries({ ...n, updatedAt: '' }).sort(([x], [y]) => (x < y ? -1 : 1))) : null);
+  return content(a) === content(b);
+}
+
+/** The only write path to the database. Map writes are logged to the oplog and can be undone. */
 export class Repository {
   private readonly ulid = monotonicFactory();
 
   constructor(
     private readonly db: Chat2KnowDB,
-    private readonly clock: Hlc,
+    readonly clock: Hlc,
     private readonly now: () => number = Date.now,
   ) {}
 
-  private log(entity: Entity, entityId: string, op: OpLogEntry['op'], patch: object): OpLogEntry {
-    return { id: this.clock.tick(), entity, entityId, op, patch: { ...patch } };
+  // ------------------------------------------------------------ reading the map
+
+  async listSubjects(): Promise<MapNode[]> {
+    return (await this.db.nodes.where('kind').equals('subject').toArray()).filter((n) => !n.deletedAt).sort(byOrder);
   }
 
-  async capture(type: CaptureType, input: CapturedSelection): Promise<NodeView> {
-    const at = this.now();
-    const node: KNode = {
-      id: this.ulid(at),
-      type,
-      title: titleFromMarkdown(input.markdown) || titleFromMarkdown(input.quote.exact),
-      body: input.markdown,
-      // Knowledge waits for the user to pick a question title; ideas are kept as-is.
-      status: type === 'knowledge' ? 'draft' : 'confirmed',
-      askCount: 0,
-      createdAt: at,
-      updatedAt: this.clock.tick(),
-    };
-    const source = this.newSource(node.id, input, at);
-    await this.db.transaction('rw', this.db.nodes, this.db.sources, this.db.oplog, async () => {
-      await this.db.nodes.add(node);
-      await this.db.sources.add(source);
-      await this.db.oplog.bulkAdd([this.log('nodes', node.id, 'put', node), this.log('sources', source.id, 'put', source)]);
-    });
-    return { ...node, sources: [source] };
+  /** Every live item, of every subject. */
+  async listItems(): Promise<MapNode[]> {
+    return (await this.db.nodes.where('kind').equals('item').toArray()).filter((n) => !n.deletedAt);
   }
 
-  private newSource(nodeId: string, input: CapturedSelection, at: number): Source {
-    return {
-      id: this.ulid(at),
-      nodeId,
-      url: input.url,
-      pageTitle: input.pageTitle,
-      quoteExact: input.quote.exact,
-      quotePrefix: input.quote.prefix,
-      quoteSuffix: input.quote.suffix,
-      capturedAt: at,
-    };
-  }
-
-  /**
-   * Saves an "ask later" question. Asking about the same term again while it is
-   * still open merges into the existing question: one more source sentence and
-   * a higher askCount, which signals the term matters.
-   */
-  async askLater(input: AskLaterInput, { merge = true } = {}): Promise<AskLaterResult> {
-    const at = this.now();
-    const question = input.question.trim();
-    return this.db.transaction('rw', this.db.nodes, this.db.sources, this.db.oplog, async () => {
-      const existing = !merge
-        ? undefined
-        : (await this.db.nodes.where('term').equalsIgnoreCase(input.term.trim()).toArray()).find(
-            (n) => n.type === 'question' && n.status === 'open' && n.deletedAt === undefined,
-          );
-      if (existing) {
-        const source = this.newSource(existing.id, input.capture, at);
-        const patch: Partial<KNode> = { askCount: existing.askCount + 1, updatedAt: this.clock.tick() };
-        if (question && !existing.originalAsk) Object.assign(patch, { title: question, originalAsk: question });
-        await this.db.nodes.update(existing.id, patch);
-        await this.db.sources.add(source);
-        await this.db.oplog.bulkAdd([this.log('nodes', existing.id, 'put', patch), this.log('sources', source.id, 'put', source)]);
-        return { nodeId: existing.id, askCount: patch.askCount!, merged: true };
-      }
-      const node: KNode = {
-        id: this.ulid(at),
-        type: 'question',
-        title: question,
-        ...(question ? { originalAsk: question } : {}),
-        term: input.term.trim(),
-        body: input.capture.markdown,
-        status: 'open',
-        askCount: 1,
-        createdAt: at,
-        updatedAt: this.clock.tick(),
-      };
-      const source = this.newSource(node.id, input.capture, at);
-      await this.db.nodes.add(node);
-      await this.db.sources.add(source);
-      await this.db.oplog.bulkAdd([this.log('nodes', node.id, 'put', node), this.log('sources', source.id, 'put', source)]);
-      return { nodeId: node.id, askCount: 1, merged: false };
-    });
-  }
-
-  /** Applies a patch to a node and logs it. Must run inside a transaction covering nodes and oplog. */
-  private async patchNode(id: string, patch: Partial<KNode>): Promise<KNode> {
-    const node = await this.db.nodes.get(id);
-    if (!node) throw new Error(`Node ${id} not found`);
-    const full = { ...patch, updatedAt: this.clock.tick() };
-    await this.db.nodes.update(id, full);
-    await this.db.oplog.add(this.log('nodes', id, 'put', full));
-    return { ...node, ...full };
-  }
-
-  private async addEdge(from: string, to: string, kind: EdgeKind, order: string): Promise<Edge> {
-    const edge: Edge = { id: this.ulid(this.now()), from, to, kind, order };
-    await this.db.edges.add(edge);
-    await this.db.oplog.add(this.log('edges', edge.id, 'put', edge));
-    return edge;
-  }
-
-  async getNode(id: string): Promise<KNode | undefined> {
+  /** A node that may have been undone away. */
+  async find(id: string): Promise<MapNode | undefined> {
     return this.db.nodes.get(id);
   }
 
-  async parentOf(nodeId: string): Promise<KNode | undefined> {
-    const edge = await this.db.edges.where('to').equals(nodeId).first();
-    return edge && this.db.nodes.get(edge.from);
+  async node(id: string): Promise<MapNode> {
+    const n = await this.db.nodes.get(id);
+    if (!n) throw new Error(`No node ${id}`);
+    return n;
   }
 
-  /** A question asked about a card or an answer: a child node that arose from it. */
-  async askFollowUp(parentId: string, question: string): Promise<KNode> {
-    const q = question.trim();
-    if (!q) throw new UserError('error.questionEmpty');
-    return this.db.transaction('rw', [this.db.nodes, this.db.edges, this.db.oplog], async () => {
-      if (!(await this.db.nodes.get(parentId))) throw new Error(`Node ${parentId} not found`);
-      const at = this.now();
-      const node: KNode = { id: this.ulid(at), type: 'question', title: q, originalAsk: q, status: 'open', askCount: 1, createdAt: at, updatedAt: this.clock.tick() };
-      await this.db.nodes.add(node);
-      await this.db.oplog.add(this.log('nodes', node.id, 'put', node));
-      await this.replaceParent(node.id, parentId, 'arose_from');
-      return node;
+  /** A subject's live map as a tree. */
+  async subjectTree(subjectId: string): Promise<MapTree> {
+    const nodes = await this.subjectNodes(subjectId);
+    const root = buildTree(nodes).find((t) => t.node.id === subjectId);
+    if (!root) throw new Error(`No subject ${subjectId}`);
+    return root;
+  }
+
+  /** All of a subject's live nodes, unordered. */
+  async subjectNodes(subjectId: string): Promise<MapNode[]> {
+    return (await this.db.nodes.where('subjectId').equals(subjectId).toArray()).filter((n) => !n.deletedAt);
+  }
+
+  /** Root first. */
+  async pathOf(id: string): Promise<MapNode[]> {
+    const path: MapNode[] = [];
+    for (let n: MapNode | undefined = await this.node(id); n; n = n.parentId ? await this.node(n.parentId) : undefined) path.unshift(n);
+    return path;
+  }
+
+  // ------------------------------------------------------------ map writes (logged, undoable)
+
+  async addSubject(title: string, origin: Origin = 'user'): Promise<Written> {
+    return this.write('addSubject', (w) => this.createSubject(w, title, origin));
+  }
+
+  async addSection(parentId: string, title: string, origin: Origin = 'user', beforeId?: string): Promise<Written> {
+    return this.write('addSection', async (w) => {
+      const parent = await this.structure(parentId);
+      if ((await this.depthOf(parent)) + 1 > MAX_DEPTH) throw new UserError('error.mapTooDeep');
+      const order = await this.orderAt(parent.id, beforeId);
+      return w.create({ subjectId: parent.subjectId, kind: 'section', parentId: parent.id, order, title: title.trim(), origin });
     });
+  }
+
+  async addItem(place: ItemPlace, input: ItemInput): Promise<Written> {
+    return this.write('addItem', async (w) => {
+      const parent = 'parentId' in place ? await this.structure(place.parentId) : await this.unplacedGroup(w, place.unplacedIn);
+      return w.create(this.newItem(parent, input, await this.orderAt(parent.id)));
+    });
+  }
+
+  /** Moves a node under `parentId`, before the sibling `beforeId` or last. Moving to another subject takes the subtree along. */
+  async move(id: string, parentId: string, beforeId?: string): Promise<string> {
+    return this.group('move', async (w) => {
+      const node = await this.live(id);
+      if (node.kind === 'subject') throw new Error('A subject cannot be moved');
+      const parent = await this.structure(parentId);
+      await this.placeUnder(w, node, parent, await this.orderAt(parent.id, beforeId, id));
+    });
+  }
+
+  /** Moves a node into a new section titled `title` under `parentId`, as one write. */
+  async moveToNewSection(id: string, parentId: string, title: string): Promise<string> {
+    return this.group('moveToNewSection', async (w) => {
+      const node = await this.live(id);
+      const parent = await this.structure(parentId);
+      if ((await this.depthOf(parent)) + 1 > MAX_DEPTH) throw new UserError('error.mapTooDeep');
+      const section = await w.create({ subjectId: parent.subjectId, kind: 'section', parentId: parent.id, order: await this.orderAt(parent.id), title: title.trim(), origin: 'user' });
+      await this.placeUnder(w, node, section, generateKeyBetween(null, null));
+    });
+  }
+
+  /** The user's own text; from now on the extension never rewrites it. */
+  async edit(id: string, patch: { title?: string; latex?: string }): Promise<string> {
+    return this.group('edit', async (w) => {
+      const node = await this.live(id);
+      await w.put({
+        ...node,
+        ...(patch.title === undefined ? {} : { title: patch.title.trim() }),
+        ...(patch.latex === undefined ? {} : { latex: patch.latex }),
+        editedByUser: true,
+      });
+    });
+  }
+
+  /** Moves everything under `fromId` to the end of `intoId` and deletes `fromId`. */
+  async mergeSections(fromId: string, intoId: string): Promise<string> {
+    return this.group('mergeSections', async (w) => {
+      const from = await this.live(fromId);
+      const into = await this.structure(intoId);
+      if (from.kind !== 'section' || into.kind !== 'section') throw new Error('Only sections are merged');
+      const children = await this.children(from.id);
+      const keys = generateNKeysBetween((await this.children(into.id)).at(-1)?.order ?? null, null, children.length);
+      for (const [i, child] of children.entries()) await this.placeUnder(w, child, into, keys[i]!);
+      await w.put({ ...from, deletedAt: this.now() });
+    });
+  }
+
+  /**
+   * Soft delete. A section's children move up into its place; a subject goes with
+   * its whole map. Undo or `restore` brings it back.
+   */
+  async remove(id: string): Promise<string> {
+    return this.group('remove', async (w) => {
+      const node = await this.live(id);
+      const at = this.now();
+      if (node.kind === 'subject') {
+        for (const n of await this.db.nodes.where('subjectId').equals(id).toArray()) if (!n.deletedAt) await w.put({ ...n, deletedAt: at });
+        return;
+      }
+      if (node.kind === 'section') {
+        const siblings = await this.children(node.parentId!);
+        const next = siblings[siblings.findIndex((s) => s.id === id) + 1];
+        const children = await this.children(id);
+        const keys = generateNKeysBetween(node.order, next?.order ?? null, children.length);
+        for (const [i, child] of children.entries()) await w.put({ ...child, parentId: node.parentId!, order: keys[i]! });
+      }
+      await w.put({ ...node, deletedAt: at });
+    });
+  }
+
+  /** Undoes the latest deletion of `id` (and what moved with it). */
+  async restore(id: string): Promise<string> {
+    const entries = await this.db.oplog.where('entityId').equals(id).reverse().sortBy('id');
+    for (const e of entries) {
+      if (e.undoes || !e.after?.deletedAt || e.before?.deletedAt) continue;
+      if (!(await this.isUndone(e.group))) return (await this.undo(e.group))!;
+    }
+    throw new Error(`No deletion of ${id} to restore`);
+  }
+
+  /**
+   * Reverts a group (default: the latest one not undone yet, passing over placements
+   * the extension made on its own, which the user never did). A node changed by a
+   * later write keeps that change. Returns the undo's own group, or null when there
+   * was nothing to undo.
+   */
+  async undo(group?: string): Promise<string | null> {
+    const target = group ?? (await this.latestUndoable());
+    if (!target || (await this.isUndone(target))) return null;
+    return this.group(
+      'undo',
+      async (w) => {
+        const entries = await this.db.oplog.where('group').equals(target).sortBy('id');
+        if (!entries.length) throw new Error(`No group ${target}`);
+        const first = new Map<string, MapNode | null>();
+        const last = new Map<string, MapNode | null>();
+        for (const e of entries) {
+          if (!first.has(e.entityId)) first.set(e.entityId, e.before);
+          last.set(e.entityId, e.after);
+        }
+        for (const [id, before] of first) {
+          if (!sameRow((await this.db.nodes.get(id)) ?? null, last.get(id)!)) continue;
+          if (before) await w.put(before);
+          else await w.drop(id);
+        }
+        await w.mark();
+      },
+      target,
+    );
+  }
+
+  /**
+   * Files an item under `path` (titles below its map) in its own map, creating the
+   * sections that are missing; the extension never moves an item to another map.
+   * An unnamed map (empty title) takes `mapName`, once. A statement takes the
+   * one-sentence form unless the user edited it. An emptied 待归位 group goes. Joins
+   * `group` when given. Returns the item's new path, or null (nothing written) when
+   * the item is gone or was written since `seen` (its updatedAt then): the user's
+   * later action wins.
+   */
+  async fileItem(itemId: string, seen: string, place: { path: string[]; statement?: string; mapName?: string }, group?: string): Promise<MapNode[] | null> {
+    let filed = false;
+    // Joined to a record, it is undone with that record; on its own it is the extension's, which Ctrl+Z passes over.
+    await this.group(
+      group ? 'fileItem' : AUTO_PLACE,
+      async (w) => {
+        const item = await this.db.nodes.get(itemId);
+        if (!item || item.deletedAt || item.updatedAt !== seen) return;
+        if (item.kind !== 'item') throw new Error(`${itemId} is not an item`);
+        filed = true;
+        const key = (t: string) => t.trim().toLowerCase();
+        let map = await this.node(item.subjectId);
+        if (!map.title.trim() && place.mapName?.trim()) map = await w.put({ ...map, title: place.mapName.trim() });
+        let parent = map;
+        for (const title of place.path) {
+          const found = (await this.children(parent.id)).find((c) => c.kind === 'section' && !c.role && key(c.title) === key(title));
+          parent =
+            found ??
+            (await w.create({ subjectId: map.id, kind: 'section', parentId: parent.id, order: await this.orderAt(parent.id), title: title.trim(), origin: 'user' }));
+        }
+        const oldParent = await this.node(item.parentId!);
+        let next = item;
+        if (parent.id !== item.parentId) {
+          await this.placeUnder(w, item, parent, await this.orderAt(parent.id));
+          next = await this.node(itemId);
+        }
+        if (place.statement && item.itemType === 'statement' && !item.editedByUser && place.statement !== item.title) {
+          await w.put({ ...next, title: place.statement.trim() });
+        }
+        if (oldParent.role === 'unplaced' && !(await this.children(oldParent.id)).length) await w.put({ ...oldParent, deletedAt: this.now() });
+      },
+      undefined,
+      group,
+    );
+    return filed ? this.pathOf(itemId) : null;
+  }
+
+  /**
+   * Lays an outline over a subject as grey (outline) sections, one undoable write.
+   * A section the user already has, by title, is used instead of a grey one: as a
+   * child of the right parent if it is there, else moved there from elsewhere in the
+   * subject when the depth allows. Nothing else of the user's moves, and no item is added.
+   */
+  async layOutline(subjectId: string, outline: OutlineNode[]): Promise<string> {
+    return this.group('layOutline', async (w) => {
+      const subject = await this.structure(subjectId);
+      if (subject.kind !== 'subject') throw new Error(`${subjectId} is not a subject`);
+      const key = (t: string) => t.trim().toLowerCase();
+      const claimed = new Set<string>();
+      const lay = async (nodes: OutlineNode[], parent: MapNode): Promise<void> => {
+        for (const o of nodes) {
+          const sections = (await this.subjectNodes(subjectId)).filter((n) => n.kind === 'section' && !n.role && !claimed.has(n.id) && key(n.title) === key(o.title));
+          let node = sections.find((n) => n.parentId === parent.id);
+          if (!node && sections.length) {
+            const path = await this.pathOf(parent.id);
+            const elsewhere = sections.find((n) => !path.some((p) => p.id === n.id));
+            if (elsewhere && path.length + (await this.sectionHeight(elsewhere)) <= MAX_DEPTH) {
+              await this.placeUnder(w, elsewhere, parent, await this.orderAt(parent.id, undefined, elsewhere.id));
+              node = await this.node(elsewhere.id);
+            }
+          }
+          node ??= await w.create({ subjectId, kind: 'section', parentId: parent.id, order: await this.orderAt(parent.id), title: o.title.trim(), origin: 'outline' });
+          claimed.add(node.id);
+          if ((await this.depthOf(node)) < MAX_DEPTH) await lay(o.children, node);
+        }
+      };
+      await lay(outline, subject);
+    });
+  }
+
+  // ------------------------------------------------------------ placements and embeddings (not logged)
+
+  async notePlacement(itemId: string, suggestedPath: string[]): Promise<void> {
+    await this.db.placements.put({ id: itemId, suggestedPath, finalPath: suggestedPath, changedByUser: false, at: this.now() });
+  }
+
+  /** The user moved an item the extension had placed: its final path becomes a placement example. */
+  async notePlacementChange(itemId: string, finalPath: string[]): Promise<void> {
+    if (await this.db.placements.get(itemId)) await this.db.placements.update(itemId, { finalPath, changedByUser: true, at: this.now() });
+  }
+
+  /** The latest placements the user corrected in a map, with the items' text, newest first. */
+  async placementExamples(limit: number, mapId: string): Promise<{ text: string; path: string[] }[]> {
+    const rows = (await this.db.placements.orderBy('at').reverse().toArray()).filter((p) => p.changedByUser);
+    const out: { text: string; path: string[] }[] = [];
+    for (const p of rows) {
+      const n = await this.db.nodes.get(p.id);
+      if (n && !n.deletedAt && n.subjectId === mapId) out.push({ text: n.latex ?? n.title, path: p.finalPath });
+      if (out.length === limit) break;
+    }
+    return out;
+  }
+
+  async embeddings(nodeIds: string[]): Promise<Map<string, Embedding>> {
+    const rows = await this.db.embeddings.bulkGet(nodeIds);
+    return new Map(rows.filter((r): r is Embedding => r !== undefined).map((r) => [r.nodeId, r]));
+  }
+
+  async putEmbeddings(rows: Embedding[]): Promise<void> {
+    await this.db.embeddings.bulkPut(rows);
+  }
+
+  // ------------------------------------------------------------ export and import
+
+  /** Every live map node: the lossless JSON export. */
+  async exportNodes(): Promise<MapNode[]> {
+    return (await this.db.nodes.toArray()).filter((n) => !n.deletedAt);
+  }
+
+  /** Merges exported nodes into the map, as one undoable write; a node with the same id is replaced. */
+  async importNodes(nodes: MapNode[]): Promise<string> {
+    for (const n of nodes) this.clock.receive(n.updatedAt);
+    return this.group('import', async (w) => {
+      for (const n of nodes) await w.put(n);
+    });
+  }
+
+  // ------------------------------------------------------------ internals
+
+  private async createSubject(w: Writer, title: string, origin: Origin): Promise<MapNode> {
+    const subjects = await this.listSubjects();
+    const id = this.ulid(this.now());
+    const order = generateKeyBetween(subjects.at(-1)?.order ?? null, null);
+    return w.put({ id, subjectId: id, kind: 'subject', order, title: title.trim(), origin, createdAt: this.now(), updatedAt: '' });
+  }
+
+  private newItem(parent: MapNode, input: ItemInput, order: string): NewNode {
+    return {
+      subjectId: parent.subjectId,
+      kind: 'item',
+      parentId: parent.id,
+      order,
+      title: input.title.trim(),
+      itemType: input.itemType,
+      ...(input.latex === undefined ? {} : { latex: input.latex }),
+      ...(input.source ? { source: input.source } : {}),
+      origin: input.origin ?? 'user',
+    };
+  }
+
+  private async write(action: string, fn: (w: Writer) => Promise<MapNode>): Promise<Written> {
+    let node!: MapNode;
+    const group = await this.group(action, async (w) => {
+      node = await fn(w);
+    });
+    return { group, node };
+  }
+
+  /** One map write; `join` appends to an earlier write's group, so one undo reverts both. */
+  private async group(action: string, fn: (w: Writer) => Promise<void>, undoes?: string, join?: string): Promise<string> {
+    const { nodes, oplog } = this.db;
+    return this.db.transaction('rw', nodes, oplog, async () => {
+      const group = join ?? this.ulid(this.now());
+      const log = async (entityId: string, before: MapNode | null, after: MapNode | null, id: string) =>
+        oplog.add({ id, group, action, entityId, before, after, ...(undoes ? { undoes } : {}) });
+      const w: Writer = {
+        group,
+        put: async (node) => {
+          const before = (await nodes.get(node.id)) ?? null;
+          const after = { ...node, updatedAt: this.clock.tick() };
+          await nodes.put(after);
+          await log(node.id, before, after, after.updatedAt);
+          return after;
+        },
+        create: (node) => w.put({ ...node, id: this.ulid(this.now()), createdAt: this.now(), updatedAt: '' }),
+        drop: async (id) => {
+          const before = (await nodes.get(id)) ?? null;
+          await nodes.delete(id);
+          await log(id, before, null, this.clock.tick());
+        },
+        mark: async () => {
+          await log('', null, null, this.clock.tick());
+        },
+      };
+      await fn(w);
+      return group;
+    });
+  }
+
+  private async isUndone(group: string): Promise<boolean> {
+    return (await this.db.oplog.where('undoes').equals(group).count()) > 0;
+  }
+
+  private async latestUndoable(): Promise<string | null> {
+    const undone = new Set<string>();
+    let found: string | null = null;
+    await this.db.oplog
+      .orderBy('id')
+      .reverse()
+      .until(() => found !== null)
+      .each((e) => {
+        if (e.undoes) undone.add(e.undoes);
+        else if (e.action !== AUTO_PLACE && !undone.has(e.group)) found = e.group;
+      });
+    return found;
+  }
+
+  private async live(id: string): Promise<MapNode> {
+    const n = await this.node(id);
+    if (n.deletedAt) throw new Error(`Node ${id} is deleted`);
+    return n;
+  }
+
+  private async structure(id: string): Promise<MapNode> {
+    const n = await this.live(id);
+    if (n.kind === 'item') throw new Error('Items have no children');
+    return n;
+  }
+
+  /** Live children in map order. */
+  private async children(parentId: string): Promise<MapNode[]> {
+    return (await this.db.nodes.where('parentId').equals(parentId).toArray()).filter((n) => !n.deletedAt).sort(byOrder);
+  }
+
+  /** A fractional index before `beforeId`, or last; `moving` is left out of the siblings. */
+  private async orderAt(parentId: string, beforeId?: string, moving?: string): Promise<string> {
+    const siblings = (await this.children(parentId)).filter((s) => s.id !== moving);
+    const i = beforeId === undefined ? siblings.length : siblings.findIndex((s) => s.id === beforeId);
+    if (i < 0) throw new Error(`${beforeId} is not a child of ${parentId}`);
+    return generateKeyBetween(siblings[i - 1]?.order ?? null, siblings[i]?.order ?? null);
+  }
+
+  /** 1 for a subject. */
+  private async depthOf(node: MapNode): Promise<number> {
+    return (await this.pathOf(node.id)).length;
+  }
+
+  /** Levels of sections in a subtree: 0 for an item, 1 for a section without sections below. */
+  private async sectionHeight(node: MapNode): Promise<number> {
+    if (node.kind === 'item') return 0;
+    const heights = await Promise.all((await this.children(node.id)).map((c) => this.sectionHeight(c)));
+    return 1 + Math.max(0, ...heights);
+  }
+
+  private async placeUnder(w: Writer, node: MapNode, parent: MapNode, order: string): Promise<void> {
+    const path = await this.pathOf(parent.id);
+    if (path.some((p) => p.id === node.id)) throw new Error('A node cannot move into itself');
+    if (path.length + (await this.sectionHeight(node)) > MAX_DEPTH) throw new UserError('error.mapTooDeep');
+    await w.put({ ...node, parentId: parent.id, order, subjectId: parent.subjectId });
+    if (node.subjectId !== parent.subjectId) await this.setSubject(w, node.id, parent.subjectId);
+  }
+
+  /** Every node below `id`, deleted ones too, follows it into another subject. */
+  private async setSubject(w: Writer, id: string, subjectId: string): Promise<void> {
+    for (const child of await this.db.nodes.where('parentId').equals(id).toArray()) {
+      await w.put({ ...child, subjectId });
+      await this.setSubject(w, child.id, subjectId);
+    }
+  }
+
+  private async unplacedGroup(w: Writer, subjectId: string): Promise<MapNode> {
+    const existing = (await this.children(subjectId)).find((n) => n.role === 'unplaced');
+    if (existing) return existing;
+    const subject = await this.structure(subjectId);
+    if (subject.kind !== 'subject') throw new Error(`${subjectId} is not a subject`);
+    return w.create({ subjectId, kind: 'section', parentId: subjectId, order: await this.orderAt(subjectId), title: '', origin: 'user', role: 'unplaced' });
+  }
+
+  /** "清空所有数据": every table, the map, its history and the local recordings. */
+  async clearAll(): Promise<void> {
+    await Promise.all(this.db.tables.map((t) => t.clear()));
+  }
+
+  /** The user recorded an item the extension had added: it becomes theirs (black), with their source. */
+  async adopt(itemId: string, source: ItemSource): Promise<Written> {
+    return this.write('adopt', async (w) => w.put({ ...(await this.live(itemId)), origin: 'user', source }));
+  }
+
+  newId(): string {
+    return this.ulid(this.now());
   }
 
   // ------------------------------------------------------------ recorded questions (local only, not logged)
@@ -236,587 +529,63 @@ export class Repository {
     return this.db.asks.orderBy('sentAt').reverse().toArray();
   }
 
-  /** Recorded questions, newest first, with the names of the concepts they were tagged with. Vectors stay in the background. */
-  async listAskViews(): Promise<AskView[]> {
-    const names = new Map((await this.db.concepts.toArray()).map((c) => [c.id, c.name]));
-    const byAsk = new Map<string, string[]>();
-    for (const t of await this.db.askTags.toArray()) byAsk.set(t.askId, [...(byAsk.get(t.askId) ?? []), names.get(t.conceptId)!]);
-    return (await this.listAsks()).map(({ vector: _v, vectorModel: _m, ...a }) => ({ ...a, concepts: byAsk.get(a.id) ?? [] }));
+  /** A map's questions sent after `after`, oldest first. */
+  async mapAsks(mapId: string, after = 0): Promise<Ask[]> {
+    return (await this.db.asks.where('mapId').equals(mapId).sortBy('sentAt')).filter((a) => a.sentAt > after);
   }
 
-  /** Deleting a question also deletes what was inferred from it. */
   private async deleteAsks(ids: string[]): Promise<void> {
-    await this.db.transaction('rw', this.db.asks, this.db.askTags, async () => {
-      await this.db.askTags.where('askId').anyOf(ids).delete();
-      await this.db.asks.bulkDelete(ids);
-    });
+    await this.db.asks.bulkDelete(ids);
   }
 
   async deleteAsk(id: string): Promise<void> {
     await this.deleteAsks([id]);
   }
 
+  /** All recorded questions, and everything read from them: the stuck checks and the reports. */
   async clearAsks(): Promise<void> {
-    await this.deleteAsks(await this.db.asks.toCollection().primaryKeys());
+    await this.db.transaction('rw', this.db.asks, this.db.stuckChecks, this.db.reports, async () => {
+      await Promise.all([this.db.asks.clear(), this.db.stuckChecks.clear(), this.db.reports.clear()]);
+    });
   }
 
   async deleteConversationAsks(conversationUrl: string): Promise<void> {
     await this.deleteAsks(await this.db.asks.where('conversationUrl').equals(stripHash(conversationUrl)).primaryKeys());
   }
 
-  /** Questions concept tagging has not looked at yet, oldest first. */
-  async untaggedAsks(): Promise<Ask[]> {
-    return (await this.db.asks.orderBy('sentAt').toArray()).filter((a) => a.taggedAt === undefined);
-  }
+  // ------------------------------------------------------------ stuck checks (local only, not logged)
 
-  async setAskVectors(rows: { id: string; vector: number[]; vectorModel: string }[]): Promise<void> {
-    await this.db.transaction('rw', this.db.asks, async () => {
-      for (const { id, vector, vectorModel } of rows) await this.db.asks.update(id, { vector, vectorModel });
-    });
-  }
-
-  async listAskTags(): Promise<AskTag[]> {
-    return this.db.askTags.toArray();
-  }
-
-  /** Records which concepts each question is about, and that it was looked at. */
-  async saveTags(tags: { askId: string; conceptIds: string[] }[]): Promise<void> {
-    const at = this.now();
-    await this.db.transaction('rw', this.db.asks, this.db.askTags, async () => {
-      for (const { askId, conceptIds } of tags) {
-        if (!(await this.db.asks.get(askId))) continue; // deleted while it was being tagged
-        await this.db.askTags.bulkAdd([...new Set(conceptIds)].map((conceptId) => ({ id: this.ulid(at), askId, conceptId })));
-        await this.db.asks.update(askId, { taggedAt: at });
-      }
-    });
-  }
-
-  // ------------------------------------------------------------ diagnoses (local only, not logged)
-
-  async listDiagnoses(): Promise<Diagnosis[]> {
-    return this.db.diagnoses.orderBy('createdAt').reverse().toArray();
-  }
-
-  async addDiagnoses(list: Omit<Diagnosis, 'id' | 'createdAt' | 'status'>[]): Promise<Diagnosis[]> {
-    const at = this.now();
-    const rows: Diagnosis[] = list.map((d) => ({ ...d, id: this.ulid(at), status: 'suspected', createdAt: at }));
-    await this.db.diagnoses.bulkAdd(rows);
-    return rows;
-  }
-
-  async getDiagnosis(id: string): Promise<Diagnosis> {
-    const d = await this.db.diagnoses.get(id);
-    if (!d) throw new Error('Diagnosis not found');
-    return d;
-  }
-
-  /** Confirms or dismisses a diagnosis (with the learner's verdict on it, when they gave one). */
-  async decideDiagnosis(id: string, status: 'confirmed' | 'dismissed', feedback?: Diagnosis['feedback']): Promise<void> {
-    await this.db.diagnoses.update(id, { status, decidedAt: this.now(), ...(feedback ? { feedback } : {}) });
-  }
-
-  async addQuiz(quiz: Omit<DiagnosisQuiz, 'id' | 'takenAt'>): Promise<DiagnosisQuiz> {
-    const at = this.now();
-    const row: DiagnosisQuiz = { ...quiz, id: this.ulid(at), takenAt: at };
-    await this.db.quizzes.add(row);
+  async addStuckCheck(check: Omit<StuckCheck, 'id'>): Promise<StuckCheck> {
+    const row = { ...check, id: this.ulid(check.checkedAt) };
+    await this.db.stuckChecks.add(row);
     return row;
   }
 
-  /** The note card for a concept: the linked one, or a new topic card named after it (linked from now on). */
-  async conceptNode(conceptId: string): Promise<KNode> {
-    return this.db.transaction('rw', [this.db.concepts, this.db.nodes, this.db.oplog], async () => {
-      const concept = await this.db.concepts.get(conceptId);
-      if (!concept) throw new Error('Concept not found');
-      const linked = concept.nodeId ? await this.db.nodes.get(concept.nodeId) : undefined;
-      if (linked && linked.deletedAt === undefined) return linked;
-      const node = await this.findOrCreateTopic(concept.name);
-      await this.db.concepts.update(conceptId, { nodeId: node.id });
-      return node;
-    });
+  /** A map's checks, newest first. */
+  async stuckChecks(mapId: string): Promise<StuckCheck[]> {
+    return (await this.db.stuckChecks.where('mapId').equals(mapId).sortBy('checkedAt')).reverse();
   }
 
-  /** Passing reviews since a time: which card, when. */
-  async passesSince(at: number): Promise<{ nodeId: string; at: number }[]> {
-    return (await this.db.reviews.where('createdAt').aboveOrEqual(at).toArray())
-      .filter((r) => r.verdict === 'pass')
-      .map((r) => ({ nodeId: r.nodeId, at: r.createdAt }));
+  async stuckCheck(id: string): Promise<StuckCheck> {
+    const c = await this.db.stuckChecks.get(id);
+    if (!c) throw new Error(`No stuck check ${id}`);
+    return c;
   }
 
-  // ------------------------------------------------------------ prerequisite graph (local only, not logged)
-
-  async listConcepts(): Promise<Concept[]> {
-    return this.db.concepts.toArray();
+  async dismissStuck(id: string, at: number): Promise<void> {
+    await this.db.stuckChecks.update(id, { dismissedAt: at });
   }
 
-  async linkConcepts(links: { conceptId: string; nodeId: string }[]): Promise<void> {
-    await this.db.transaction('rw', this.db.concepts, async () => {
-      for (const { conceptId, nodeId } of links) await this.db.concepts.update(conceptId, { nodeId });
-    });
+  // ------------------------------------------------------------ reports (local only, not logged)
+
+  async addReport(report: Omit<Report, 'id'>): Promise<Report> {
+    const row = { ...report, id: this.ulid(report.createdAt) };
+    await this.db.reports.add(row);
+    return row;
   }
 
-  async listPrereqEdges(): Promise<PrereqEdge[]> {
-    return this.db.prereqEdges.toArray();
+  /** A map's reports, newest first. */
+  async reports(mapId: string): Promise<Report[]> {
+    return (await this.db.reports.where('mapId').equals(mapId).sortBy('createdAt')).reverse();
   }
-
-  /**
-   * Adds concepts and prerequisite edges, by name, to a domain's graph. Names
-   * already in the domain are reused; edges already there are skipped.
-   */
-  async addToGraph(domain: string, names: string[], edges: { from: string; to: string }[]): Promise<void> {
-    await this.db.transaction('rw', this.db.concepts, this.db.prereqEdges, async () => {
-      const at = this.now();
-      const inDomain = (await this.db.concepts.toArray()).filter((c) => conceptKey(c.domain) === conceptKey(domain));
-      const byKey = new Map(inDomain.map((c) => [conceptKey(c.name), c]));
-      const domainName = inDomain[0]?.domain ?? domain.trim();
-      for (const name of [...names, ...edges.flatMap((e) => [e.from, e.to])]) {
-        if (byKey.has(conceptKey(name))) continue;
-        const concept: Concept = { id: this.ulid(at), domain: domainName, name: name.trim(), createdAt: at };
-        await this.db.concepts.add(concept);
-        byKey.set(conceptKey(name), concept);
-      }
-      const existing = new Set((await this.db.prereqEdges.toArray()).map((e) => `${e.from}>${e.to}`));
-      for (const e of edges) {
-        const from = byKey.get(conceptKey(e.from))!.id;
-        const to = byKey.get(conceptKey(e.to))!.id;
-        if (existing.has(`${from}>${to}`)) continue;
-        existing.add(`${from}>${to}`);
-        await this.db.prereqEdges.add({ id: this.ulid(at), from, to });
-      }
-    });
-  }
-
-  // ------------------------------------------------------------ embeddings (cache, not logged)
-
-  async embeddingsFor(ids: string[]): Promise<Map<string, Embedding>> {
-    return new Map((await this.db.embeddings.bulkGet(ids)).filter((e): e is Embedding => !!e).map((e) => [e.nodeId, e]));
-  }
-
-  async putEmbeddings(rows: Embedding[]): Promise<void> {
-    await this.db.embeddings.bulkPut(rows);
-  }
-
-  /** A card and every live card below it, parents before children, siblings in tree order. */
-  async subtree(rootId: string): Promise<KNode[]> {
-    const root = await this.db.nodes.get(rootId);
-    if (!root || root.deletedAt !== undefined) throw new Error('Card not found');
-    const out = [root];
-    for (let frontier = [rootId]; frontier.length; ) {
-      const edges = (await this.db.edges.where('from').anyOf(frontier).toArray()).sort((a, b) => (a.order < b.order ? -1 : 1));
-      const children = (await this.db.nodes.bulkGet(edges.map((e) => e.to))).filter((n): n is KNode => !!n && n.deletedAt === undefined);
-      out.push(...children);
-      frontier = children.map((n) => n.id);
-    }
-    return out;
-  }
-
-  /** Ids of every node below `id` in the tree. */
-  async descendantsOf(id: string): Promise<Set<string>> {
-    const out = new Set<string>();
-    for (let frontier = [id]; frontier.length; ) {
-      const children = (await this.db.edges.where('from').anyOf(frontier).toArray()).map((e) => e.to).filter((c) => !out.has(c));
-      children.forEach((c) => out.add(c));
-      frontier = children;
-    }
-    return out;
-  }
-
-  /**
-   * Merges a duplicate concept into an existing node: its sources and children
-   * move over, ask counts add up, and the duplicate is soft-deleted.
-   */
-  async mergeInto(duplicateId: string, targetId: string): Promise<void> {
-    if (duplicateId === targetId) throw new Error('Cannot merge a card into itself');
-    await this.db.transaction('rw', [this.db.nodes, this.db.edges, this.db.sources, this.db.oplog], async () => {
-      const dup = await this.db.nodes.get(duplicateId);
-      const target = await this.db.nodes.get(targetId);
-      if (!dup || !target) throw new Error('Card not found');
-      for (const s of await this.db.sources.where('nodeId').equals(duplicateId).toArray()) {
-        await this.db.sources.update(s.id, { nodeId: targetId });
-        await this.db.oplog.add(this.log('sources', s.id, 'put', { nodeId: targetId }));
-      }
-      for (const e of await this.db.edges.where('from').equals(duplicateId).toArray()) {
-        if (e.to === targetId) continue;
-        await this.replaceParent(e.to, targetId, e.kind);
-      }
-      await this.removeParent(duplicateId);
-      await this.patchNode(targetId, { askCount: target.askCount + dup.askCount });
-      await this.patchNode(duplicateId, { deletedAt: this.now() });
-    });
-  }
-
-  /**
-   * Adds cards the user kept from an organize pass (each with its quote as provenance)
-   * or from a systematic review (`under` a concept's card, with a mastery requirement).
-   */
-  async addCards(
-    cards: { title: string; summary: string; quote?: string }[],
-    page?: { url: string; pageTitle: string },
-    place?: { under: string; mastery?: Mastery },
-  ): Promise<string[]> {
-    const ids: string[] = [];
-    await this.db.transaction('rw', [this.db.nodes, this.db.edges, this.db.sources, this.db.oplog], async () => {
-      for (const c of cards) {
-        const at = this.now();
-        const node: KNode = {
-          id: this.ulid(at),
-          type: 'knowledge',
-          title: c.title.trim(),
-          summary: c.summary.trim(),
-          ...(c.quote ? { body: c.quote } : {}),
-          ...(place?.mastery ? { mastery: place.mastery } : {}),
-          status: 'confirmed',
-          askCount: 0,
-          createdAt: at,
-          updatedAt: this.clock.tick(),
-        };
-        if (!node.title || !node.summary) throw new UserError('error.titleSummaryRequired');
-        await this.db.nodes.add(node);
-        await this.db.oplog.add(this.log('nodes', node.id, 'put', node));
-        if (place) await this.replaceParent(node.id, place.under, 'child');
-        if (page && c.quote) {
-          const source = this.newSource(node.id, { ...page, markdown: c.quote, quote: { exact: c.quote, prefix: '', suffix: '' } }, at);
-          await this.db.sources.add(source);
-          await this.db.oplog.add(this.log('sources', source.id, 'put', source));
-        }
-        ids.push(node.id);
-      }
-    });
-    return ids;
-  }
-
-  async sourcesOf(nodeId: string): Promise<Source[]> {
-    return this.db.sources.where('nodeId').equals(nodeId).toArray();
-  }
-
-  // ------------------------------------------------------------ distillation
-
-  /** Knowledge cards still waiting for a summary (and not failed). Derived from data, so it survives worker restarts. */
-  async pendingDistills(): Promise<KNode[]> {
-    return (await this.db.nodes.where('status').equals('draft').toArray()).filter(
-      (n) => n.type === 'knowledge' && n.deletedAt === undefined && !n.summary && !n.distillError,
-    );
-  }
-
-  async setDistillation(id: string, summary: string, titleCandidates: string[]): Promise<void> {
-    await this.db.transaction('rw', this.db.nodes, this.db.oplog, () =>
-      this.patchNode(id, { summary, titleCandidates, distillError: undefined }),
-    );
-  }
-
-  async setDistillError(id: string, message: string | undefined): Promise<void> {
-    await this.db.transaction('rw', this.db.nodes, this.db.oplog, () => this.patchNode(id, { distillError: message }));
-  }
-
-  /** The user picked or wrote the question title for a draft card. */
-  async confirmTitle(id: string, title: string): Promise<void> {
-    const t = title.trim();
-    if (!t) throw new UserError('error.titleEmpty');
-    await this.db.transaction('rw', this.db.nodes, this.db.oplog, () =>
-      this.patchNode(id, { title: t, status: 'confirmed', titleCandidates: undefined }),
-    );
-  }
-
-  // ------------------------------------------------------------ inbox (not logged: disposable)
-
-  async addInboxItem(item: Omit<InboxItem, 'id' | 'createdAt' | 'expiresAt'>): Promise<InboxItem> {
-    const at = this.now();
-    const full: InboxItem = { ...item, id: this.ulid(at), createdAt: at, expiresAt: at + INBOX_TTL_MS };
-    await this.db.inbox.add(full);
-    return full;
-  }
-
-  /** Live inbox items, newest first. Expired items are purged first. */
-  async listInbox(): Promise<InboxItem[]> {
-    await this.db.inbox.where('expiresAt').belowOrEqual(this.now()).delete();
-    return this.db.inbox.orderBy('createdAt').reverse().toArray();
-  }
-
-  async getInboxItem(id: string): Promise<InboxItem> {
-    const item = await this.db.inbox.get(id);
-    if (!item) throw new UserError('error.answerExpired');
-    return item;
-  }
-
-  /**
-   * Turns an answered question into kept knowledge. The question node itself is
-   * promoted (restored if the user had dismissed it), so its sources and ask
-   * history stay. Instances additionally hang under their concept node.
-   */
-  async keep(inboxId: string, decision: KeepDecision): Promise<KNode> {
-    const title = decision.title.trim();
-    const summary = decision.summary.trim();
-    if (!title || !summary) throw new UserError('error.titleSummaryRequired');
-    return this.db.transaction('rw', [this.db.nodes, this.db.edges, this.db.inbox, this.db.oplog], async () => {
-      const item = await this.getInboxItem(inboxId);
-      const patch: Partial<KNode> = { type: 'knowledge', title, summary, status: 'confirmed', deletedAt: undefined };
-      if (decision.concept) patch.mastery = 'index'; // an example only needs to be findable
-      const node = await this.patchNode(item.questionNodeId, patch);
-      if (decision.concept) {
-        const concept = await this.findOrCreateTopic(decision.concept);
-        await this.replaceParent(node.id, concept.id, 'instance_of');
-      }
-      // Every answer to this question is now accounted for, so none resurfaces as a leftover.
-      await this.db.inbox.where('questionNodeId').equals(item.questionNodeId).modify({ promotedNodeId: node.id });
-      return node;
-    });
-  }
-
-  private async findOrCreateTopic(title: string): Promise<KNode> {
-    const wanted = title.trim().toLowerCase();
-    const existing = (await this.db.nodes.toArray()).find(
-      (n) => n.deletedAt === undefined && (n.type === 'topic' || n.type === 'knowledge') && n.title.trim().toLowerCase() === wanted,
-    );
-    if (existing) return existing;
-    const at = this.now();
-    const node: KNode = { id: this.ulid(at), type: 'topic', title: title.trim(), status: 'confirmed', askCount: 0, createdAt: at, updatedAt: this.clock.tick() };
-    await this.db.nodes.add(node);
-    await this.db.oplog.add(this.log('nodes', node.id, 'put', node));
-    return node;
-  }
-
-  private async removeParent(childId: string): Promise<Edge | undefined> {
-    const [old] = await this.db.edges.where('to').equals(childId).toArray();
-    if (!old) return undefined;
-    await this.db.edges.delete(old.id);
-    await this.db.oplog.add(this.log('edges', old.id, 'delete', {}));
-    return old;
-  }
-
-  /**
-   * Makes `parentId` the only tree parent of `childId`, placed before sibling
-   * `beforeId` or after the last sibling. Only the moved edge gets a new order key.
-   */
-  private async replaceParent(childId: string, parentId: string, kind: EdgeKind, beforeId?: string): Promise<Edge> {
-    await this.removeParent(childId);
-    const siblings = (await this.db.edges.where('from').equals(parentId).toArray()).sort((a, b) => (a.order < b.order ? -1 : 1));
-    const at = beforeId === undefined ? siblings.length : siblings.findIndex((e) => e.to === beforeId);
-    if (at < 0) throw new Error('Sibling not found under the target parent');
-    return this.addEdge(parentId, childId, kind, generateKeyBetween(siblings[at - 1]?.order ?? null, siblings[at]?.order ?? null));
-  }
-
-  /**
-   * Moves a card in the tree: under `parentId` (before `beforeId` if given), or
-   * to the top level when `parentId` is null. A move keeps the relation kind
-   * when the parent stays the same; otherwise it becomes a plain child.
-   */
-  async moveNode(childId: string, parentId: string | null, beforeId?: string): Promise<void> {
-    await this.db.transaction('rw', this.db.nodes, this.db.edges, this.db.oplog, async () => {
-      if (parentId === null) {
-        await this.removeParent(childId);
-        return;
-      }
-      for (let up: string | undefined = parentId; up; up = (await this.db.edges.where('to').equals(up).first())?.from) {
-        if (up === childId) throw new UserError('error.cardUnderItself');
-      }
-      const old = await this.db.edges.where('to').equals(childId).first();
-      await this.replaceParent(childId, parentId, old?.from === parentId ? old.kind : 'child', beforeId);
-    });
-  }
-
-  async addPreference(pref: Omit<Preference, 'id' | 'createdAt'>): Promise<void> {
-    const at = this.now();
-    const full: Preference = { ...pref, id: this.ulid(at), createdAt: at };
-    await this.db.transaction('rw', this.db.preferences, this.db.oplog, async () => {
-      await this.db.preferences.add(full);
-      await this.db.oplog.add(this.log('preferences', full.id, 'put', full));
-    });
-  }
-
-  async recentPreferences(limit: number): Promise<Preference[]> {
-    return this.db.preferences.orderBy('createdAt').reverse().limit(limit).toArray();
-  }
-
-  /** Sets or edits the question text of an ask-later node. */
-  async updateQuestion(id: string, question: string): Promise<void> {
-    await this.db.transaction('rw', this.db.nodes, this.db.oplog, async () => {
-      const node = await this.db.nodes.get(id);
-      if (!node || node.deletedAt !== undefined) throw new Error('Question not found');
-      const title = question.trim();
-      const patch: Partial<KNode> = { title, updatedAt: this.clock.tick() };
-      if (title && !node.originalAsk) patch.originalAsk = title;
-      await this.db.nodes.update(id, patch);
-      await this.db.oplog.add(this.log('nodes', id, 'put', patch));
-    });
-  }
-
-  /** Open questions with a source on this page, for underlining their terms. */
-  async questionsForUrl(url: string): Promise<PageQuestion[]> {
-    const page = stripHash(url);
-    const open = (await this.db.nodes.where('status').equals('open').toArray()).filter(
-      (n) => n.type === 'question' && n.deletedAt === undefined && n.term,
-    );
-    const ids = new Set(open.map((n) => n.id));
-    const sources = (await this.db.sources.where('nodeId').anyOf([...ids]).toArray()).filter((s) => stripHash(s.url) === page);
-    const byId = new Map(open.map((n) => [n.id, n]));
-    return sources.map((s) => ({
-      nodeId: s.nodeId,
-      term: byId.get(s.nodeId)!.term!,
-      quote: { exact: s.quoteExact, prefix: s.quotePrefix, suffix: s.quoteSuffix },
-    }));
-  }
-
-  /** Live nodes, newest first, each with its sources, tree parent and latest review verdict. */
-  async listNodes(reviews?: ReviewSummary): Promise<NodeView[]> {
-    const nodes = (await this.db.nodes.orderBy('createdAt').reverse().toArray()).filter((n) => n.deletedAt === undefined);
-    const ids = nodes.map((n) => n.id);
-    const sources = await this.db.sources.where('nodeId').anyOf(ids).toArray();
-    const byNode = new Map<string, Source[]>();
-    for (const s of sources) byNode.set(s.nodeId, [...(byNode.get(s.nodeId) ?? []), s]);
-    const parents = new Map((await this.db.edges.where('to').anyOf(ids).toArray()).map((e) => [e.to, e]));
-    const { latest } = reviews ?? (await this.reviewSummary());
-    return nodes.map((n) => {
-      const e = parents.get(n.id);
-      const verdict = latest.get(n.id)?.verdict;
-      return {
-        ...n,
-        sources: byNode.get(n.id) ?? [],
-        ...(e ? { parent: { id: e.from, kind: e.kind, order: e.order } } : {}),
-        ...(verdict ? { lastVerdict: verdict } : {}),
-      };
-    });
-  }
-
-  // ------------------------------------------------------------ mastery and review
-
-  async setMastery(id: string, mastery: Mastery | undefined): Promise<void> {
-    await this.db.transaction('rw', this.db.nodes, this.db.oplog, () => this.patchNode(id, { mastery }));
-  }
-
-  /** One pass over the reviews: the latest per card, and how many recall / apply checks each had. */
-  private async reviewSummary(): Promise<ReviewSummary> {
-    const latest = new Map<string, Review>();
-    const quizzed = new Map<string, number>();
-    for (const r of await this.db.reviews.orderBy('createdAt').toArray()) {
-      latest.set(r.nodeId, r);
-      if (r.mode !== 'explain') quizzed.set(r.nodeId, (quizzed.get(r.nodeId) ?? 0) + 1);
-    }
-    return { latest, quizzed };
-  }
-
-  private dueItems(nodes: NodeView[], { latest, quizzed }: ReviewSummary, modelConfigured: boolean): QuizItem[] {
-    const now = this.now();
-    return nodes
-      .filter((n) => isQuizzable(n) && isDue(latest.get(n.id), now))
-      .sort((a, b) => (latest.get(a.id)?.dueAt ?? 0) - (latest.get(b.id)?.dueAt ?? 0))
-      .map((n) => ({ ...n, mode: quizMode(quizzed.get(n.id) ?? 0, modelConfigured) }));
-  }
-
-  /** Cards the user must know by heart whose review is due, oldest due first, each with how it is checked this time. */
-  async dueForQuiz(modelConfigured: boolean): Promise<QuizItem[]> {
-    const reviews = await this.reviewSummary();
-    return this.dueItems(await this.listNodes(reviews), reviews, modelConfigured);
-  }
-
-  /** Records a review, schedules the next one and moves the card in or out of `mastered`. */
-  async recordReview(input: { nodeId: string; mode: ReviewMode; prompt: string; answer: string; verdict: Verdict; feedback?: string }): Promise<Review> {
-    return this.db.transaction('rw', [this.db.nodes, this.db.reviews, this.db.oplog], async () => {
-      const previous = (await this.db.reviews.where('nodeId').equals(input.nodeId).sortBy('createdAt')).at(-1);
-      const at = this.now();
-      const interval = nextInterval(previous?.interval, input.verdict);
-      const review: Review = { ...input, id: this.ulid(at), interval, dueAt: at + interval * DAY_MS, createdAt: at };
-      await this.db.reviews.add(review);
-      await this.db.oplog.add(this.log('reviews', review.id, 'put', review));
-      if (input.verdict !== 'partial') await this.patchNode(input.nodeId, { status: input.verdict === 'pass' ? 'mastered' : 'confirmed' });
-      return review;
-    });
-  }
-
-  /**
-   * North star (cards to know by heart that passed a check in the last 7 days),
-   * the same count for the three weeks before, and queue sizes.
-   */
-  async stats(): Promise<Stats> {
-    const now = this.now();
-    const reviews = await this.reviewSummary();
-    const nodes = await this.listNodes(reviews);
-    const mustKnow = new Set(nodes.filter(isQuizzable).map((n) => n.id));
-    const weeks = [0, 1, 2, 3].map(() => new Set<string>());
-    for (const r of await this.db.reviews.where('createdAt').aboveOrEqual(now - 28 * DAY_MS).toArray()) {
-      if (r.verdict === 'pass' && mustKnow.has(r.nodeId)) weeks[Math.min(3, Math.floor((now - r.createdAt) / (7 * DAY_MS)))]!.add(r.nodeId);
-    }
-    return {
-      masteredThisWeek: weeks[0]!.size,
-      earlierWeeks: weeks.slice(1).map((w) => w.size),
-      due: this.dueItems(nodes, reviews, false).length,
-      mustKnow: mustKnow.size,
-      openQuestions: nodes.filter((n) => n.type === 'question' && n.status === 'open').length,
-    };
-  }
-
-  async getSource(id: string): Promise<Source | undefined> {
-    return this.db.sources.get(id);
-  }
-
-  async deleteNode(id: string): Promise<void> {
-    await this.db.transaction('rw', this.db.nodes, this.db.oplog, async () => {
-      const node = await this.db.nodes.get(id);
-      if (!node || node.deletedAt !== undefined) return;
-      const patch = { deletedAt: this.now(), updatedAt: this.clock.tick() };
-      await this.db.nodes.update(id, patch);
-      await this.db.oplog.add(this.log('nodes', id, 'delete', patch));
-    });
-  }
-
-  async exportData(): Promise<ExportFile> {
-    return this.db.transaction('r', [this.db.nodes, this.db.edges, this.db.sources, this.db.reviews, this.db.preferences], async () => ({
-      format: EXPORT_FORMAT,
-      version: EXPORT_VERSION,
-      exportedAt: this.now(),
-      nodes: await this.db.nodes.toArray(),
-      edges: await this.db.edges.toArray(),
-      sources: await this.db.sources.toArray(),
-      reviews: await this.db.reviews.toArray(),
-      preferences: await this.db.preferences.toArray(),
-    }));
-  }
-
-  /** Merges an export into the database. Rows with the same id are replaced. */
-  async importData(data: unknown): Promise<ImportResult> {
-    const file = parseExport(data);
-    for (const n of file.nodes) this.clock.receive(n.updatedAt);
-    await this.db.transaction(
-      'rw',
-      [this.db.nodes, this.db.edges, this.db.sources, this.db.reviews, this.db.preferences, this.db.oplog],
-      async () => {
-        await this.db.nodes.bulkPut(file.nodes);
-        await this.db.edges.bulkPut(file.edges);
-        await this.db.sources.bulkPut(file.sources);
-        await this.db.reviews.bulkPut(file.reviews);
-        await this.db.preferences.bulkPut(file.preferences);
-        await this.db.oplog.bulkAdd([
-          ...file.nodes.map((r) => this.log('nodes', r.id, 'put', r)),
-          ...file.edges.map((r) => this.log('edges', r.id, 'put', r)),
-          ...file.sources.map((r) => this.log('sources', r.id, 'put', r)),
-          ...file.reviews.map((r) => this.log('reviews', r.id, 'put', r)),
-          ...file.preferences.map((r) => this.log('preferences', r.id, 'put', r)),
-        ]);
-      },
-    );
-    return {
-      nodes: file.nodes.length,
-      edges: file.edges.length,
-      sources: file.sources.length,
-      reviews: file.reviews.length,
-      preferences: file.preferences.length,
-    };
-  }
-}
-
-function isRow(value: unknown): value is { id: string } {
-  return typeof value === 'object' && value !== null && typeof (value as { id?: unknown }).id === 'string';
-}
-
-export function parseExport(data: unknown): ExportFile {
-  const file = (typeof data === 'string' ? JSON.parse(data) : data) as Partial<ExportFile> | null;
-  if (!file || file.format !== EXPORT_FORMAT) throw new UserError('error.notExport');
-  if (file.version !== EXPORT_VERSION) throw new UserError('error.exportVersion', [String(file.version)]);
-  for (const key of ['nodes', 'edges', 'sources', 'reviews'] as const) {
-    const rows = file[key];
-    if (!Array.isArray(rows) || !rows.every(isRow)) throw new UserError('error.invalidExport', [key]);
-  }
-  // Exports made before schema v2 lack askCount and preferences.
-  for (const node of file.nodes as Partial<KNode>[]) node.askCount ??= 0;
-  file.preferences ??= [];
-  if (!Array.isArray(file.preferences) || !file.preferences.every(isRow)) throw new UserError('error.invalidExport', ['preferences']);
-  return file as ExportFile;
 }

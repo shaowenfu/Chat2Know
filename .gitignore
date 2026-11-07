@@ -9,3 +9,6 @@ test-results/
 playwright-report/
 tests/e2e/screenshots/
 .DS_Store
+
+# Eval output: model replies, kept local
+tests/eval/results/*.json
