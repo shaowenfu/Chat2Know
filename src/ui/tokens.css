@@ -55,3 +55,85 @@ button {
 .link-button:hover {
   color: var(--accent-ink);
 }
+
+/* A statement or quote rendered from Markdown (src/ui/rich-html.ts): compact enough for one map row. */
+.rich > :first-child {
+  margin-top: 0;
+}
+.rich > :last-child {
+  margin-bottom: 0;
+}
+.rich p,
+.rich ul,
+.rich ol,
+.rich blockquote,
+.rich pre {
+  margin: 0 0 6px;
+}
+.rich ul,
+.rich ol {
+  padding-left: 18px;
+}
+.rich h1,
+.rich h2,
+.rich h3,
+.rich h4,
+.rich h5,
+.rich h6 {
+  margin: 4px 0;
+  font-size: 1em;
+  font-weight: 700;
+}
+.rich blockquote {
+  padding-left: 10px;
+  border-left: 3px solid var(--branch);
+  color: var(--ink-2);
+}
+.rich code {
+  font-family: var(--mono);
+  font-size: 0.9em;
+  background: var(--bg-soft);
+  padding: 0 3px;
+  border-radius: 3px;
+}
+.rich pre {
+  overflow-x: auto;
+  background: var(--bg-soft);
+  padding: 6px 8px;
+  border-radius: 6px;
+}
+.rich pre code {
+  background: none;
+  padding: 0;
+}
+/* A table scrolls sideways inside its row instead of widening the panel. */
+.rich table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+  margin: 0 0 6px;
+  font-size: 0.95em;
+}
+.rich th,
+.rich td {
+  border: 1px solid var(--line);
+  padding: 3px 6px;
+  text-align: left;
+  vertical-align: top;
+}
+.rich th {
+  background: var(--bg-soft);
+  font-weight: 600;
+}
+.rich img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: 4px;
+}
+.rich .katex-display {
+  margin: 4px 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}

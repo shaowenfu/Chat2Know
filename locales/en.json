@@ -20,7 +20,9 @@
     "barLabel": "For the selection",
     "barNote": "Note",
     "barQuote": "Keep words",
-    "barAsk": "Ask"
+    "barAsk": "Ask",
+    "noteRequestLabel": "How should this be noted?",
+    "noteRequestPlaceholder": "How to note it? e.g. keep the table (Enter: the usual)"
   },
   "toast": {
     "relocate": "Move",

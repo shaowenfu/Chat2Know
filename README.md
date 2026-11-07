@@ -29,7 +29,7 @@ Step-by-step guide with screenshots (中文 / English): [docs/install.md](docs/i
 1. **First screen.** Click the Chat2Know icon to open the side panel. It asks for three things: ① your model (any OpenAI-compatible endpoint: base URL, model, key; an embedding model is optional, under *Advanced*), ② the AI sites you use (ChatGPT, Claude, Gemini, DeepSeek, Kimi, 豆包; the browser asks for each one you tick), ③ your first map. Switch between 中文 and English at the top.
 2. **Maps are yours.** Create a map per subject or topic (a name is optional) and open it from the switcher at the top of the side panel. Everything you record goes into the open map until you open another. Chat2Know never creates, switches or renames a map on its own; a map you left unnamed is named once from its first notes.
 3. **Select, then choose.** On a ticked site, select a few words of an answer and a small bar appears above them:
-   - **Note** records it, compressed: one formula selected stays a formula, anything else becomes one sentence (a bare term becomes "term: a one-line explanation").
+   - **Note** asks, in a small box, how to note it: press Enter for the usual (one formula stays a formula, anything else becomes one sentence; a bare term becomes "term: a one-line explanation"), or type a request such as *keep the table with its formulas* or *three bullet points*.
    - **Keep words** records a protected quote: the exact words, never rewritten. The model only chooses its place; only you can edit it. It shows with a purple border and a serif face.
    - **Ask** opens a small window beside the selection: ask a short question about it, the answer streams in, follow up if you like. Add a useful answer to the map or keep it word for word; the conversation itself is not kept.
    

@@ -34,7 +34,7 @@ Only requests to **the model provider you configure yourself** (any OpenAI-compa
 
 | When | Sent to your model provider |
 | --- | --- |
-| You record an item (automatic placement) | The item, a few words of the conversation around it, the open map's name, its chapters and topics, and the last placements you corrected in it |
+| You record an item (automatic placement) | The item (and the request you typed after Note, if any), a few words of the conversation around it, the open map's name, its chapters and topics, and the last placements you corrected in it |
 | Embedding model set | The item's text, and the map's topic titles with a few of their items |
 | A named map gets its first note (outline offer) | The map's name, its existing topic titles, and a table of contents if you paste one |
 | You open "Move" on a recorded item, with an embedding model | The item's text |
@@ -47,7 +47,7 @@ Nothing is sent to the Chat2Know project or any third party.
 
 只有发往**你自己配置的模型服务商**的请求（任意兼容 OpenAI 格式的接口，用你自己的 Key）。没有配置模型时，什么都不会离开浏览器。配置之后：
 
-- 记下条目时（自动归位）：该条目、它前后的几个字、当前导图的名称和章节知识点标题、你在这张导图里最近改过的归位。
+- 记下条目时（自动归位）：该条目（以及点"记下"后你写的要求，如果有）、它前后的几个字、当前导图的名称和章节知识点标题、你在这张导图里最近改过的归位。
 - 配置了嵌入模型时：条目文字，以及导图的知识点标题和其下几条条目。
 - 有名字的导图记下第一条后（提议大纲）：导图名称、已有知识点标题、你粘贴的目录。
 - 打开"改位置"且配置了嵌入模型时：条目文字。

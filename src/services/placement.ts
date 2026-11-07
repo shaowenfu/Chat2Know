@@ -110,6 +110,7 @@ export async function placeItem(repo: Repository, client: Client, embeddingModel
       lang: req.lang,
       itemType: item.itemType!,
       text: itemText(item),
+      request: item.request ?? '',
       before: req.before,
       after: req.after,
       map: map.title,

@@ -20,6 +20,7 @@ export interface ItemInput {
   latex?: string;
   source?: ItemSource;
   origin?: Origin;
+  request?: string;
 }
 
 /** Where a new item goes: under a structure node, or in a map's "待归位" group (created when missing). */
@@ -379,6 +380,7 @@ export class Repository {
       itemType: input.itemType,
       ...(input.latex === undefined ? {} : { latex: input.latex }),
       ...(input.source ? { source: input.source } : {}),
+      ...(input.request?.trim() ? { request: input.request.trim() } : {}),
       origin: input.origin ?? 'user',
     };
   }

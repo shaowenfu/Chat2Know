@@ -19,6 +19,7 @@ export interface PlacementInput {
   lang: PromptLang;
   itemType: ItemType;
   text: string; // LaTeX for a formula, the recorded text for a statement, the exact words of a quote
+  request: string; // how the learner asked for a statement to be written; '' for the default (one sentence)
   before: string; // the conversation just before it
   after: string;
   map: string; // the open map's name, '' when the user left it unnamed
@@ -38,11 +39,13 @@ export const MAX_PATH = 3;
 
 const PLACE_TEXT = {
   zh: {
-    task: (type: ItemType, unnamed: boolean) =>
+    task: (type: ItemType, unnamed: boolean, request: boolean) =>
       [
         '你负责把学习者的一条笔记放进他打开的这张知识导图。导图下面是章和知识点，标题都是简短的名词，不是问句。',
         '为这条笔记选出它在这张导图里的路径：1 到 3 层章 / 知识点标题。优先用已有位置（候选位置或导图结构里的原标题，一字不差）；都不合适时才新建知识点或章。新标题是简短的中文名词。学习者自己改过的位置说明了他的整理习惯，照着做。',
-        type === 'statement'
+        type === 'statement' && request
+          ? '学习者对这条笔记提了要求（见"要求"）：按要求写 "statement"，要求优先于"一句话"的规则：可以多句，可以保留或整理成 Markdown 表格或列表，公式写成 $...$；只用笔记里有的内容，不编造。'
+          : type === 'statement'
           ? '再把笔记改写成一句保留原意的话（约 40 个汉字以内，公式写成 $...$）。如果笔记只是一个术语或名称，写成"术语：一句话解释"，解释根据上下文和你的知识。'
           : type === 'quote'
             ? '这条笔记是学习者要原样保留的原文：只决定它放在哪里，不改写、不总结，"statement" 填 ""。'
@@ -50,14 +53,16 @@ const PLACE_TEXT = {
         unnamed ? '这张导图还没有名字：按这条笔记所属的学科或主题，起一个简短的中文名字填在 "mapName"。' : '"mapName" 填 ""。',
         '只返回 JSON：{"path": ["..."], "statement": "...", "mapName": "..."}。',
       ].join(''),
-    labels: { note: '笔记', formula: '公式', statement: '文字', quote: '原文', context: '上下文', now: '现在在', candidates: '候选位置', map: '导图', unnamed: '（未命名）', outline: '导图结构', examples: '学习者改过的位置', none: '（无）' },
+    labels: { note: '笔记', formula: '公式', statement: '文字', quote: '原文', request: '要求', context: '上下文', now: '现在在', candidates: '候选位置', map: '导图', unnamed: '（未命名）', outline: '导图结构', examples: '学习者改过的位置', none: '（无）' },
   },
   en: {
-    task: (type: ItemType, unnamed: boolean) =>
+    task: (type: ItemType, unnamed: boolean, request: boolean) =>
       [
         "You file one of a learner's notes into the knowledge map they have open. Below the map are chapters and topics; their titles are short nouns, never questions.",
         ' Choose the note\'s path in this map: 1–3 chapter / topic titles. Prefer an existing place (a candidate or a path from the map\'s outline, with the exact titles); add a new topic or chapter only when nothing fits. New titles are short English nouns. The learner\'s own corrections show how they organize notes; follow them.',
-        type === 'statement'
+        type === 'statement' && request
+          ? ' The learner asked for this note to be written a certain way (see "Request"): write "statement" as asked; the request comes before the one-sentence rule: it may be several sentences, and may keep or arrange the content as a Markdown table or list, formulas as $...$; use only what is in the note, invent nothing.'
+          : type === 'statement'
           ? ' Also rewrite the note as one plain sentence that keeps its claim (about 20 words at most, formulas as $...$). If the note is only a term or a name, write "term: a one-sentence explanation", drawn from the context and your knowledge.'
           : type === 'quote'
             ? ' The note is a quote the learner keeps word for word: only choose its place, never rewrite or summarize it; "statement" is "".'
@@ -65,7 +70,7 @@ const PLACE_TEXT = {
         unnamed ? ' The map has no name yet: give it a short English name for the subject or topic this note belongs to, in "mapName".' : ' "mapName" is "".',
         ' Return JSON only: {"path": ["..."], "statement": "...", "mapName": "..."}.',
       ].join(''),
-    labels: { note: 'Note', formula: 'formula', statement: 'text', quote: 'quote', context: 'Context', now: 'Now in', candidates: 'Candidates', map: 'Map', unnamed: '(unnamed)', outline: "The map's outline", examples: "The learner's corrections", none: '(none)' },
+    labels: { note: 'Note', formula: 'formula', statement: 'text', quote: 'quote', request: 'Request', context: 'Context', now: 'Now in', candidates: 'Candidates', map: 'Map', unnamed: '(unnamed)', outline: "The map's outline", examples: "The learner's corrections", none: '(none)' },
   },
 } as const;
 
@@ -74,11 +79,12 @@ export function placePrompt(input: PlacementInput): ChatMessage[] {
   const l = t.labels;
   const examples = input.examples.length ? input.examples.map((e) => `- ${e.text} → ${e.path.join(' › ')}`).join('\n') : l.none;
   return [
-    system('place', t.task(input.itemType, !input.map)),
+    system('place', t.task(input.itemType, !input.map, input.itemType === 'statement' && !!input.request)),
     {
       role: 'user',
       content: [
         `${l.note} (${l[input.itemType]}): ${input.text}`,
+        ...(input.itemType === 'statement' && input.request ? [`${l.request}: ${input.request}`] : []),
         `${l.context}: …${input.before} [NOTE] ${input.after}…`,
         `${l.map}: ${input.map || l.unnamed}`,
         `${l.now}: ${input.now || l.none}`,

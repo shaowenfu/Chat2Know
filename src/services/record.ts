@@ -7,6 +7,8 @@ export interface RecordRequest {
   title: string;
   latex?: string;
   source: ItemSource;
+  /** How the user asked for it to be written, typed after "记下"; placement follows it instead of the one-sentence rule. */
+  request?: string;
   /** "仍然添加": record even though the same item is already on the map. */
   force?: boolean;
 }
@@ -59,7 +61,7 @@ export async function recordItem(repo: Repository, mapId: string | undefined, re
 
   const conversation = stripHash(req.source.url);
   const previous = [...items].sort((a, b) => b.createdAt - a.createdAt).find((i) => i.source && stripHash(i.source.url) === conversation);
-  const input = { itemType: req.itemType, title: req.title, ...(req.latex === undefined ? {} : { latex: req.latex }), source: req.source };
+  const input = { itemType: req.itemType, title: req.title, ...(req.latex === undefined ? {} : { latex: req.latex }), source: req.source, ...(req.request ? { request: req.request } : {}) };
   const written = await repo.addItem(previous ? { parentId: previous.parentId! } : { unplacedIn: map.id }, input);
   return { status: 'recorded', group: written.group, itemId: written.node.id, path: await placePath(repo, written.node.id, labels) };
 }

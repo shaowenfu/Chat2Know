@@ -142,6 +142,20 @@ describe('automatic placement', () => {
     expect(parsePlacement({ path: ['a'], statement: 'Be curious.', mapName: '' }, 'quote', false)).toEqual({ path: ['a'], statement: '', mapName: '' });
   });
 
+  it('a note recorded with a request is written as asked, not compressed to one sentence', async () => {
+    const table = '方法二：套公式\n\n| 函数 | Hessian |\n| --- | --- |\n| $\\|x\\|^2$ | $2I$ |';
+    const client = stubClient();
+    const { r } = await recordAndPlace({ itemType: 'statement', title: table, request: '保留表格里的公式', source: source() }, client);
+    expect(client.prompts[0]).toContain('Request: 保留表格里的公式');
+    expect((await repo.node(r.itemId)).title).toBe(table);
+    expect((await repo.node(r.itemId)).request).toBe('保留表格里的公式');
+    // Without a request, the same note is compressed as before.
+    const plain = stubClient();
+    const { r: r2 } = await recordAndPlace({ itemType: 'statement', title: 'Scaling keeps softmax stable. It divides by sqrt d.', source: source('https://chatgpt.com/c/2') }, plain);
+    expect(plain.prompts[0]).not.toContain('Request:');
+    expect((await repo.node(r2.itemId)).title).toBe('Scaling keeps softmax stable.');
+  });
+
   it('rejects malformed placements', () => {
     expect(() => parsePlacement({ path: ['a', 'b', 'c', 'd'], statement: '', mapName: '' }, 'formula', false)).toThrow('1–3');
     expect(() => parsePlacement({ path: ['a'], statement: '', mapName: '' }, 'formula', true)).toThrow('mapName');

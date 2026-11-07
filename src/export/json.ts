@@ -49,6 +49,7 @@ function isMapNode(v: unknown): v is MapNode {
     (v.kind === 'subject' ? v.parentId === undefined && v.subjectId === v.id : isString(v.parentId)) &&
     (item ? ITEM_TYPES.includes(v.itemType as string) : v.itemType === undefined) &&
     (v.latex === undefined || isString(v.latex)) &&
+    (v.request === undefined || (item && isString(v.request))) &&
     (v.source === undefined || (item && isSource(v.source))) &&
     (v.role === undefined || (v.role === 'unplaced' && v.kind === 'section')) &&
     (v.editedByUser === undefined || typeof v.editedByUser === 'boolean') &&

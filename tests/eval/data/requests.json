@@ -1,0 +1,54 @@
+{
+  "_about": "Notes recorded with a request typed after 记下 (2026-11 feedback). `expect` lists checks on the written note: `table` (still a Markdown table), `contains` (every string appears), `maxLength` (characters).",
+  "cases": [
+    {
+      "map": "最优化",
+      "request": "保留表格里的公式",
+      "text": "### 方法二：套公式（矩阵形式的函数）\n\n函数以 $x^\\top Ax$、$\\|Hx - b\\|^2$ 这种矩阵形式给出时，直接用结论更快：\n\n| 函数 | Hessian |\n| --- | --- |\n| $a^\\top x + b$ | $O$（零矩阵） |\n| $\\frac{1}{2}x^\\top Ax + b^\\top x + c$ | $\\frac{1}{2}(A + A^\\top)$；$A$ 对称时为 $A$ |\n| $\\frac{1}{2}\\|Hx - b\\|^2$ | $H^\\top H$ |\n| $\\|x\\|^2$ | $2I$ |\n| $\\varphi(a^\\top x)$ | $\\varphi''(a^\\top x)\\, aa^\\top$ |\n| $\\ln\\sum_j e^{x_j}$ | $\\text{Diag}(y) - yy^\\top$，$y = \\text{softmax}(x)$ |\n\n**适用**：二次函数、最小二乘这类标准形式。注意二次函数的 Hessian 是常数矩阵，和 $x$ 无关，$b$、$c$ 也不影响它。",
+      "expect": {
+        "table": true,
+        "contains": [
+          "H^\\top H",
+          "2I",
+          "\\text{Diag}(y) - yy^\\top"
+        ]
+      }
+    },
+    {
+      "map": "最优化",
+      "request": "只要表格，去掉说明文字",
+      "text": "牛顿法和梯度下降的对比如下：\n\n| 方法 | 每步代价 | 收敛速度 |\n| --- | --- | --- |\n| 梯度下降 | $O(n)$ | 线性 |\n| 牛顿法 | $O(n^3)$ | 二次 |\n\n一般来说，维度很高时更常用梯度下降或拟牛顿法。",
+      "expect": {
+        "table": true,
+        "contains": [
+          "O(n^3)",
+          "二次"
+        ],
+        "notContains": [
+          "拟牛顿"
+        ]
+      }
+    },
+    {
+      "map": "线性代数",
+      "request": "分成三条要点",
+      "text": "一个 n 阶方阵可逆，当且仅当它的行列式不等于零；这也等价于它的秩等于 n，以及齐次方程 Ax=0 只有零解。",
+      "expect": {
+        "list": true,
+        "contains": [
+          "行列式",
+          "秩",
+          "Ax=0"
+        ]
+      }
+    },
+    {
+      "map": "线性代数",
+      "request": "",
+      "text": "一个 n 阶方阵可逆，当且仅当它的行列式不等于零；这也等价于它的秩等于 n，以及齐次方程 Ax=0 只有零解。另外，可逆矩阵的逆是唯一的。",
+      "expect": {
+        "maxLength": 60
+      }
+    }
+  ]
+}

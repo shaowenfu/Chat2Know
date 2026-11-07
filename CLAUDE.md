@@ -13,21 +13,22 @@ Does the map truly show what the user has learned and what is missing, does reco
 ## Three bottom lines (check every feature against them)
 
 1. **The extension is never more complex than the page it serves.** The side panel does one thing per screen; recording one item takes at most one click.
-2. **Notes are simpler than the original, unless the user protects them.** A recorded statement is compressed to one sentence and a formula comes in as just a formula. A **protected** quote (a line whose exact words matter) is kept word for word and never rewritten.
+2. **Notes are simpler than the original, unless the user protects them or asks otherwise.** A recorded statement is compressed to one sentence and a formula comes in as just a formula. A **protected** quote (a line whose exact words matter) is kept word for word and never rewritten. A **request** the user types after 记下 ("keep the table") comes before the one-sentence rule; Enter alone keeps the default.
 3. **The extension asks; it never forces things into the map.** A solid node is either recorded by the user or added by the extension with the user's consent. The extension never creates or switches maps on its own.
 
 ## Explicitly not doing (check before adding anything)
 
 - No general chat. Asking in the extension only starts from a selection on the page (the floating question window), and its conversation is not kept; an answer the user wants goes to the map.
 - No review, quizzing schedules, spaced repetition, scores or mastery percentages. Reports on the questions are written analysis, generated only when the user asks.
-- No choosing a type, writing a title or confirming anything for each note.
+- No choosing a type, writing a title or confirming anything for each note. (The request box after 记下 is optional: Enter alone records as usual.)
 - Nothing appears on the chat page unless the user acted: the selection layer appears only after the user selects text; the stuck guidance appears only in the side panel.
 - No solid nodes added to the map automatically; no map created, renamed by the user, or switched by the extension.
 
 ## The map
 
 - The user creates maps (one per subject or topic) and opens one; everything recorded goes into the open map until the user opens another. A map the user created without a name is named from its content once; a name the user gave is never changed. With no map open, recording asks the user to create or open one.
-- Structure nodes (map › chapter › topic, at most 4 levels, titles are nouns) and items (leaves): a **formula** (LaTeX, kept verbatim), a **statement** (one sentence; a long selection is compressed to one, the full text stays in the source), or a **protected quote** (the selection word for word; the model only chooses its place; only the user edits it; shown in its own colour).
+- Structure nodes (map › chapter › topic, at most 4 levels, titles are nouns) and items (leaves): a **formula** (LaTeX, kept verbatim), a **statement** (one sentence; a long selection is compressed to one, the full text stays in the source; written as the user asked when they typed a request: a table, a list), or a **protected quote** (the selection word for word; the model only chooses its place; only the user edits it; shown in its own colour).
+- Statements and quotes are Markdown, shown sanitized (`src/ui/rich-html.ts`): tables, lists, displayed formulas and a page's images keep their shape.
 - Every item has one place and one source (page URL and quote) that jumps back to the conversation through an explicit button, never a plain click on the item.
 - Origin decides how a node looks: `user` (solid black), `plugin` (light blue dashed, added with consent), `outline` (grey dashed, not yet learned). Orange outline on a structure node = the user may be stuck there. "Grey" is derived (no non-outline item below), never stored.
 - Recording never waits for a model: the item appears at once (in the previous place of this conversation, or the open map's "待归位" group), then automatic placement moves it within the open map.

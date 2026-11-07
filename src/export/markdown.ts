@@ -24,7 +24,8 @@ export function mapToMarkdown(subjects: MapTree[], o: ExportOptions): string {
     const n = t.node;
     if (n.kind === 'item') {
       // A protected quote stays word for word, as a quotation.
-      const text = n.itemType === 'quote' ? n.title.split('\n').map((l) => `> ${l}`.trimEnd()).join('\n  ') : itemText(n);
+      // A note of several lines (a table, a list) stays inside its bullet.
+      const text = n.itemType === 'quote' ? n.title.split('\n').map((l) => `> ${l}`.trimEnd()).join('\n  ') : itemText(n).split('\n').join('\n  ');
       parts.push(`- ${text}${n.source ? ` ([source](${n.source.url}))` : ''}`);
       return;
     }

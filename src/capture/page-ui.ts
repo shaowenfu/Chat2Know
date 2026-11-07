@@ -19,6 +19,8 @@ export interface BarAction {
   run: () => void;
   disabled?: boolean;
   title?: string;
+  /** The action keeps the bar for a next step (记下 asks how to note it). */
+  keepBar?: boolean;
 }
 
 export interface ToastAction {
@@ -68,6 +70,11 @@ const CSS = `
 .bar button[data-action="quote"] { color: #E2D3FF; }
 .bar button[data-action="ask"] { color: #A9C0FF; }
 .bar button:disabled { opacity: 0.4; cursor: default; }
+.bar-prompt { display: flex; align-items: center; gap: 4px; margin: 0; }
+.bar-prompt input { width: 300px; max-width: calc(100vw - 140px); height: 32px; box-sizing: border-box; padding: 0 10px; border: 0; border-radius: 7px; background: #33322e; color: #FFFFFF; font: inherit; font-size: 13px; outline: none; }
+.bar-prompt input::placeholder { color: #A3A19A; }
+.bar-prompt input:focus-visible { box-shadow: 0 0 0 2px #A9C0FF; }
+.marked { position: fixed; background: rgba(43, 87, 217, 0.22); border-radius: 2px; pointer-events: none; }
 .ask { position: fixed; width: 440px; max-width: calc(100vw - 32px); box-sizing: border-box; display: flex; flex-direction: column; border-radius: 12px; border: 1px solid #D6D3CA; background: #FFFFFF; color: #1B1B19; box-shadow: 0 16px 40px rgba(0,0,0,0.18); font-size: 13px; line-height: 1.7; pointer-events: auto; }
 .ask-head { height: 44px; flex: none; display: flex; align-items: center; justify-content: space-between; padding: 0 8px 0 14px; border-bottom: 1px solid #E3E1DA; cursor: move; user-select: none; }
 .ask-title { font-size: 13px; font-weight: 700; }
@@ -148,7 +155,7 @@ export class PageUi {
   private toastText: HTMLElement | undefined;
   private popoverEl: HTMLElement | undefined;
   private toastTimer: ReturnType<typeof setTimeout> | undefined;
-  private bar: { el: HTMLElement; range: Range } | undefined;
+  private bar: { el: HTMLElement; range: Range; prompting?: boolean; marks?: HTMLElement[] } | undefined;
   private askEl: HTMLElement | undefined;
 
   constructor(
@@ -209,7 +216,7 @@ export class PageUi {
       button.addEventListener('mousedown', (e) => e.preventDefault());
       button.addEventListener('click', (e) => {
         e.stopPropagation();
-        this.hideBar();
+        if (!action.keepBar) this.hideBar();
         action.run();
       });
       el.append(button);
@@ -237,13 +244,59 @@ export class PageUi {
     el.querySelector<HTMLElement>('input')?.focus();
   }
 
+  /**
+   * "记下" asks how to note it: the bar becomes a box for an optional request. Enter
+   * alone records as usual; Esc puts it away. Typing moves the focus off the page, so
+   * the selected lines stay marked while the box is open.
+   */
+  promptBar(text: { label: string; placeholder: string; submit: string }, done: (request: string) => void): void {
+    const bar = this.bar;
+    if (!bar) return;
+    const form = this.doc.createElement('form');
+    form.className = 'bar-prompt';
+    const input = this.doc.createElement('input');
+    input.type = 'text';
+    input.placeholder = text.placeholder;
+    input.setAttribute('aria-label', text.label);
+    input.maxLength = 300;
+    const submit = this.doc.createElement('button');
+    submit.type = 'submit';
+    submit.dataset.action = 'note';
+    submit.innerHTML = BAR_ICONS.note;
+    submit.append(text.submit);
+    form.append(input, submit);
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const request = input.value.trim();
+      this.hideBar();
+      done(request);
+    });
+    // Keys typed here are ours: the chat page must not take them (some move focus to their own box).
+    for (const type of ['keydown', 'keyup', 'keypress'] as const) {
+      form.addEventListener(type, (e) => {
+        e.stopPropagation();
+        if (type === 'keydown' && (e as KeyboardEvent).key === 'Escape') this.hideBar();
+      });
+    }
+    bar.el.replaceChildren(form);
+    bar.prompting = true;
+    this.place();
+    input.focus();
+  }
+
   hideBar(): void {
     this.bar?.el.remove();
+    this.bar?.marks?.forEach((m) => m.remove());
     this.bar = undefined;
   }
 
   get barShown(): boolean {
     return this.bar !== undefined;
+  }
+
+  /** The bar is asking how to note the selection; the page's selection may have gone meanwhile. */
+  get barPrompting(): boolean {
+    return this.bar?.prompting === true;
   }
 
   /** The ＋ of this formula becomes the "已记下" pill, with an outline around the formula for a moment. */
@@ -396,7 +449,10 @@ export class PageUi {
         mark.button.style.top = `${Math.round(mid - 14)}px`;
         if (mark.outline) Object.assign(mark.outline.style, { left: `${r.left - 4}px`, top: `${r.top - 4}px`, width: `${r.width + 8}px`, height: `${r.height + 8}px` });
       }
-      if (this.bar) this.placeBar(this.bar.el, this.bar.range, view);
+      if (this.bar) {
+        this.placeBar(this.bar.el, this.bar.range, view);
+        if (this.bar.prompting) this.markRange(this.bar);
+      }
     });
   };
 
@@ -411,5 +467,19 @@ export class PageUi {
     const left = Math.min(Math.max(BAR_GAP, r.left + r.width / 2 - w / 2), view.innerWidth - w - BAR_GAP);
     el.style.left = `${Math.round(left)}px`;
     el.style.top = `${Math.round(top)}px`;
+  }
+
+  /** Light-blue boxes over the selected lines, drawn in our layer: the page's own DOM is not touched. */
+  private markRange(bar: { range: Range; marks?: HTMLElement[] }): void {
+    bar.marks?.forEach((m) => m.remove());
+    bar.marks = Array.from(bar.range.getClientRects())
+      .filter((r) => r.width > 0 && r.height > 0)
+      .map((r) => {
+        const m = this.doc.createElement('div');
+        m.className = 'marked';
+        Object.assign(m.style, { left: `${r.left}px`, top: `${r.top}px`, width: `${r.width}px`, height: `${r.height}px` });
+        this.layer.prepend(m);
+        return m;
+      });
   }
 }
