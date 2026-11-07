@@ -51,9 +51,10 @@ UI changes are checked against the design canvas first. A deviation is explained
 
 ## Branches
 
-- Develop only on `v2`. `main` is frozen at v0.1.0 (security and severe-bug fixes only, through PRs).
-- Main engineer (Claude Code, cloud) pushes to `v2` after `npm run check` passes. Task-card branches start from `v2` and open PRs back into `v2`.
-- `v2` is merged into `main` when it passes acceptance, released as 0.2.0. `v2` is a codename, not a version.
+- Develop directly on `main`, unless the owner explicitly asks for a branch. The main engineer (Claude Code, cloud) pushes to `main` after `npm run check` passes.
+- Task-card branches, when the owner asks for them, start from `main` and open PRs back into `main`.
+- Releases are tagged on `main` (`v<version>`, see `.github/workflows/release.yml`); the landing page in `site/` deploys from `main`.
+- `v2` was the branch of the 0.2 rebuild. It is merged into `main` and no longer developed on.
 
 ## Commands
 

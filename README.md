@@ -6,7 +6,7 @@ Select something in an AI answer and one click records it in the right place on 
 
 选中 AI 回答里的一段：点一下记进你打开的导图（放到哪里由插件来定），或一字不改地保存，或就地提问。插件也会看你发出的提问：像是在绕圈子时，侧栏会温和地告诉你可能卡在哪、先弄清什么、怎么问更好。
 
-> Status: 0.2.0, a rebuild of 0.1, is on the `v2` branch and in its final trial. The released 0.1.0 is on `main`. Chrome and other Chromium browsers (Edge, Brave, Arc); Firefox is not supported yet. Interface and model prompts in 中文 and English.
+> Status: 0.2.0, a rebuild of 0.1, is on `main` and in its final trial before release (the latest published release is still 0.1.0). Chrome and other Chromium browsers (Edge, Brave, Arc); Firefox is not supported yet. Interface and model prompts in 中文 and English.
 
 ## Install
 
@@ -17,7 +17,6 @@ Select something in an AI answer and one click records it in the right place on 
 ```bash
 git clone https://github.com/shaowenfu/Chat2Know.git
 cd Chat2Know
-git checkout v2
 npm install
 npm run build   # then Load unpacked: .output/chrome-mv3
 ```
